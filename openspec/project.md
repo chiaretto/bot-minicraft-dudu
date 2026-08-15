@@ -79,6 +79,14 @@ Este projeto usa OpenSpec (Spec-Driven Development):
 
 1. `/openspec-proposal <descrição>` — cria a proposta em `openspec/changes/`
 2. `/openspec-apply <change-id>` — implementa seguindo `tasks.md`
-3. `/openspec-archive <change-id>` — consolida os deltas em `openspec/specs/`
+3. `/openspec-archive <change-id>` — consolida os deltas em `openspec/specs/` e
+   move o change para `openspec/changes/archive/AAAA-MM-DD-<change-id>/`
 
-`openspec/specs/` é a fonte da verdade do comportamento já implementado.
+`openspec/specs/` é a fonte da verdade do comportamento já implementado: um
+arquivo por componente, com os requisitos e cenários já consolidados. Os deltas
+em `changes/archive/` são o **histórico** de como cada requisito chegou lá — não
+consulte os deltas para saber como o bot se comporta hoje, consulte as specs.
+
+Um delta pode modificar requisito de outro componente. Ao arquivar, aplique a
+seção `MODIFIED` no arquivo do componente dono do requisito, e registre o que a
+seção `REMOVED` tirou numa seção `## Descontinuado` da spec correspondente.
