@@ -15,7 +15,7 @@ export const KNOWN_PLACEHOLDERS = [
 export type PlaceholderName = (typeof KNOWN_PLACEHOLDERS)[number]
 
 export const whenSchema = z.object({
-  state: z.enum(['IDLE', 'FOLLOW', 'STAY', 'ACTION', 'DEFEND', 'EMERGENCY']).optional(),
+  state: z.enum(['IDLE', 'FOLLOW', 'STAY', 'ACTION', 'GAME', 'DEFEND', 'EMERGENCY']).optional(),
   timeOfDay: z.enum(['dia', 'tarde', 'noite']).optional(),
   healthBelow: z.number().positive().optional(),
   ownerHealthBelow: z.number().positive().optional(),

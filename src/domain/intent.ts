@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { GAME_ROLES } from './games.js'
 
 /**
  * Catálogo FECHADO de intenções. A IA só pode propor o que está aqui.
@@ -16,6 +17,7 @@ export const INTENT_TYPES = [
   'EQUIP_ITEM',
   'DEFENSE_ON',
   'DEFENSE_OFF',
+  'PLAY_GAME',
   'CHAT',
   'UNKNOWN',
 ] as const
@@ -48,6 +50,15 @@ export const intentSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('EQUIP_ITEM'), params: z.object({ item: z.string().min(1) }) }),
   z.object({ type: z.literal('DEFENSE_ON'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('DEFENSE_OFF'), params: z.object({}).default({}) }),
+  // `game` é string livre no schema, mas o registro de jogos recusa o que não
+  // conhece: um jogo novo não pode exigir mudança no contrato da IA.
+  z.object({
+    type: z.literal('PLAY_GAME'),
+    params: z.object({
+      game: z.string().min(1),
+      role: z.enum(GAME_ROLES).optional(),
+    }),
+  }),
   z.object({
     type: z.literal('CHAT'),
     params: z.object({ text: z.string() }).default({ text: '' }),
@@ -77,6 +88,8 @@ export const INTENT_JSON_SCHEMA = {
         y: { type: 'number' },
         z: { type: 'number' },
         text: { type: 'string' },
+        game: { type: 'string' },
+        role: { type: 'string', enum: [...GAME_ROLES] },
       },
     },
   },

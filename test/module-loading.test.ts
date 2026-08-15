@@ -67,6 +67,27 @@ describe.skipIf(!DIST_READY)('carregamento em ESM nativo (sobre o dist/)', () =>
     expect(result.ok).toBe(true)
   })
 
+  // `vec3` também é CommonJS: `import { Vec3 } from 'vec3'` é a mesma armadilha
+  // do `goals` do pathfinder. Funciona porque o pacote faz `v.Vec3 = Vec3`, que
+  // o cjs-module-lexer detecta — mas isso só o Node de verdade comprova.
+  it('vec3 expõe Vec3 como named export', () => {
+    const result = importInRealNode('vec3')
+    expect(result.error).toBe('')
+    expect(result.ok).toBe(true)
+  })
+
+  it('dist/minecraft/visibility.js carrega com o Vec3 de verdade', () => {
+    const result = importInRealNode('./dist/minecraft/visibility.js')
+    expect(result.error).not.toMatch(/does not provide an export named/)
+    expect(result.ok).toBe(true)
+  })
+
+  it('dist/behaviors/games/index.js carrega', () => {
+    const result = importInRealNode('./dist/behaviors/games/index.js')
+    expect(result.error).not.toMatch(/does not provide an export named/)
+    expect(result.ok).toBe(true)
+  })
+
   it('os providers de IA carregam suas bibliotecas', () => {
     for (const mod of ['./dist/ai/providers/ollama.js', './dist/ai/providers/gemini.js']) {
       const result = importInRealNode(mod)
@@ -88,6 +109,32 @@ describe('superfície dos módulos (transpilado)', () => {
     expect(typeof mod.equipBestWeapon).toBe('function')
   })
 
+  it('games expõe o registro e a sessão', async () => {
+    const mod = await import('../src/behaviors/games/index.js')
+    expect(typeof mod.createSession).toBe('function')
+    expect(typeof mod.resolveGame).toBe('function')
+    expect(typeof mod.HideAndSeekSession).toBe('function')
+  })
+
+  it('o adaptador de raycast produz um Vec3 usável de verdade', async () => {
+    const { raycastWorldFrom } = await import('../src/minecraft/visibility.js')
+    let origin: unknown = null
+    const world = raycastWorldFrom({
+      world: {
+        raycast: (from) => {
+          origin = from
+          return null
+        },
+      },
+    })
+    world?.raycast({ x: 1, y: 2, z: 3 }, { x: 0, y: 0, z: 1 }, 5)
+    // O iterador do prismarine chama `.minus()`: sem Vec3 de verdade, a consulta
+    // lançaria e o bot nunca acharia ninguém.
+    const vec = origin as { minus: (other: unknown) => { x: number } }
+    expect(typeof vec.minus).toBe('function')
+    expect(vec.minus({ x: 1, y: 0, z: 0 }).x).toBe(0)
+  })
+
   it('instanciar os providers não faz rede', async () => {
     const { OllamaProvider } = await import('../src/ai/providers/ollama.js')
     const { GeminiProvider } = await import('../src/ai/providers/gemini.js')
@@ -97,7 +144,10 @@ describe('superfície dos módulos (transpilado)', () => {
       model: 'qwen3:4b',
       keepAlive: '30m',
     })
-    const gemini = new GeminiProvider({ apiKey: 'chave-de-teste', model: 'gemini-2.0-flash' })
+    const gemini = new GeminiProvider({
+      apiKey: 'chave-de-teste',
+      model: 'gemini-flash-lite-latest',
+    })
 
     expect(ollama.name).toBe('ollama')
     expect(gemini.name).toBe('gemini')

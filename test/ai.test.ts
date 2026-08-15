@@ -80,6 +80,41 @@ describe('validação de intenção', () => {
     expect(validateIntent('FOLLOW')).toEqual(UNKNOWN_INTENT)
     expect(validateIntent(null)).toEqual(UNKNOWN_INTENT)
   })
+
+  it('aceita PLAY_GAME com papel explícito', () => {
+    const intent = validateIntent({
+      type: 'PLAY_GAME',
+      params: { game: 'esconde_esconde', role: 'bot_esconde' },
+    })
+    expect(intent).toEqual({
+      type: 'PLAY_GAME',
+      params: { game: 'esconde_esconde', role: 'bot_esconde' },
+    })
+  })
+
+  it('aceita PLAY_GAME sem papel — o padrão é resolvido depois', () => {
+    const intent = validateIntent({ type: 'PLAY_GAME', params: { game: 'esconde_esconde' } })
+    expect(intent.type).toBe('PLAY_GAME')
+    expect(intent.type === 'PLAY_GAME' && intent.params.role).toBeUndefined()
+  })
+
+  it('rejeita papel fora dos dois possíveis', () => {
+    expect(
+      validateIntent({ type: 'PLAY_GAME', params: { game: 'esconde_esconde', role: 'juiz' } }),
+    ).toEqual(UNKNOWN_INTENT)
+  })
+
+  it('rejeita PLAY_GAME sem nome de jogo', () => {
+    expect(validateIntent({ type: 'PLAY_GAME', params: {} })).toEqual(UNKNOWN_INTENT)
+    expect(validateIntent({ type: 'PLAY_GAME', params: { game: '' } })).toEqual(UNKNOWN_INTENT)
+  })
+
+  it('aceita a forma de jogo desconhecido — quem recusa é o registro', () => {
+    // O schema não pode ser a lista de jogos: jogo novo não deve mudar o
+    // contrato entregue à IA. Ver: player_commands_delta.md.
+    const intent = validateIntent({ type: 'PLAY_GAME', params: { game: 'poquer' } })
+    expect(intent.type).toBe('PLAY_GAME')
+  })
 })
 
 describe('prompt', () => {
@@ -113,6 +148,22 @@ describe('limpeza da resposta', () => {
 
   it('remove markdown e ação entre asteriscos', () => {
     expect(cleanReply('*acena* **Oi** `amigo`')).toBe('Oi amigo')
+  })
+
+  it('apara resposta cortada pelo teto de tokens na última frase completa', () => {
+    expect(cleanReply('Eu adoro a floresta! E aí uma coisa estranha aconte')).toBe(
+      'Eu adoro a floresta!',
+    )
+  })
+
+  it('mantém a resposta inteira quando ela já termina em pontuação', () => {
+    expect(cleanReply('Eu prefiro a noite, é mais divertido.')).toBe(
+      'Eu prefiro a noite, é mais divertido.',
+    )
+  })
+
+  it('devolve o texto como veio quando não há nenhuma frase fechada', () => {
+    expect(cleanReply('Oi amigo tudo bem com')).toBe('Oi amigo tudo bem com')
   })
 })
 

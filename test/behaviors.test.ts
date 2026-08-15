@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseCommand, commandPatternCount } from '../src/behaviors/commands.js'
+import { parseCommand, commandPatternCount, isGiveUp } from '../src/behaviors/commands.js'
 import { StateMachine } from '../src/behaviors/state-machine.js'
 import {
   classifyThreats,
@@ -86,6 +86,94 @@ describe('parser de comandos', () => {
   it('cobre um conjunto razoável de padrões', () => {
     expect(commandPatternCount()).toBeGreaterThanOrEqual(25)
   })
+
+  it('reconhece o convite de brincar sem chamar a IA', () => {
+    for (const text of [
+      'vamos brincar',
+      'dudu, vamos brincar de esconde esconde',
+      'bora brincar',
+      'vamos jogar esconde esconde',
+      'esconde esconde',
+      'quer brincar de esconde esconde',
+    ]) {
+      const parsed = parseCommand(text, 'Dudu')
+      expect(parsed?.intent.type, text).toBe('PLAY_GAME')
+      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.game, text).toBe(
+        'esconde_esconde',
+      )
+    }
+  })
+
+  it('o convite genérico faz o bot ser quem se esconde', () => {
+    const parsed = parseCommand('dudu, vamos brincar', 'Dudu')
+    expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.role).toBe('bot_esconde')
+  })
+
+  it('reconhece o papel de quem procura', () => {
+    for (const text of [
+      'eu vou me esconder',
+      'dudu, conta ate 10',
+      'me procura',
+      'vem me achar',
+      'fecha o olho e conta',
+    ]) {
+      const parsed = parseCommand(text, 'Dudu')
+      expect(parsed?.intent.type, text).toBe('PLAY_GAME')
+      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.role, text).toBe(
+        'bot_procura',
+      )
+    }
+  })
+
+  it('mandar se esconder põe o bot no papel de quem esconde', () => {
+    for (const text of ['se esconde', 'dudu, vai se esconder', 'voce se esconde']) {
+      const parsed = parseCommand(text, 'Dudu')
+      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.role, text).toBe(
+        'bot_esconde',
+      )
+    }
+  })
+
+  it('tolera caixa, acento e pontuação no convite', () => {
+    const parsed = parseCommand('DUDU, VAMOS BRINCAR DE ESCONDE-ESCONDE!!!', 'Dudu')
+    expect(parsed?.intent.type).toBe('PLAY_GAME')
+    expect(parseCommand('DUDU, CONTA ATÉ 10', 'Dudu')?.intent.type).toBe('PLAY_GAME')
+  })
+
+  it('remove enfeite no fim do convite', () => {
+    expect(parseCommand('vamos brincar agora', 'Dudu')?.intent.type).toBe('PLAY_GAME')
+    expect(parseCommand('se esconde vai', 'Dudu')?.intent.type).toBe('PLAY_GAME')
+  })
+
+  it('não confunde "vamos" sozinho com convite de brincadeira', () => {
+    expect(parseCommand('vamos', 'Dudu')?.intent.type).toBe('FOLLOW')
+    expect(parseCommand('vamos embora', 'Dudu')?.intent.type).toBe('FOLLOW')
+  })
+})
+
+describe('desistência no jogo', () => {
+  it('reconhece que o jogador desistiu', () => {
+    for (const text of ['desisto', 'dudu, desisto', 'cade voce', 'me entrego', 'nao acho voce']) {
+      expect(isGiveUp(text, 'Dudu'), text).toBe(true)
+    }
+  })
+
+  it('tolera acento e pontuação', () => {
+    expect(isGiveUp('CADÊ VOCÊ???', 'Dudu')).toBe(true)
+  })
+
+  it('não é comando: continua descendo na cascata fora do jogo', () => {
+    // `cade voce` só vira desistência com uma rodada em andamento; o parser de
+    // comandos não pode reivindicá-la.
+    expect(parseCommand('cade voce', 'Dudu')).toBeNull()
+    expect(parseCommand('desisto', 'Dudu')).toBeNull()
+  })
+
+  it('não confunde conversa comum com desistência', () => {
+    for (const text of ['oi', 'vamos brincar', 'voce ta bem', 'para']) {
+      expect(isGiveUp(text, 'Dudu'), text).toBe(false)
+    }
+  })
 })
 
 // ────────────────────────── MÁQUINA DE ESTADOS ────────────────────────────
@@ -96,6 +184,12 @@ describe('prioridade de estados', () => {
     expect(STATE_PRIORITY.DEFEND).toBeGreaterThan(STATE_PRIORITY.ACTION)
     expect(STATE_PRIORITY.ACTION).toBeGreaterThan(STATE_PRIORITY.FOLLOW)
     expect(STATE_PRIORITY.FOLLOW).toBeGreaterThan(STATE_PRIORITY.IDLE)
+  })
+
+  it('põe o jogo no mesmo degrau da ação, abaixo da defesa', () => {
+    expect(STATE_PRIORITY.GAME).toBe(STATE_PRIORITY.ACTION)
+    expect(STATE_PRIORITY.DEFEND).toBeGreaterThan(STATE_PRIORITY.GAME)
+    expect(STATE_PRIORITY.GAME).toBeGreaterThan(STATE_PRIORITY.FOLLOW)
   })
 })
 
@@ -134,6 +228,51 @@ describe('máquina de estados', () => {
 
     expect(sm.state).toBe('STAY')
     expect(sm.ctx.stayPoint).toEqual(point)
+  })
+
+  it('não empilha o jogo: rodada interrompida é descartada', () => {
+    const sm = new StateMachine()
+    sm.command('GAME', { actionLabel: 'esconde_esconde' })
+
+    const result = sm.interrupt('DEFEND', { targets: [1] })
+    expect(result).not.toBeNull()
+    expect(result!.stacked).toBe(false)
+    expect(sm.stackDepth).toBe(0)
+
+    // Fim do combate cai em IDLE, e não de volta no jogo.
+    sm.resume()
+    expect(sm.state).toBe('IDLE')
+  })
+
+  it('cancela a sessão do jogo ao ser interrompido', () => {
+    const sm = new StateMachine()
+    sm.command('GAME')
+    const signal = sm.signal
+    expect(signal?.aborted).toBe(false)
+
+    sm.interrupt('DEFEND')
+    expect(signal?.aborted).toBe(true)
+  })
+
+  it('jogo e ação não se interrompem: prioridades iguais', () => {
+    const sm = new StateMachine()
+    sm.command('ACTION')
+    expect(sm.interrupt('GAME')).toBeNull()
+    expect(sm.state).toBe('ACTION')
+
+    sm.command('GAME')
+    expect(sm.interrupt('ACTION')).toBeNull()
+    expect(sm.state).toBe('GAME')
+  })
+
+  it('ordem do jogador troca ação por jogo mesmo com prioridade igual', () => {
+    const sm = new StateMachine()
+    sm.command('ACTION', { actionLabel: 'coletar madeira' })
+    const signal = sm.signal
+
+    sm.command('GAME')
+    expect(sm.state).toBe('GAME')
+    expect(signal?.aborted).toBe(true)
   })
 
   it('emergência interrompe a defesa', () => {

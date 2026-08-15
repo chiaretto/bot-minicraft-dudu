@@ -184,6 +184,8 @@ llm:
 | `dudu, não briga`                    | desliga a defesa automática        |
 | `dudu, pode brigar`                  | religa a defesa                    |
 | `dudu, olha pra mim`                 | vira para você                     |
+| `dudu, vamos brincar` / `se esconde` | brinca de esconde-esconde (ele esconde) |
+| `dudu, eu vou me esconder` / `conta até 10` | brinca de esconde-esconde (ele procura) |
 
 O vocativo é opcional: `oi dudu`, `dudu, oi` e `oi` funcionam igual.
 
@@ -198,6 +200,53 @@ o que tem no inventário, cortesia, afeto, piada, onde vocês estão, e mais.
 estruturada, que é **validada contra um catálogo fechado** antes de virar ação.
 Pedido fora do catálogo é recusado com educação — a IA nunca executa nada
 diretamente.
+
+---
+
+## Brincadeiras
+
+Por enquanto o bot sabe **uma**: esconde-esconde. Nos dois papéis, e sem precisar
+de IA nenhuma ligada.
+
+### Quando ele se esconde
+
+Fale `dudu, vamos brincar` (ou `se esconde`). Ele pede que você feche o olho e
+conte até 10, procura um lugar que você **não esteja enxergando**, caminha até lá
+e só então avisa `pode procurar`. Chegue perto dele (2 blocos) e ele admite a
+derrota. Se você desistir, fale `desisto` ou `cadê você` que ele aparece.
+
+### Quando ele procura
+
+Fale `dudu, eu vou me esconder` (ou `conta até 10`). Ele conta de 1 a 10 no chat,
+um número por mensagem, e sai procurando. **Ele vai errar duas vezes de
+propósito** antes de procurar de verdade. Quando conseguir te ver, vai até você e
+fala que achou.
+
+### Por que ele erra de propósito
+
+O bot recebe a posição de todos os jogadores pelo protocolo do jogo: **ele sabe
+onde você está o tempo todo, e não há como tirar isso dele.** Se "achar" fosse só
+chegar perto, a brincadeira acabaria no primeiro segundo.
+
+Então o jogo tem regras que tornam a busca honesta:
+
+- **Duas buscas erradas obrigatórias**, em lugares longe de você (`fakeSearches`).
+- **Enquanto finge, ele é cego**: passar na frente dele nesse momento não conta.
+- **"Achei" exige ver de verdade**: o caminho até você precisa estar livre. Atrás
+  de uma parede sólida você não é achado, mesmo com ele sabendo a coordenada.
+
+Ajuste a dificuldade no bloco `games` do `config.yaml`: `hideMaxDistance` deixa o
+esconderijo mais longe, `fakeSearches` faz ele demorar mais para achar.
+
+### O que interrompe a brincadeira
+
+`dudu, para`, um monstro aparecendo, vida crítica, morte do bot, você sair do
+servidor ou trocar de dimensão. A rodada **não é retomada** depois: o esconderijo
+já foi queimado e você já saiu do lugar — recomeçar é mais claro para uma criança
+que "voltar de onde parou".
+
+Em lugar apertado (dentro de casa, túnel) pode não existir esconderijo válido. Ele
+avisa no chat e sugere ir para um lugar aberto, em vez de ficar mudo.
 
 ---
 

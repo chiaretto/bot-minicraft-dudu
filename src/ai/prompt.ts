@@ -49,8 +49,8 @@ export function buildConversePrompt(ctx: ConversationContext): string {
     worldContext(ctx),
     '',
     '## Como responder',
-    `- Fale português do Brasil, do jeito que se fala com criança.`,
-    '- UMA frase curta, no máximo 200 caracteres. Nunca faça listas.',
+    `- Você fala com uma criança de 7 anos: palavra simples, tom de amigo.`,
+    '- UMA frase curta, no máximo 100 caracteres. Nunca faça listas.',
     '- Você está digitando no chat de um jogo: seja direto e caloroso.',
     '- Não use markdown, não use asteriscos, não descreva ações entre asteriscos.',
   ].join('\n')
@@ -73,6 +73,9 @@ export function buildInterpretPrompt(ctx: ConversationContext): string {
     '  "vem cá" -> {"type":"FOLLOW","params":{}}',
     '  "constrói uma casa" -> {"type":"UNKNOWN","params":{}}',
     '  "você gosta de diamante?" -> {"type":"CHAT","params":{}}',
+    '  "bora brincar de esconder" -> {"type":"PLAY_GAME","params":{"game":"esconde_esconde","role":"bot_esconde"}}',
+    '  "some daí que eu vou te achar" -> {"type":"PLAY_GAME","params":{"game":"esconde_esconde","role":"bot_esconde"}}',
+    '  "fica de olho fechado que eu me escondo" -> {"type":"PLAY_GAME","params":{"game":"esconde_esconde","role":"bot_procura"}}',
     '',
     `O jogador se chama ${ctx.owner}.`,
   ].join('\n')

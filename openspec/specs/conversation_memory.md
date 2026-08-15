@@ -1,0 +1,222 @@
+# Especificação: Memória de Conversa
+
+**Componente:** `conversation_memory`
+**Origem:** `add-minecraft-companion-bot` (2026-08-15)
+
+> Convenção de nomes: `Dudu` é o **bot**, `Miguel` é o **jogador dono**.
+
+---
+
+## Requisitos
+
+### Requirement: Registro de toda troca de conversa
+
+Toda mensagem trocada com o bot é gravada, venha a resposta de qualquer nível da
+cascata.
+
+#### Scenario: Troca resolvida pelo repertório
+- **GIVEN** o dono digita `dudu, oi` e o repertório responde
+- **WHEN** a resposta é enviada ao chat
+- **THEN** uma linha é gravada com a fala do dono e outra com a do bot
+- **AND** a linha do bot registra `source: "repertoire"` e o `entryId` usado
+
+#### Scenario: Troca resolvida pela IA
+- **GIVEN** a mensagem do dono foi respondida pelo provider de IA
+- **WHEN** a resposta é enviada
+- **THEN** a linha do bot registra `source: "llm"`
+- **AND** registra `provider` com o nome da implementação que respondeu
+  (`"ollama"` ou `"gemini"`)
+
+#### Scenario: Comando também é registrado
+- **GIVEN** o dono digita `dudu, me segue` e o bot entra em `FOLLOW`
+- **WHEN** a confirmação é enviada
+- **THEN** a troca é gravada com `source: "command"` e o comando reconhecido
+
+#### Scenario: Fala espontânea é registrada
+- **GIVEN** anoiteceu e o bot falou sozinho
+- **WHEN** a fala é enviada
+- **THEN** a linha é gravada com `source: "spontaneous"`, sem mensagem do jogador
+
+#### Scenario: Mensagem de outro jogador
+- **GIVEN** o jogador `Fulano` fala com o bot
+- **WHEN** a troca acontece
+- **THEN** ela é gravada com o `speaker` sendo `Fulano`
+- **AND** fica distinguível das falas do dono
+
+---
+
+### Requirement: Um arquivo por dia
+
+O histórico é particionado por data local, em JSONL append-only.
+
+#### Scenario: Primeiro registro do dia
+- **GIVEN** hoje é `2026-08-15` e ainda não há arquivo do dia
+- **WHEN** a primeira troca acontece
+- **THEN** `data/conversations/2026-08-15.jsonl` é criado
+- **AND** a troca é gravada como a primeira linha
+
+#### Scenario: Trocas seguintes no mesmo dia
+- **GIVEN** `data/conversations/2026-08-15.jsonl` já existe com 40 linhas
+- **WHEN** uma nova troca acontece no mesmo dia
+- **THEN** a linha é acrescentada ao fim do mesmo arquivo
+- **AND** nada do conteúdo anterior é reescrito
+
+#### Scenario: Virada de meia-noite com o bot rodando
+- **GIVEN** o bot está rodando e gravando em `2026-08-15.jsonl`
+- **WHEN** o relógio local passa da meia-noite
+- **THEN** a próxima troca vai para `2026-08-16.jsonl`
+- **AND** o arquivo anterior é fechado sem perder nada
+
+#### Scenario: Sessões separadas no mesmo dia
+- **GIVEN** o bot rodou de manhã e foi encerrado
+- **WHEN** ele sobe de novo à tarde do mesmo dia
+- **THEN** ele continua gravando no **mesmo** arquivo do dia, em modo append
+
+---
+
+### Requirement: Formato do registro
+
+Cada linha é um objeto JSON autocontido.
+
+#### Scenario: Campos obrigatórios de uma linha
+- **GIVEN** qualquer troca gravada
+- **WHEN** a linha é lida
+- **THEN** ela contém `ts` (ISO 8601 com fuso), `speaker`, `text`, `source`,
+  `botState` e `sessionId`
+
+#### Scenario: Campos opcionais de contexto
+- **GIVEN** a troca aconteceu durante um combate
+- **WHEN** a linha é gravada
+- **THEN** ela pode conter `entryId` (se veio do repertório), `latencyMs`,
+  `botHealth` e `dimension`
+
+#### Scenario: Uma linha por objeto, sem quebra
+- **GIVEN** a resposta do bot contém quebra de linha
+- **WHEN** a linha é gravada
+- **THEN** as quebras são escapadas dentro do JSON
+- **AND** o arquivo mantém exatamente um objeto JSON por linha
+
+#### Scenario: Linha corrompida não invalida o arquivo
+- **GIVEN** uma linha do arquivo ficou truncada por um crash
+- **WHEN** o arquivo é lido na inicialização
+- **THEN** a linha inválida é pulada com aviso no log
+- **AND** todas as outras linhas são carregadas normalmente
+
+---
+
+### Requirement: Memória curta em RAM
+
+O contexto enviado ao provider de IA vem de uma janela deslizante, não do arquivo inteiro.
+
+#### Scenario: Janela limitada
+- **GIVEN** a janela é de 10 trocas e já está cheia
+- **WHEN** uma nova troca acontece
+- **THEN** a mais antiga sai da janela
+- **AND** o arquivo do dia **continua** com todas as trocas
+
+#### Scenario: Janela alimenta o prompt da IA
+- **GIVEN** há 6 trocas na janela
+- **WHEN** o provider de IA é chamado
+- **THEN** as 6 trocas entram no prompt como histórico da conversa
+
+---
+
+### Requirement: Retomada do contexto do dia
+
+Ao subir, o bot relê o arquivo de hoje para não perder o fio da conversa.
+
+#### Scenario: Reinício no mesmo dia
+- **GIVEN** o bot conversou de manhã e foi reiniciado à tarde do mesmo dia
+- **WHEN** ele inicializa
+- **THEN** ele lê `data/conversations/<hoje>.jsonl`
+- **AND** carrega as últimas N trocas na memória curta
+- **AND** o dono pode perguntar `o que eu te falei antes?` e ser entendido
+
+#### Scenario: Primeiro início do dia
+- **GIVEN** não existe arquivo para hoje
+- **WHEN** o bot inicializa
+- **THEN** a memória curta começa vazia
+- **AND** nenhum arquivo de dias anteriores é carregado
+
+#### Scenario: Dias anteriores não entram no contexto
+- **GIVEN** existem arquivos de vários dias anteriores
+- **WHEN** o bot inicializa
+- **THEN** só o arquivo de hoje é lido
+- **AND** os anteriores permanecem em disco, intactos e legíveis
+
+---
+
+### Requirement: Durabilidade da escrita
+
+O histórico não pode ser perdido por queda do processo.
+
+#### Scenario: Escrita a cada troca
+- **GIVEN** uma troca acabou de acontecer
+- **WHEN** a linha é gravada
+- **THEN** ela é escrita e liberada para o SO imediatamente
+- **AND** não fica represada num buffer esperando N mensagens
+
+#### Scenario: Encerramento gracioso
+- **GIVEN** o bot recebe `SIGINT`
+- **WHEN** ele encerra
+- **THEN** o arquivo do dia é sincronizado e fechado antes da saída
+
+#### Scenario: Falha de escrita não derruba o bot
+- **GIVEN** o disco está cheio ou o diretório ficou sem permissão
+- **WHEN** a gravação falha
+- **THEN** o erro é registrado no log
+- **AND** o bot continua conversando e obedecendo normalmente
+
+---
+
+### Requirement: Privacidade e retenção do histórico
+
+O histórico é um arquivo local com conversas de uma criança — tratado como tal.
+
+#### Scenario: O histórico nunca sai da máquina
+- **GIVEN** o bot está gravando conversas
+- **WHEN** qualquer chamada ao provider de IA é feita
+- **THEN** só a janela curta em RAM é enviada
+- **AND** nenhum arquivo de histórico é lido ou transmitido para fora
+
+#### Scenario: Com provider local, nada sai da máquina
+- **GIVEN** `llm.provider` é `"ollama"` com `baseUrl` em localhost
+- **AND** `llm.fallbackProvider` é `null`
+- **WHEN** o dono conversa com o bot durante toda uma sessão
+- **THEN** nenhuma mensagem da criança trafega para fora do computador
+- **AND** nem o histórico nem a janela curta saem da máquina
+
+#### Scenario: Diretório de dados fora do controle de versão
+- **GIVEN** o repositório tem `.gitignore`
+- **WHEN** o projeto é inicializado
+- **THEN** `data/conversations/` está ignorado
+- **AND** nenhuma conversa vai parar num commit
+
+#### Scenario: Retenção configurada
+- **GIVEN** `memory.retentionDays` é 90
+- **WHEN** o bot inicializa
+- **THEN** arquivos de conversa com mais de 90 dias são apagados
+- **AND** cada exclusão é registrada no log
+
+#### Scenario: Retenção infinita
+- **GIVEN** `memory.retentionDays` é `null`
+- **WHEN** o bot inicializa
+- **THEN** nenhum arquivo antigo é apagado
+
+---
+
+### Requirement: Configuração da memória
+
+O bloco `memory` da configuração parametriza o comportamento.
+
+#### Scenario: Valores padrão
+- **GIVEN** `config.yaml` não traz o bloco `memory`
+- **WHEN** o bot inicializa
+- **THEN** vale o padrão: `dir: "data/conversations"`, `shortTermWindow: 10`,
+  `retentionDays: null`, `resumeToday: true`
+
+#### Scenario: Retomada desligada
+- **GIVEN** `memory.resumeToday` é `false`
+- **WHEN** o bot reinicia no mesmo dia
+- **THEN** a memória curta começa vazia
+- **AND** a gravação no arquivo do dia continua normalmente

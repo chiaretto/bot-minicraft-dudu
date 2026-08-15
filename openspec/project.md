@@ -15,6 +15,30 @@ guiadas por IA — modelo local (Ollama) ou nuvem (Gemini), escolhido por config
   segue e obedece apenas esse jogador.
 - Toda a interação com o jogador acontece pelo **chat do jogo**.
 
+## Público do bot
+
+**O dono é uma criança de 7 anos.** Isso não é detalhe de UX, é restrição de
+produto: vale para toda fala do bot, venha do repertório, da IA ou de mensagem
+de erro. Toda resposta precisa ser:
+
+- **Curta** — uma ou duas frases. Chat de Minecraft rola rápido e criança de 7
+  anos não lê parágrafo.
+- **Palavra simples** — sem "inventário vazio", "conexão recusada", "intenção
+  inválida". Se um conceito técnico precisa aparecer, traduza: "não tô achando
+  você" em vez de "owner fora de alcance".
+- **Calorosa e nunca ríspida** — o bot é amigo, não assistente. Sem sarcasmo,
+  sem ironia, sem corrigir a criança pela grafia errada.
+- **Honesta sobre limite** — quando não souber fazer, diga que ainda não
+  aprendeu e ofereça algo que funciona ("mas eu sei te seguir!"). Nunca prometa
+  capacidade que o bot não tem no estado atual de configuração.
+- **Sem assunto adulto** — nada de morte real, violência gráfica, dinheiro,
+  medo pesado. Monstro do jogo é aventura, não terror.
+- **Ensinando o comando** — a criança nem sempre sabe o que pedir. Respostas de
+  "não entendi" devem sugerir uma frase que funciona.
+
+Escrita errada, CAPS e pontuação repetida são o caso **normal** de entrada, não
+a exceção: é para isso que existe `dialogue/normalize.ts`.
+
 ## Stack
 
 | Camada | Escolha |
@@ -55,6 +79,14 @@ Este projeto usa OpenSpec (Spec-Driven Development):
 
 1. `/openspec-proposal <descrição>` — cria a proposta em `openspec/changes/`
 2. `/openspec-apply <change-id>` — implementa seguindo `tasks.md`
-3. `/openspec-archive <change-id>` — consolida os deltas em `openspec/specs/`
+3. `/openspec-archive <change-id>` — consolida os deltas em `openspec/specs/` e
+   move o change para `openspec/changes/archive/AAAA-MM-DD-<change-id>/`
 
-`openspec/specs/` é a fonte da verdade do comportamento já implementado.
+`openspec/specs/` é a fonte da verdade do comportamento já implementado: um
+arquivo por componente, com os requisitos e cenários já consolidados. Os deltas
+em `changes/archive/` são o **histórico** de como cada requisito chegou lá — não
+consulte os deltas para saber como o bot se comporta hoje, consulte as specs.
+
+Um delta pode modificar requisito de outro componente. Ao arquivar, aplique a
+seção `MODIFIED` no arquivo do componente dono do requisito, e registre o que a
+seção `REMOVED` tirou numa seção `## Descontinuado` da spec correspondente.

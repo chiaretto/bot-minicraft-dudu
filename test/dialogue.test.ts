@@ -13,6 +13,7 @@ import {
 } from '../src/dialogue/loader.js'
 import { Repertoire } from '../src/dialogue/repertoire.js'
 import { dialogueSchema, personaSchema } from '../src/config/schema.js'
+import { MIN_VARIATIONS_WARN } from '../src/dialogue/schema.js'
 import type { WorldSnapshot } from '../src/domain/types.js'
 
 const dialogue = dialogueSchema.parse({})
@@ -103,6 +104,123 @@ describe('matcher', () => {
   it('ignora entradas que não são de chat', () => {
     const match = findBestMatch('acabou o perigo', catalog.entries)
     expect(match?.entry.id).not.toBe('combate_fim')
+  })
+})
+
+describe('repertório do esconde-esconde', () => {
+  /** Toda fala que a sessão do jogo emite por id. */
+  const FALAS_DA_SESSAO = [
+    'jogo_aceito',
+    'jogo_mande_contar',
+    'jogo_pode_procurar',
+    'jogo_fui_achado',
+    'jogo_me_entrego',
+    'jogo_contando_fim',
+    'jogo_busca_errada',
+    'jogo_achei',
+    'jogo_nao_achei',
+    'jogo_sem_esconderijo',
+  ]
+
+  /** Falas que o wiring do bot emite. */
+  const FALAS_DO_BOT = [
+    'jogo_cancelado_monstro',
+    'jogo_cancelado',
+    'jogo_desconhecido',
+    'jogo_desligado',
+    'jogo_ja_rolando',
+  ]
+
+  const TODAS = [...FALAS_DA_SESSAO, ...FALAS_DO_BOT]
+
+  it('todas as entradas do jogo existem no catálogo', () => {
+    const rep = makeRepertoire()
+    for (const id of TODAS) {
+      expect(rep.has(id), id).toBe(true)
+    }
+  })
+
+  it('toda entrada do jogo responde quando chamada por id', () => {
+    const rep = makeRepertoire()
+    for (const id of TODAS) {
+      const said = rep.say(id, snapshot({ state: 'GAME' }))
+      expect(said, id).not.toBeNull()
+      expect(said!.text.length, id).toBeGreaterThan(0)
+    }
+  })
+
+  it('nenhuma entrada do jogo fica abaixo do mínimo de variações', () => {
+    for (const id of TODAS) {
+      const entry = catalog.entries.find((e) => e.id === id)
+      expect(entry, id).toBeDefined()
+      expect(entry!.responses.length, id).toBeGreaterThanOrEqual(MIN_VARIATIONS_WARN)
+    }
+  })
+
+  it('não repete a fala de busca errada nas duas buscas seguidas', () => {
+    const rep = makeRepertoire()
+    const first = rep.say('jogo_busca_errada', snapshot())
+    const second = rep.say('jogo_busca_errada', snapshot())
+    expect(first!.text).not.toBe(second!.text)
+  })
+
+  it('as falas do jogo não são pescadas por conversa comum', () => {
+    // São `trigger: fallback`: só saem por id, nunca por casamento de padrão.
+    const rep = makeRepertoire()
+    for (const text of ['pode procurar', 'achei', 'me entrego', 'lá vou eu', 'oi']) {
+      const answer = rep.respond(text, snapshot())
+      expect(answer === null || !TODAS.includes(answer.entryId), text).toBe(true)
+    }
+  })
+
+  it('fala de criança: curta, sem termo técnico', () => {
+    const proibidos = /pathfinder|timeout|raycast|sess[ãa]o|coordenada|null|erro|invalid/i
+    for (const id of TODAS) {
+      const entry = catalog.entries.find((e) => e.id === id)!
+      for (const response of entry.responses) {
+        const text = typeof response === 'string' ? response : response.text
+        expect(text.length, `${id}: ${text}`).toBeLessThanOrEqual(120)
+        expect(text, `${id}: ${text}`).not.toMatch(proibidos)
+      }
+    }
+  })
+
+  it('a recusa de jogo desconhecido oferece o que o bot sabe', () => {
+    const entry = catalog.entries.find((e) => e.id === 'jogo_desconhecido')!
+    for (const response of entry.responses) {
+      const text = typeof response === 'string' ? response : response.text
+      expect(text.toLowerCase(), text).toContain('esconde')
+    }
+  })
+
+  it('com os jogos desligados, o bot NÃO oferece esconde-esconde', () => {
+    // Oferecer o que está desligado é prometer o que o bot não faz.
+    const entry = catalog.entries.find((e) => e.id === 'jogo_desligado')!
+    for (const response of entry.responses) {
+      const text = typeof response === 'string' ? response : response.text
+      expect(text.toLowerCase(), text).not.toContain('esconde-esconde')
+    }
+  })
+
+  it('a derrota é admitida com graça, sem discutir com a criança', () => {
+    const entry = catalog.entries.find((e) => e.id === 'jogo_fui_achado')!
+    const textos = entry.responses.map((r) => (typeof r === 'string' ? r : r.text)).join(' ')
+    expect(textos).toMatch(/achou|pegou|perdi/i)
+    expect(textos).not.toMatch(/trapa|roubou|n[ãa]o vale/i)
+  })
+
+  it('o catálogo anuncia que o bot sabe brincar', () => {
+    const rep = makeRepertoire()
+    const entry = catalog.entries.find((e) => e.id === 'capacidades')!
+    const textos = entry.responses.map((r) => (typeof r === 'string' ? r : r.text)).join(' ')
+    expect(textos.toLowerCase()).toContain('esconde-esconde')
+    // E a pergunta direta chega na entrada certa.
+    expect(rep.respond('voce sabe brincar', snapshot())?.entryId).toBe('capacidades')
+  })
+
+  it('aceita variação condicionada ao estado GAME', () => {
+    expect(matchesWhen({ state: 'GAME' }, { snapshot: snapshot({ state: 'GAME' }) })).toBe(true)
+    expect(matchesWhen({ state: 'GAME' }, { snapshot: snapshot({ state: 'IDLE' }) })).toBe(false)
   })
 })
 
