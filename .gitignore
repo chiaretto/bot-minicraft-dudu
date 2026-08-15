@@ -2,6 +2,10 @@ node_modules/
 dist/
 .env
 
+# Configuração pessoal: contém o nome do jogador e a topologia da rede local.
+# Use config.example.yaml como ponto de partida.
+config.yaml
+
 # Conversas do jogador — nunca versionadas.
 # Ver openspec: conversation_memory_delta.md → "Privacidade e retenção".
 data/
