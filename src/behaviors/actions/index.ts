@@ -1,8 +1,10 @@
 import type { Bot } from 'mineflayer'
-import { goals } from 'mineflayer-pathfinder'
+import pathfinderPkg from 'mineflayer-pathfinder'
 import type { BehaviorConfig } from '../../config/schema.js'
 import type { Intent } from '../../domain/intent.js'
 import { bestWeapon } from '../../domain/mobs.js'
+
+const { goals } = pathfinderPkg
 
 export class ActionAborted extends Error {
   override name = 'ActionAborted'

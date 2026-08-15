@@ -1,10 +1,15 @@
 import mineflayer, { type Bot } from 'mineflayer'
-import { pathfinder, Movements, goals } from 'mineflayer-pathfinder'
+// `mineflayer-pathfinder` é CommonJS e o cjs-module-lexer do Node não detecta
+// `goals` como named export (ele nasce de um `require()` dentro do
+// module.exports). Import default + destructure funciona em ESM e em CJS.
+import pathfinderPkg from 'mineflayer-pathfinder'
 import { EventEmitter } from 'node:events'
 import type { Config, Secrets } from '../config/schema.js'
 import type { Logger } from '../logging/logger.js'
 import { Backoff, shouldReconnect, type DisconnectReason } from './reconnect.js'
 import { ChatSender } from './chat.js'
+
+const { pathfinder, Movements, goals } = pathfinderPkg
 
 export class VersionMismatchError extends Error {
   override name = 'VersionMismatchError'

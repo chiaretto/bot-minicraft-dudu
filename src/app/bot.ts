@@ -10,7 +10,7 @@ import { AiLayer } from '../ai/index.js'
 import { MessageRouter } from '../behaviors/router.js'
 import { StateMachine } from '../behaviors/state-machine.js'
 import { classifyThreats, planDefense, canStrike } from '../behaviors/defense/threat-watcher.js'
-import { goals } from 'mineflayer-pathfinder'
+import pathfinderPkg from 'mineflayer-pathfinder'
 import {
   equipBestWeapon,
   runIntent,
@@ -21,6 +21,8 @@ import {
 import { bestWeapon } from '../domain/mobs.js'
 import type { Intent } from '../domain/intent.js'
 import type { WorldSnapshot } from '../domain/types.js'
+
+const { goals } = pathfinderPkg
 
 const THREAT_TICK_MS = 250
 
