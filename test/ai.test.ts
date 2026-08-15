@@ -114,6 +114,22 @@ describe('limpeza da resposta', () => {
   it('remove markdown e ação entre asteriscos', () => {
     expect(cleanReply('*acena* **Oi** `amigo`')).toBe('Oi amigo')
   })
+
+  it('apara resposta cortada pelo teto de tokens na última frase completa', () => {
+    expect(cleanReply('Eu adoro a floresta! E aí uma coisa estranha aconte')).toBe(
+      'Eu adoro a floresta!',
+    )
+  })
+
+  it('mantém a resposta inteira quando ela já termina em pontuação', () => {
+    expect(cleanReply('Eu prefiro a noite, é mais divertido.')).toBe(
+      'Eu prefiro a noite, é mais divertido.',
+    )
+  })
+
+  it('devolve o texto como veio quando não há nenhuma frase fechada', () => {
+    expect(cleanReply('Oi amigo tudo bem com')).toBe('Oi amigo tudo bem com')
+  })
 })
 
 describe('resiliência: timeout', () => {

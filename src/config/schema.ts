@@ -69,7 +69,9 @@ export const ollamaSchema = z.object({
 })
 
 export const geminiSchema = z.object({
-  model: z.string().min(1).default('gemini-2.0-flash'),
+  // Alias '-latest': identificador de versão fixa é aposentado pelo Google e
+  // passa a devolver 404. Foi o que aconteceu com 'gemini-2.0-flash'.
+  model: z.string().min(1).default('gemini-flash-lite-latest'),
   timeoutMs: z.number().int().positive().default(5_000),
 })
 

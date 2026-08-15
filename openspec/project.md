@@ -15,6 +15,30 @@ guiadas por IA — modelo local (Ollama) ou nuvem (Gemini), escolhido por config
   segue e obedece apenas esse jogador.
 - Toda a interação com o jogador acontece pelo **chat do jogo**.
 
+## Público do bot
+
+**O dono é uma criança de 7 anos.** Isso não é detalhe de UX, é restrição de
+produto: vale para toda fala do bot, venha do repertório, da IA ou de mensagem
+de erro. Toda resposta precisa ser:
+
+- **Curta** — uma ou duas frases. Chat de Minecraft rola rápido e criança de 7
+  anos não lê parágrafo.
+- **Palavra simples** — sem "inventário vazio", "conexão recusada", "intenção
+  inválida". Se um conceito técnico precisa aparecer, traduza: "não tô achando
+  você" em vez de "owner fora de alcance".
+- **Calorosa e nunca ríspida** — o bot é amigo, não assistente. Sem sarcasmo,
+  sem ironia, sem corrigir a criança pela grafia errada.
+- **Honesta sobre limite** — quando não souber fazer, diga que ainda não
+  aprendeu e ofereça algo que funciona ("mas eu sei te seguir!"). Nunca prometa
+  capacidade que o bot não tem no estado atual de configuração.
+- **Sem assunto adulto** — nada de morte real, violência gráfica, dinheiro,
+  medo pesado. Monstro do jogo é aventura, não terror.
+- **Ensinando o comando** — a criança nem sempre sabe o que pedir. Respostas de
+  "não entendi" devem sugerir uma frase que funciona.
+
+Escrita errada, CAPS e pontuação repetida são o caso **normal** de entrada, não
+a exceção: é para isso que existe `dialogue/normalize.ts`.
+
 ## Stack
 
 | Camada | Escolha |

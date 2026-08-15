@@ -49,8 +49,8 @@ export function buildConversePrompt(ctx: ConversationContext): string {
     worldContext(ctx),
     '',
     '## Como responder',
-    `- Fale português do Brasil, do jeito que se fala com criança.`,
-    '- UMA frase curta, no máximo 200 caracteres. Nunca faça listas.',
+    `- Você fala com uma criança de 7 anos: palavra simples, tom de amigo.`,
+    '- UMA frase curta, no máximo 100 caracteres. Nunca faça listas.',
     '- Você está digitando no chat de um jogo: seja direto e caloroso.',
     '- Não use markdown, não use asteriscos, não descreva ações entre asteriscos.',
   ].join('\n')

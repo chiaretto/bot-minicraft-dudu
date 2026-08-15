@@ -89,7 +89,9 @@ llm:
     keepAlive: '30m'
 
   gemini:
-    model: 'gemini-2.0-flash'
+    # Prefira o alias '-latest': identificador de versão fixa é aposentado e
+    # passa a devolver 404, derrubando a IA sem erro visível no chat.
+    model: 'gemini-flash-lite-latest'
     timeoutMs: 5000
 
   # Carrega o modelo na inicialização, para a primeira conversa não pagar o

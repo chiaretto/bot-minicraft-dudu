@@ -17,7 +17,19 @@ interface CommandPattern {
 const COMMANDS: CommandPattern[] = [
   {
     intent: { type: 'STOP', params: {} },
-    patterns: [/^para$/, /^pare$/, /^parar$/, /^para tudo$/, /^cancela$/, /^chega$/],
+    patterns: [
+      /^para$/,
+      /^pare$/,
+      /^parar$/,
+      /^para tudo$/,
+      /^cancela$/,
+      /^cancelar$/,
+      /^chega$/,
+      /^para com isso$/,
+      /^pode parar$/,
+      /^esquece$/,
+      /^deixa pra la$/,
+    ],
   },
   {
     intent: { type: 'FOLLOW', params: {} },
@@ -26,12 +38,26 @@ const COMMANDS: CommandPattern[] = [
       /^vem ca$/,
       /^vem aqui$/,
       /^vem comigo$/,
+      /^vem junto$/,
+      /^vem pra ca$/,
+      /^vem pra perto$/,
+      /^vem atras de mim$/,
       /^me segue$/,
       /^me segui$/,
+      // Imperativo "correto": é como a maioria das pessoas escreve de primeira.
+      /^me siga$/,
+      /^siga me$/,
+      /^siga$/,
+      /^segue$/,
       /^segue me$/,
+      /^me sigue$/,
       /^me acompanha$/,
+      /^me acompanhe$/,
+      /^anda comigo$/,
       /^vamos$/,
+      /^vamos embora$/,
       /^bora$/,
+      /^bora la$/,
     ],
   },
   {
@@ -40,10 +66,17 @@ const COMMANDS: CommandPattern[] = [
       /^fica aqui$/,
       /^fique aqui$/,
       /^fica ai$/,
+      /^fique ai$/,
       /^espera aqui$/,
+      /^espera ai$/,
+      /^aguarda aqui$/,
       /^nao sai daqui$/,
       /^fica parado$/,
+      /^fica de guarda$/,
       /^me espera$/,
+      /^me espere$/,
+      /^nao me segue$/,
+      /^para de me seguir$/,
     ],
   },
   {
@@ -66,13 +99,23 @@ export interface ParsedCommand {
 }
 
 /**
- * Reconhece um comando, ou `null` para a mensagem descer na cascata.
- * Nunca faz I/O e nunca chama a IA.
+ * Enfeite no fim da frase: "me segue ai", "vem por favor", "para agora".
+ * Só é removido depois que o texto cru falhou, senão "fica ai" — que é comando
+ * de verdade — viraria "fica" e deixaria de casar.
  */
-export function parseCommand(text: string, botName: string): ParsedCommand | null {
-  const normalized = prepare(text, botName)
-  if (!normalized) return null
+const TRAILING_FILLER = /\s+(por favor|pfvr|pfv|agora|ja|ai|vai|pra mim|ta bom)$/u
 
+function stripFillers(text: string): string {
+  let out = text
+  let previous = ''
+  while (out !== previous && out) {
+    previous = out
+    out = out.replace(TRAILING_FILLER, '').trim()
+  }
+  return out
+}
+
+function match(normalized: string): ParsedCommand | null {
   for (const command of COMMANDS) {
     for (const pattern of command.patterns) {
       if (pattern.test(normalized)) {
@@ -81,6 +124,22 @@ export function parseCommand(text: string, botName: string): ParsedCommand | nul
     }
   }
   return null
+}
+
+/**
+ * Reconhece um comando, ou `null` para a mensagem descer na cascata.
+ * Nunca faz I/O e nunca chama a IA.
+ */
+export function parseCommand(text: string, botName: string): ParsedCommand | null {
+  const normalized = prepare(text, botName)
+  if (!normalized) return null
+
+  const direct = match(normalized)
+  if (direct) return direct
+
+  const stripped = stripFillers(normalized)
+  if (stripped === normalized || !stripped) return null
+  return match(stripped)
 }
 
 /** Exposto para teste: quantos padrões o parser cobre. */

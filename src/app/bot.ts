@@ -7,7 +7,7 @@ import { Repertoire } from '../dialogue/repertoire.js'
 import { loadCatalog } from '../dialogue/loader.js'
 import { MemoryStore } from '../memory/store.js'
 import { AiLayer } from '../ai/index.js'
-import { MessageRouter } from '../behaviors/router.js'
+import { MessageRouter, type RouteResult } from '../behaviors/router.js'
 import { StateMachine } from '../behaviors/state-machine.js'
 import { classifyThreats, planDefense, canStrike } from '../behaviors/defense/threat-watcher.js'
 import pathfinderPkg from 'mineflayer-pathfinder'
@@ -116,6 +116,11 @@ export class CompanionBot {
       )
     }
 
+    // Conecta primeiro: em CPU, carregar o modelo leva minutos, e o bot não
+    // pode ficar fora do mundo esperando isso — a criança está lá olhando.
+    // Comandos e repertório já funcionam sem a IA estar quente.
+    this.mc.connect()
+
     // Falha de aquecimento NUNCA impede o bot de iniciar.
     const warmUpError = await this.ai.warmUp()
     if (warmUpError) {
@@ -124,8 +129,6 @@ export class CompanionBot {
         `IA indisponível — o bot vai operar por comandos e repertório.\n${warmUpError.toActionableMessage()}`,
       )
     }
-
-    this.mc.connect()
   }
 
   private wireEvents(): void {
@@ -196,6 +199,35 @@ export class CompanionBot {
 
   // ─────────────────────────────── CHAT ────────────────────────────────
 
+  /**
+   * Registra no log o que a IA recebeu e devolveu.
+   *
+   * Também registra o caso em que ela NÃO respondeu: com a IA ligada, uma
+   * resposta `nao_entendi` só acontece quando o provider estourou o tempo ou
+   * falhou — é o sinal para ajustar `llm.ollama.timeoutMs`.
+   */
+  private logLlm(question: string, result: RouteResult): void {
+    if (result.source === 'llm') {
+      this.logger.info(
+        {
+          pergunta: question,
+          resposta: result.reply,
+          provider: result.provider,
+          latencyMs: result.latencyMs,
+        },
+        'IA respondeu',
+      )
+      return
+    }
+
+    if (this.ai.enabled && result.entryId === 'nao_entendi') {
+      this.logger.warn(
+        { pergunta: question },
+        'IA não respondeu (timeout, erro ou circuito aberto) — caiu no repertório',
+      )
+    }
+  }
+
   private async onChat(username: string, message: string): Promise<void> {
     const isOwner = username === this.config.ownerPlayer
 
@@ -209,6 +241,7 @@ export class CompanionBot {
     if (!isOwner) {
       // Outros jogadores conversam, mas não comandam.
       const parsed = await this.router.route(message, this.snapshot())
+      this.logLlm(message, parsed)
       if (parsed.intent !== null) {
         this.say(`Desculpa ${username}, eu só obedeço o ${this.config.ownerPlayer}!`, 'repertoire')
       } else if (parsed.reply) {
@@ -224,6 +257,7 @@ export class CompanionBot {
 
     const snapshot = this.snapshot()
     const result = await this.router.route(message, snapshot)
+    this.logLlm(message, result)
 
     if (result.reply) {
       this.say(

@@ -97,7 +97,7 @@ describe('superfície dos módulos (transpilado)', () => {
       model: 'qwen3:4b',
       keepAlive: '30m',
     })
-    const gemini = new GeminiProvider({ apiKey: 'chave-de-teste', model: 'gemini-2.0-flash' })
+    const gemini = new GeminiProvider({ apiKey: 'chave-de-teste', model: 'gemini-flash-lite-latest' })
 
     expect(ollama.name).toBe('ollama')
     expect(gemini.name).toBe('gemini')

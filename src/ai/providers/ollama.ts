@@ -52,7 +52,10 @@ export class OllamaProvider implements LlmProvider {
           { role: 'user', content: ctx.message },
         ],
         stream: false,
-        options: { temperature: 0.8, num_predict: 120 },
+        // `num_predict` baixo não é economia: em CPU a latência é proporcional
+        // ao tamanho da resposta, e resposta curta é o que a criança precisa.
+        // Ver CLAUDE.md → "o dono é uma criança de 7 anos".
+        options: { temperature: 0.8, num_predict: 35 },
       })
       signal?.throwIfAborted()
       return cleanReply(response.message.content)
@@ -104,10 +107,28 @@ export class OllamaProvider implements LlmProvider {
  * "thinking", markdown e ação entre asteriscos.
  */
 export function cleanReply(text: string): string {
-  return text
+  const clean = text
     .replace(/<think>[\s\S]*?<\/think>/gi, '')
     .replace(/\*[^*]*\*/g, '')
     .replace(/[*_`#]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+  return trimToLastSentence(clean)
+}
+
+/**
+ * Corta no fim da última frase completa.
+ *
+ * O teto de `num_predict` interrompe a geração no meio da palavra, e "o mundo
+ * começ" chegando no chat de uma criança é pior que uma resposta mais curta.
+ * Sem nenhuma frase fechada, devolve o texto como veio — melhor algo do que
+ * nada.
+ */
+export function trimToLastSentence(text: string): string {
+  if (!text) return text
+  if (/[.!?…]$/.test(text)) return text
+
+  const lastEnd = Math.max(text.lastIndexOf('.'), text.lastIndexOf('!'), text.lastIndexOf('?'))
+  if (lastEnd <= 0) return text
+  return text.slice(0, lastEnd + 1)
 }

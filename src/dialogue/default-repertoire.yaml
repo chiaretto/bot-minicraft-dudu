@@ -68,11 +68,13 @@ entries:
     specificity: 3
     patterns:
       ['o que voce sabe fazer', 'o que voce faz', 'quais comandos', 'como eu te uso', 'me ajuda',
-       'voce consegue fazer o que', 'quais sao seus poderes', 'o que voce pode fazer', 'ajuda']
+       'voce consegue fazer o que', 'quais sao seus poderes', 'o que voce pode fazer', 'ajuda',
+       'voce sabe andar', 'voce anda', 'voce consegue andar', 'voce sabe me seguir',
+       'voce se move']
     responses:
-      - 'Eu sei te seguir, ficar de guarda num lugar, pegar coisas pra você e te defender dos monstros! É só falar comigo.'
-      - "Posso ir com você (fala 'vem'), ficar parado ('fica aqui'), parar tudo ('para') e pegar uns blocos pra você."
-      - 'Sei andar com você, buscar item, ficar vigiando um lugar e brigar com zumbi que te atacar!'
+      - 'Eu sei te seguir, ficar de guarda num lugar e te defender dos monstros! É só falar comigo.'
+      - "Posso ir com você (fala 'vem'), ficar parado ('fica aqui') e parar tudo ('para')."
+      - 'Sei andar com você, ficar vigiando um lugar e brigar com zumbi que te atacar!'
       - "Meu forte: te acompanhar, te proteger e conversar. Manda 'me segue' que eu vou atrás!"
       - "Fala 'vem', 'fica aqui' ou 'para' que eu obedeço. E se um monstro te atacar eu já parto pra cima!"
 
@@ -241,11 +243,16 @@ entries:
       - 'Como assim, {owner}? Não peguei essa.'
       - 'Ué, me perdi. Repete pra mim?'
       - 'Não sei o que você quis dizer. Tenta de novo!'
+      # Variações que ensinam o comando: a criança nem sempre sabe o que pedir.
+      - 'Não entendi! Experimenta falar "me segue" ou "fica aqui".'
+      - 'Essa eu não sei. Você pode me mandar "vem", "fica aqui" ou "para"!'
+      - 'Não peguei! Pergunta "o que você sabe fazer" que eu te conto tudo.'
 
   # ───────────────────────── 21. PRESENÇA ────────────────────────────
   - id: presenca
     specificity: 3
-    patterns: ['cade voce', 'ta ai', 'voce sumiu', 'voce ta vivo', 'alo', 'ta me ouvindo', 'responde']
+    patterns: ['cade voce', 'onde voce esta', 'onde voce ta', 'onde vc ta', 'ta onde', 'voce esta onde',
+       'ta ai', 'voce sumiu', 'voce ta vivo', 'alo', 'alguem ai', 'ta me ouvindo', 'responde']
     responses:
       - 'Tô aqui, {owner}! Em {coords}.'
       - 'Aqui ó! Tô em {coords}, vem me buscar!'
@@ -303,3 +310,69 @@ entries:
       - 'Não aguento mais! Vou me afastar um pouco.'
       - 'Minha vida tá acabando, me desculpa!'
       - 'Preciso fugir, {owner}! Tô quase morrendo!'
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Entradas abaixo nasceram da análise do log de conversas.
+  # Ver openspec/project.md → "Público do bot" antes de escrever resposta.
+  # ═══════════════════════════════════════════════════════════════════
+
+  # ────────────── 27. PULAR / CORRER / HABILIDADE FÍSICA ─────────────
+  # Do log 2026-08-15: 'voce sabe pular', 'voce consegue pular um bloco'.
+  - id: habilidade_fisica
+    specificity: 5
+    patterns:
+      ['voce sabe pular', 'voce consegue pular', 'voce pula', 'da um pulo', 'pula um bloco',
+       'voce consegue pular um bloco', 'voce sabe correr', 'voce corre', 'voce sabe nadar',
+       'voce consegue subir', 'voce sabe escalar', 'voce sabe voar']
+    responses:
+      - 'Sei pular sim! Pulo bloco, subo escada e corro atrás de você.'
+      - 'Pular eu pulo! Um bloco de altura é facinho pra mim.'
+      - 'Sei correr e pular! Fala "me segue" que eu te mostro.'
+      - 'Consigo pular e subir! Só voar que eu não sei.'
+      - 'Pulo, corro e nado! Vem que eu vou atrás de você.'
+
+  # ───────────────────── 28. SKIN / APARÊNCIA ────────────────────────
+  # Do log 2026-08-15: 'voce quer mudar de skin?'.
+  - id: aparencia
+    specificity: 4
+    patterns:
+      ['voce quer mudar de skin', 'muda de skin', 'sua skin', 'quer trocar de skin',
+       'sua roupa', 'muda sua roupa', 'voce e feio', 'voce e bonito', 'como voce e',
+       'voce parece o que', 'que cara e a sua']
+    responses:
+      - 'Trocar de skin eu não sei sozinho! Se você quiser outra pra mim, pede pro seu pai.'
+      - 'Gostei da minha roupa! Mas quem troca ela é o seu pai, eu não consigo.'
+      - 'Eu fico com essa mesmo! E você, tá de skin nova?'
+      - 'Mudar eu não consigo não. Mas eu acho a sua bem legal!'
+      - 'Minha cara é essa aqui! Você gosta dela?'
+
+  # ────────── 29. PEDIDO DE COLETA (sem IA, ainda não faço) ──────────
+  # Do log 2026-08-15: 'pegue o bloco de diamante'.
+  # ATENÇÃO: não prometa buscar item. Com `llm.provider: none` não existe
+  # quem transforme "pega madeira" em ação — só comando de regex funciona.
+  - id: pedido_coleta
+    specificity: 4
+    patterns:
+      ['pega pra mim', 'pegue pra mim', 'pega um', 'pegue um', 'pega o bloco', 'pegue o bloco',
+       'me da um', 'me arruma', 'pega diamante', 'pegue diamante', 'pega madeira',
+       'pega pedra', 'pega ferro', 'pega ouro', 'busca pra mim']
+    responses:
+      - 'Buscar coisa eu ainda não aprendi, {owner}. Mas sei te seguir e te proteger!'
+      - 'Essa eu não consigo ainda. Se você for lá, eu vou junto te dar cobertura!'
+      - 'Pegar item eu ainda não sei. Fala "me segue" que a gente vai pegar juntos!'
+      - 'Ainda não! Seu pai ainda tá me ensinando isso. Quer que eu vá com você?'
+      - 'Não sei pegar não, desculpa. Mas eu te acompanho até lá!'
+
+  # ────────────── 30. O QUE O DONO ESTÁ SEGURANDO ────────────────────
+  # Do log 2026-08-15: 'o que esta na minha mão?'.
+  - id: mao_do_dono
+    specificity: 4
+    patterns:
+      ['o que esta na minha mao', 'o que tem na minha mao', 'o que eu to segurando',
+       'o que eu estou segurando', 'o que eu tenho na mao', 've minha mao', 'olha minha mao',
+       'adivinha o que eu to segurando']
+    responses:
+      - 'Daqui eu não consigo ver o que você tá segurando! Me conta o que é?'
+      - 'Sua mão eu não enxergo não, {owner}. O que você pegou?'
+      - 'Hmm, isso eu não vejo. Fala o que é que eu chuto!'
+      - 'Não dá pra ver daqui! Mas eu vejo você :D'
