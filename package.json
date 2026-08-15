@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/app/main.ts",
+    "dev:once": "tsx src/app/main.ts",
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "start": "node dist/app/main.js",
     "test": "vitest run",

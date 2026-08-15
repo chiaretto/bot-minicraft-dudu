@@ -66,6 +66,31 @@ server:
 npm run dev
 ```
 
+### Windows
+
+O bot precisa rodar no **mesmo Windows onde o Minecraft está aberto** — um mundo
+em LAN escuta em `localhost` do host, e o WSL não enxerga esse `localhost`.
+
+```powershell
+npm install        # rode pelo PowerShell; node_modules instalado no Linux não serve
+npm run dev
+```
+
+Se o projeto estiver numa pasta do WSL (`\\wsl.localhost\...` ou um drive
+mapeado), o watch do `tsx` falha com `EISDIR: watch` — o Windows não consegue
+observar arquivos nesse compartilhamento. Use:
+
+```powershell
+npm run dev:once   # sem reload
+```
+
+Para ter reload, mova o repositório para um caminho nativo do Windows
+(ex.: `C:\Users\<você>\bot-minicraft-dudu`) e rode `npm install` de novo lá.
+
+> A versão máxima suportada pelo mineflayer hoje é **1.21.11**. Se o seu
+> Minecraft for mais novo, crie uma instalação 1.21.11 no launcher e abra o mundo
+> para LAN por ela — senão o servidor recusa a conexão na hora.
+
 ---
 
 ## IA: local, nuvem ou nenhuma
