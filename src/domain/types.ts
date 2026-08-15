@@ -1,19 +1,28 @@
 /** Estados da máquina de comportamento, em ordem crescente de prioridade. */
-export type BotState = 'IDLE' | 'FOLLOW' | 'STAY' | 'ACTION' | 'DEFEND' | 'EMERGENCY'
+export type BotState = 'IDLE' | 'FOLLOW' | 'STAY' | 'ACTION' | 'GAME' | 'DEFEND' | 'EMERGENCY'
 
 /**
  * Prioridade declarada. Um estado de prioridade maior sempre interrompe o menor,
  * e o interrompido vai para a pilha de retomada.
  * Ver: player_defense_delta.md → "Prioridade entre estados".
+ *
+ * `GAME` tem a mesma prioridade de `ACTION` — mas, ao contrário dela, **não é
+ * retomado** depois de interrompido. Esconderijo queimado e contagem perdida
+ * fazem de "voltar de onde parou" algo mais confuso que recomeçar.
+ * Ver: bot_games_delta.md → "Estado `GAME` e prioridade".
  */
 export const STATE_PRIORITY: Record<BotState, number> = {
   IDLE: 0,
   FOLLOW: 1,
   STAY: 1,
   ACTION: 2,
+  GAME: 2,
   DEFEND: 3,
   EMERGENCY: 4,
 }
+
+/** Estados que, ao serem interrompidos, são descartados em vez de empilhados. */
+export const NON_RESUMABLE_STATES: ReadonlySet<BotState> = new Set<BotState>(['GAME'])
 
 export interface Vec3Like {
   x: number

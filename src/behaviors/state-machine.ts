@@ -1,4 +1,9 @@
-import { STATE_PRIORITY, type BotState, type Vec3Like } from '../domain/types.js'
+import {
+  NON_RESUMABLE_STATES,
+  STATE_PRIORITY,
+  type BotState,
+  type Vec3Like,
+} from '../domain/types.js'
 
 export interface StateContext {
   /** Coordenada memorizada do STAY. */
@@ -70,7 +75,9 @@ export class StateMachine {
     const from = this.current
     // IDLE não vale a pena empilhar: retomar "não fazer nada" é o mesmo que
     // simplesmente voltar ao IDLE.
-    const shouldStack = from !== 'IDLE'
+    // Jogo não é retomável: o esconderijo já foi queimado e a criança já saiu
+    // do lugar. Ver: bot_games_delta.md → "Fim do combate não retoma o jogo".
+    const shouldStack = from !== 'IDLE' && !NON_RESUMABLE_STATES.has(from)
     if (shouldStack) this.stack.push({ state: from, context: this.context })
 
     this.cancelCurrent()

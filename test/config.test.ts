@@ -8,6 +8,7 @@ import {
   assertSecretsForProvider,
 } from '../src/config/load.js'
 import { REDACT_PATHS, scrubSecrets } from '../src/logging/logger.js'
+import { FORBIDDEN_YAML_KEYS } from '../src/config/schema.js'
 
 const minimal = { ownerPlayer: 'Miguel', server: { version: '1.21.4' } }
 
@@ -143,6 +144,66 @@ describe('config: padrões dos blocos novos', () => {
 
   it('recusa provider desconhecido listando os suportados', () => {
     expect(() => parseConfig({ ...minimal, llm: { provider: 'chatgpt' } })).toThrow(ConfigError)
+  })
+})
+
+describe('config: jogos', () => {
+  it('aplica os defaults quando o bloco está ausente', () => {
+    const c = parseConfig(minimal)
+    expect(c.games.enabled).toBe(true)
+    expect(c.games.hideAndSeek.countTo).toBe(10)
+    expect(c.games.hideAndSeek.fakeSearches).toBe(2)
+    expect(c.games.hideAndSeek.touchDistance).toBe(2)
+    expect(c.games.hideAndSeek.roundTimeoutMs).toBe(180_000)
+  })
+
+  it('permite desligar os jogos', () => {
+    const c = parseConfig({ ...minimal, games: { enabled: false } })
+    expect(c.games.enabled).toBe(false)
+    // Mesmo desligado, os parâmetros continuam válidos e com default.
+    expect(c.games.hideAndSeek.countTo).toBe(10)
+  })
+
+  it('recusa faixa de distância invertida apontando o campo', () => {
+    const raw = { ...minimal, games: { hideAndSeek: { hideMinDistance: 40, hideMaxDistance: 20 } } }
+    expect(() => parseConfig(raw)).toThrow(ConfigError)
+    expect(() => parseConfig(raw)).toThrow(/hideMinDistance/)
+  })
+
+  it('recusa busca falsa mais perto que a distância de toque', () => {
+    const raw = {
+      ...minimal,
+      games: { hideAndSeek: { touchDistance: 10, fakeSearchMinDistanceFromOwner: 3 } },
+    }
+    expect(() => parseConfig(raw)).toThrow(ConfigError)
+    expect(() => parseConfig(raw)).toThrow(/fakeSearchMinDistanceFromOwner/)
+  })
+
+  it('recusa valores fora de faixa', () => {
+    for (const hideAndSeek of [
+      { fakeSearches: -1 },
+      { countTo: 0 },
+      { roundTimeoutMs: 0 },
+      { seeDistance: -5 },
+      { hideCandidateSamples: 0 },
+    ]) {
+      expect(
+        () => parseConfig({ ...minimal, games: { hideAndSeek } }),
+        JSON.stringify(hideAndSeek),
+      ).toThrow(ConfigError)
+    }
+  })
+
+  it('aceita zero buscas falsas — desliga o teatro sem quebrar o jogo', () => {
+    const c = parseConfig({ ...minimal, games: { hideAndSeek: { fakeSearches: 0 } } })
+    expect(c.games.hideAndSeek.fakeSearches).toBe(0)
+  })
+
+  it('não introduz nenhuma chave de segredo', () => {
+    const c = parseConfig({ ...minimal, games: { enabled: true } })
+    for (const key of Object.keys(c.games.hideAndSeek)) {
+      expect(FORBIDDEN_YAML_KEYS as readonly string[]).not.toContain(key)
+    }
   })
 })
 

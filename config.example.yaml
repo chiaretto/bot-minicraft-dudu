@@ -63,6 +63,38 @@ defense:
   # Creeper dentro deste raio do dono nunca vai para corpo a corpo.
   creeperSafeDistance: 10
 
+# Brincadeiras com regra, começo e fim. Hoje: esconde-esconde.
+games:
+  enabled: true
+  hideAndSeek:
+    # Quão longe o bot vai se esconder. Aumente as duas se a criança estiver
+    # achando fácil demais; diminua se ela cansar de procurar.
+    hideMinDistance: 10
+    hideMaxDistance: 30
+    # Quantos lugares ele avalia antes de desistir. Em lugar apertado (dentro
+    # de casa, túnel) pode não existir nenhum bom, e aí ele avisa no chat.
+    hideCandidateSamples: 24
+    # Chegar a esta distância do bot escondido conta como "achei você".
+    touchDistance: 2
+    # Até onde o bot enxerga. Ele só diz que achou com o caminho livre de
+    # verdade: quem está atrás de uma parede não é achado.
+    seeDistance: 20
+    # Até quanto ele conta, e o ritmo da contagem no chat. O chat do jogo tem
+    # um piso de 900 ms entre mensagens, então pedir menos que isso não muda.
+    countTo: 10
+    countIntervalMs: 1000
+    # Quantas vezes ele procura no lugar errado DE PROPÓSITO antes de procurar
+    # de verdade. Aumente para ele demorar mais para achar.
+    # Isto não é enfeite: o bot sabe onde você está o tempo todo (o jogo conta
+    # para ele), e são estes erros de propósito que fazem a brincadeira existir.
+    fakeSearches: 2
+    # Distância mínima entre um lugar errado e o jogador — se for pequena, ele
+    # esbarra em você fingindo procurar e a rodada acaba na hora.
+    fakeSearchMinDistanceFromOwner: 8
+    # Depois disso a rodada acaba sozinha, com o bot se entregando ou pedindo
+    # dica. Serve para nenhuma brincadeira ficar pendurada para sempre.
+    roundTimeoutMs: 180000
+
 # Nível 3 da cascata: só recebe o que comando e repertório não resolveram.
 llm:
   # 'ollama' = modelo local (padrão, sem custo, sem internet)

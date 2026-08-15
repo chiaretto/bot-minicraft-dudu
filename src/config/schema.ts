@@ -61,6 +61,62 @@ export const defenseSchema = z.object({
   creeperSafeDistance: z.number().positive().default(10),
 })
 
+/**
+ * Parâmetros do esconde-esconde. Os defaults funcionam sem ninguém mexer em
+ * nada; as distâncias são o que se ajusta quando a rodada fica fácil ou
+ * difícil demais para a criança.
+ * Ver: configuration_delta.md → "Bloco `games`".
+ */
+export const hideAndSeekSchema = z
+  .object({
+    /** Esconderijo nunca colado no jogador. */
+    hideMinDistance: z.number().positive().default(10),
+    /** Nem tão longe que a brincadeira vire caminhada. */
+    hideMaxDistance: z.number().positive().default(30),
+    /** Pontos avaliados antes de o bot desistir de achar esconderijo. */
+    hideCandidateSamples: z.number().int().positive().default(24),
+    /** Encostou a esta distância, achou. */
+    touchDistance: z.number().positive().default(2),
+    /** Alcance máximo do "ver" do bot, mesmo com caminho livre. */
+    seeDistance: z.number().positive().default(20),
+    countTo: z.number().int().positive().default(10),
+    /** O `ChatSender` impõe um piso de 900 ms; abaixo disso não adianta pedir. */
+    countIntervalMs: z.number().int().positive().default(1000),
+    /**
+     * Erros de propósito antes de procurar de verdade. NÃO é enfeite: é a única
+     * coisa que impede o bot de "achar" na hora, já que o protocolo entrega a
+     * posição do jogador de graça.
+     * Ver: bot_games_delta.md → "Cegueira deliberada durante o fingimento".
+     */
+    fakeSearches: z.number().int().nonnegative().default(2),
+    fakeSearchMinDistanceFromOwner: z.number().positive().default(8),
+    /** Rodada nunca fica pendurada. */
+    roundTimeoutMs: z.number().int().positive().default(180_000),
+  })
+  .superRefine((cfg, ctx) => {
+    if (cfg.hideMinDistance > cfg.hideMaxDistance) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['hideMinDistance'],
+        message: `não pode ser maior que hideMaxDistance (${cfg.hideMaxDistance})`,
+      })
+    }
+    // Busca falsa mais perto que o toque encostaria no jogador e acabaria a
+    // brincadeira antes de começar.
+    if (cfg.fakeSearchMinDistanceFromOwner < cfg.touchDistance) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['fakeSearchMinDistanceFromOwner'],
+        message: `não pode ser menor que touchDistance (${cfg.touchDistance})`,
+      })
+    }
+  })
+
+export const gamesSchema = z.object({
+  enabled: z.boolean().default(true),
+  hideAndSeek: hideAndSeekSchema.default({}),
+})
+
 export const ollamaSchema = z.object({
   baseUrl: z.string().url().default('http://localhost:11434'),
   model: z.string().min(1).default('qwen3:4b'),
@@ -121,6 +177,7 @@ export const configSchema = z.object({
   dialogue: dialogueSchema.default({}),
   memory: memorySchema.default({}),
   defense: defenseSchema.default({}),
+  games: gamesSchema.default({}),
   llm: llmSchema.default({}),
   behavior: behaviorSchema.default({}),
   logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
@@ -129,6 +186,8 @@ export const configSchema = z.object({
 export type Config = z.infer<typeof configSchema>
 export type LlmConfig = z.infer<typeof llmSchema>
 export type DefenseConfig = z.infer<typeof defenseSchema>
+export type GamesConfig = z.infer<typeof gamesSchema>
+export type HideAndSeekConfig = z.infer<typeof hideAndSeekSchema>
 export type DialogueConfig = z.infer<typeof dialogueSchema>
 export type MemoryConfig = z.infer<typeof memorySchema>
 export type BehaviorConfig = z.infer<typeof behaviorSchema>

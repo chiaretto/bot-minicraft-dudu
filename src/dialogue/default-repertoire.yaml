@@ -70,13 +70,15 @@ entries:
       ['o que voce sabe fazer', 'o que voce faz', 'quais comandos', 'como eu te uso', 'me ajuda',
        'voce consegue fazer o que', 'quais sao seus poderes', 'o que voce pode fazer', 'ajuda',
        'voce sabe andar', 'voce anda', 'voce consegue andar', 'voce sabe me seguir',
-       'voce se move']
+       'voce se move', 'voce sabe brincar', 'voce sabe jogar', 'que brincadeira voce sabe',
+       'voce brinca de que', 'quais jogos voce sabe']
     responses:
-      - 'Eu sei te seguir, ficar de guarda num lugar e te defender dos monstros! É só falar comigo.'
+      - 'Eu sei te seguir, ficar de guarda, te defender dos monstros e brincar de esconde-esconde!'
       - "Posso ir com você (fala 'vem'), ficar parado ('fica aqui') e parar tudo ('para')."
       - 'Sei andar com você, ficar vigiando um lugar e brigar com zumbi que te atacar!'
-      - "Meu forte: te acompanhar, te proteger e conversar. Manda 'me segue' que eu vou atrás!"
+      - "Meu forte: te acompanhar, te proteger e brincar. Manda 'vamos brincar' que eu me escondo!"
       - "Fala 'vem', 'fica aqui' ou 'para' que eu obedeço. E se um monstro te atacar eu já parto pra cima!"
+      - "Sei brincar de esconde-esconde! Fala 'vamos brincar' que eu escondo, ou 'eu vou me esconder' que eu conto até 10."
 
   # ────────────────────── 6. ESTADO / COMO ESTÁ ──────────────────────
   - id: estado_bot
@@ -177,6 +179,8 @@ entries:
       - "Bati numa ovelha e ela disse 'béé-m feito'. Tá, essa foi ruim."
 
   # ─────────────────── 14. PERGUNTAS SOBRE O JOGO ────────────────────
+  # Perguntas sobre o MUNDO (hora, lugar). Não confundir com as entradas
+  # `jogo_*` da brincadeira de esconde-esconde, mais abaixo.
   - id: jogo_perguntas
     specificity: 3
     patterns: ['que horas sao', 'ta de noite', 'ta de dia', 'onde a gente ta', 'onde estamos', 'que lugar e esse', 'qual a coordenada']
@@ -310,6 +314,160 @@ entries:
       - 'Não aguento mais! Vou me afastar um pouco.'
       - 'Minha vida tá acabando, me desculpa!'
       - 'Preciso fugir, {owner}! Tô quase morrendo!'
+
+  # ─────────────── 24. ESCONDE-ESCONDE (instantâneos) ────────────────
+  # Faladas pela sessão do jogo, por id, nunca pela IA — o mesmo motivo dos
+  # avisos de combate: uma pausa de 4 s esperando modelo estraga a brincadeira.
+  # NÃO confundir com `jogo_perguntas`, que é sobre o mundo (hora, coordenada).
+  # Ver: openspec/changes/.../specs/local_dialogue_delta.md
+
+  # O bot topou brincar.
+  - id: jogo_aceito
+    trigger: fallback
+    responses:
+      - 'Ihaaa, bora brincar!'
+      - 'Oba! Adoro esconde-esconde!'
+      - 'Bora! Essa eu sou bom!'
+      - 'Tô dentro, {owner}! Vamos nessa!'
+      - 'Aêêê! Brincadeira é comigo mesmo!'
+
+  # Pede que a criança feche o olho e conte, para o bot poder sumir.
+  - id: jogo_mande_contar
+    trigger: fallback
+    responses:
+      - 'Fecha o olho e conta até 10 que eu vou me esconder!'
+      - 'Conta até 10 sem espiar, hein!'
+      - 'Tampa o olho e conta! Sem trapaça, {owner}!'
+      - 'Conta devagarzinho até 10 que eu já sumo daqui!'
+      - 'Olho fechado! Conta até 10 pra mim.'
+
+  # Só sai DEPOIS de o bot chegar ao esconderijo.
+  - id: jogo_pode_procurar
+    trigger: fallback
+    responses:
+      - 'Pronto! Pode procurar!'
+      - 'Tô escondido! Vem me achar!'
+      - 'Pode vir! Aposto que não me acha.'
+      - 'Escondi! Agora é com você, {owner}!'
+      - 'Prontinho! Vem, vem!'
+
+  # O jogador encostou no bot escondido.
+  - id: jogo_fui_achado
+    trigger: fallback
+    responses:
+      - 'Ahh, você me achou! Perdi!'
+      - 'Aiii, me pegou! Você é bom nisso!'
+      - 'Perdi, perdi! Bora de novo?'
+      - 'Não acredito que você me achou tão rápido!'
+      - 'Achou! Agora é minha vez de procurar?'
+
+  # O jogador desistiu, ou o tempo acabou com o bot ainda escondido.
+  - id: jogo_me_entrego
+    trigger: fallback
+    responses:
+      - 'Tô aqui ó! Não me achou dessa vez!'
+      - 'Sai daqui de trás! Me escondi bem, né?'
+      - 'Achou não! Tava aqui esse tempo todo.'
+      - 'Apareci! Quer tentar mais uma vez?'
+      - 'Ganhei essa! Bora de novo que agora você acha.'
+
+  # A contagem até 10 acabou e o bot vai procurar.
+  - id: jogo_contando_fim
+    trigger: fallback
+    responses:
+      - 'Lá vou eu!'
+      - 'Pronto ou não, lá vou eu!'
+      - 'Terminei de contar! Já vou te achar.'
+      - 'Acabou a contagem! Cadê você?'
+      - 'Tô indo! Se prepara, {owner}!'
+
+  # Chegou num dos lugares errados, DE PROPÓSITO.
+  - id: jogo_busca_errada
+    trigger: fallback
+    responses:
+      - 'Será que tá aqui atrás?'
+      - 'Aqui não tá... hmm.'
+      - 'Achei que você tinha vindo pra cá!'
+      - 'Nada aqui. Cadê você, {owner}?'
+      - 'Olhei aqui e nada. Vou procurar mais longe.'
+      - 'Hmm, aqui não. Você escondeu bem!'
+
+  # Enxergou o jogador e chegou perto dele.
+  - id: jogo_achei
+    trigger: fallback
+    responses:
+      - 'Achei você!!'
+      - 'Te peguei! Tava aí escondidinho!'
+      - 'Achei, achei! Ganhei essa!'
+      - 'Olha você aí! Achei, {owner}!'
+      - 'Te vi! Agora é a minha vez de esconder?'
+
+  # O tempo acabou e o bot não achou.
+  - id: jogo_nao_achei
+    trigger: fallback
+    responses:
+      - 'Não tô te achando! Me dá uma dica?'
+      - 'Você escondeu muito bem! Cadê você?'
+      - 'Desisto! Onde você tá?'
+      - 'Procurei tudo e não achei. Você ganhou!'
+      - 'Nossa, que esconderijo bom! Aparece pra mim?'
+
+  # Não existe lugar sem linha de visão ali (túnel, casa pequena).
+  - id: jogo_sem_esconderijo
+    trigger: fallback
+    responses:
+      - 'Aqui não tem lugar bom pra esconder. Vamos lá pra fora?'
+      - 'É apertado demais aqui! Num lugar maior eu escondo melhor.'
+      - 'Não achei onde me esconder por aqui. Bora pra um lugar aberto?'
+      - 'Aqui você me vê de qualquer canto! Vamos pra outro lugar?'
+
+  # A defesa cancelou a rodada.
+  - id: jogo_cancelado_monstro
+    trigger: fallback
+    responses:
+      - 'Peraí! Tem monstro. A gente brinca depois?'
+      - 'Deixa a brincadeira, apareceu bicho! Fica perto de mim.'
+      - 'Ó o monstro! Depois a gente joga de novo.'
+      - 'Para o jogo! Tem coisa feia aqui perto.'
+
+  # O jogador parou o jogo, ou um evento do mundo encerrou.
+  - id: jogo_cancelado
+    trigger: fallback
+    responses:
+      - 'Tá bom, paramos a brincadeira!'
+      - 'Beleza, jogo encerrado. Quando quiser é só chamar!'
+      - 'Parei! Foi divertido enquanto durou.'
+      - 'Ok! Depois a gente brinca de novo, {owner}.'
+
+  # Jogo que o bot não conhece.
+  - id: jogo_desconhecido
+    trigger: fallback
+    responses:
+      - 'Essa eu ainda não aprendi. Mas eu sei brincar de esconde-esconde!'
+      - 'Não sei jogar isso não. Bora de esconde-esconde?'
+      - 'Ainda não aprendi essa! A que eu sei é esconde-esconde.'
+      - 'Essa aí eu não sei. Mas me chama pro esconde-esconde!'
+
+  # Jogos desligados na configuração (`games.enabled: false`).
+  # Entrada separada de `jogo_desconhecido` de propósito: aquela OFERECE o
+  # esconde-esconde, e oferecer o que está desligado é prometer o que o bot não
+  # faz. Ver openspec/project.md → "Público do bot".
+  - id: jogo_desligado
+    trigger: fallback
+    responses:
+      - 'Agora não dá pra brincar. Mas eu sei te seguir!'
+      - 'Hoje não posso brincar, desculpa! Quer que eu te acompanhe?'
+      - 'Brincadeira tá desligada aqui. Mas eu fico de guarda pra você!'
+      - 'Não consigo brincar agora. Chama seu pai pra ligar isso pra mim?'
+
+  # Convite chegando com uma rodada já em andamento.
+  - id: jogo_ja_rolando
+    trigger: fallback
+    responses:
+      - 'Ó, a gente já tá brincando! Continua!'
+      - 'Calma que o jogo de agora nem acabou!'
+      - 'Já tô brincando com você! Termina essa primeiro.'
+      - 'Essa rodada ainda tá valendo, {owner}!'
 
   # ═══════════════════════════════════════════════════════════════════
   # Entradas abaixo nasceram da análise do log de conversas.

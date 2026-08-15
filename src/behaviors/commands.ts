@@ -91,7 +91,91 @@ const COMMANDS: CommandPattern[] = [
     intent: { type: 'LOOK_AT_OWNER', params: {} },
     patterns: [/^olha pra mim$/, /^olha aqui$/, /^me olha$/],
   },
+  // ── Brincadeiras ────────────────────────────────────────────────────────
+  // Vêm antes do convite genérico: "eu vou me esconder" também casaria com
+  // "vou me esconder" de um convite qualquer, e o papel ficaria trocado.
+  {
+    intent: { type: 'PLAY_GAME', params: { game: 'esconde_esconde', role: 'bot_procura' } },
+    patterns: [
+      /^eu vou me esconder$/,
+      /^vou me esconder$/,
+      /^eu me escondo$/,
+      /^me procura$/,
+      /^vem me procurar$/,
+      /^vem me achar$/,
+      /^me acha$/,
+      /^conta ate 10$/,
+      /^conta ate dez$/,
+      /^fecha o olho e conta$/,
+      /^conta ai$/,
+      /^voce procura$/,
+      /^voce conta$/,
+    ],
+  },
+  {
+    intent: { type: 'PLAY_GAME', params: { game: 'esconde_esconde', role: 'bot_esconde' } },
+    patterns: [
+      /^se esconde$/,
+      /^se esconda$/,
+      /^vai se esconder$/,
+      /^voce se esconde$/,
+      /^voce se esconda$/,
+      /^some daqui que eu te acho$/,
+      /^eu vou te achar$/,
+      /^eu vou te procurar$/,
+      // Convite genérico: "vamos brincar" de uma criança de 7 anos quer dizer
+      // "some daí que eu te acho". O papel padrão é o bot se esconder.
+      /^vamos brincar$/,
+      /^vamos brincar de esconde esconde$/,
+      /^vamos brincar de esconde$/,
+      /^vamos jogar$/,
+      /^vamos jogar esconde esconde$/,
+      /^bora brincar$/,
+      /^bora brincar de esconde esconde$/,
+      /^bora jogar esconde esconde$/,
+      /^bora de esconde esconde$/,
+      /^quer brincar$/,
+      /^quer brincar de esconde esconde$/,
+      /^quer jogar esconde esconde$/,
+      /^brincar de esconde esconde$/,
+      /^esconde esconde$/,
+      /^vamos de esconde esconde$/,
+    ],
+  },
 ]
+
+/**
+ * O jogador desistiu de procurar e quer que o bot apareça.
+ *
+ * Não é intenção do catálogo: só faz sentido com uma rodada em andamento, e
+ * fora dela `cade voce` é conversa que o repertório responde. Quem chama
+ * verifica o estado antes.
+ * Ver: bot_games_delta.md → "Jogador desiste".
+ */
+const GIVE_UP_PATTERNS: RegExp[] = [
+  /^desisto$/,
+  /^eu desisto$/,
+  /^me entrego$/,
+  /^cade voce$/,
+  /^onde voce ta$/,
+  /^onde voce esta$/,
+  /^nao acho voce$/,
+  /^nao te achei$/,
+  /^nao to achando voce$/,
+  /^aparece$/,
+  /^sai dai$/,
+]
+
+export function isGiveUp(text: string, botName: string): boolean {
+  const normalized = prepare(text, botName)
+  if (!normalized) return false
+  if (GIVE_UP_PATTERNS.some((p) => p.test(normalized))) return true
+
+  const stripped = stripFillers(normalized)
+  return stripped !== normalized && stripped.length > 0
+    ? GIVE_UP_PATTERNS.some((p) => p.test(stripped))
+    : false
+}
 
 export interface ParsedCommand {
   intent: Intent

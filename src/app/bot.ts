@@ -10,6 +10,16 @@ import { AiLayer } from '../ai/index.js'
 import { MessageRouter, type RouteResult } from '../behaviors/router.js'
 import { StateMachine } from '../behaviors/state-machine.js'
 import { classifyThreats, planDefense, canStrike } from '../behaviors/defense/threat-watcher.js'
+import { createSession, type GameSession, type GameWorld } from '../behaviors/games/index.js'
+import { GameAborted } from '../behaviors/games/hide-and-seek.js'
+import { isGiveUp } from '../behaviors/commands.js'
+import {
+  hasLineOfSight,
+  isInFieldOfView,
+  raycastWorldFrom,
+  DEFAULT_FOV_HALF_ANGLE,
+} from '../minecraft/visibility.js'
+import { distance } from '../minecraft/snapshot.js'
 import pathfinderPkg from 'mineflayer-pathfinder'
 import {
   equipBestWeapon,
@@ -20,11 +30,14 @@ import {
 } from '../behaviors/actions/index.js'
 import { bestWeapon } from '../domain/mobs.js'
 import type { Intent } from '../domain/intent.js'
-import type { WorldSnapshot } from '../domain/types.js'
+import type { Vec3Like, WorldSnapshot } from '../domain/types.js'
 
 const { goals } = pathfinderPkg
 
 const THREAT_TICK_MS = 250
+
+/** Folga do `GoalNear` ao caminhar durante o jogo. */
+const GAME_GOAL_RANGE = 1
 
 /**
  * Composition root: monta as dependências e liga os laços.
@@ -45,6 +58,10 @@ export class CompanionBot {
   private threatTimer: ReturnType<typeof setInterval> | null = null
   private engagementStartedAt: number | null = null
   private wasNight: boolean | null = null
+  /** Rodada em andamento, ou `null`. */
+  private game: GameSession | null = null
+  /** Dimensão em que a rodada começou: trocar de dimensão encerra o jogo. */
+  private gameDimension: string | null = null
 
   constructor(
     private readonly config: Config,
@@ -156,8 +173,11 @@ export class CompanionBot {
     this.mc.on('entityGone', (id) => this.recentAttackers.delete(id))
 
     this.mc.on('death', () => {
+      // `reset()` aborta o sinal e com ele a rodada em andamento.
+      const wasPlaying = this.game !== null
       this.state.reset()
       this.say('Ai, eu morri! Já tô voltando...', 'spontaneous')
+      if (wasPlaying) this.sayGame('jogo_cancelado')
     })
 
     this.mc.on('end', () => this.stopThreatWatcher())
@@ -255,6 +275,13 @@ export class CompanionBot {
       return
     }
 
+    // Desistir só faz sentido com uma rodada rolando. Fora dela, `cade voce`
+    // é conversa e desce na cascata normalmente.
+    if (this.game !== null && isGiveUp(message, this.config.persona.name)) {
+      this.game.requestReveal()
+      return
+    }
+
     const snapshot = this.snapshot()
     const result = await this.router.route(message, snapshot)
     this.logLlm(message, result)
@@ -304,6 +331,8 @@ export class CompanionBot {
         if (this.state.state === 'DEFEND') this.state.resume()
         this.say('Tá bom, não brigo mais.', 'command')
         return
+      case 'PLAY_GAME':
+        return this.startGame(intent.params.game, intent.params.role)
       default:
         return this.runWorldAction(intent)
     }
@@ -314,22 +343,29 @@ export class CompanionBot {
       this.say('Não tô te vendo! Cadê você?', 'command')
       return
     }
+    const wasPlaying = this.game !== null
     this.state.command('FOLLOW')
+    if (wasPlaying) this.sayGame('jogo_cancelado')
     this.mc.followOwner(this.config.behavior.followDistance)
     this.say('Tô indo!', 'command')
   }
 
   private startStay(): void {
     const position = this.snapshot().position
+    const wasPlaying = this.game !== null
     this.state.command('STAY', { stayPoint: { ...position } })
+    if (wasPlaying) this.sayGame('jogo_cancelado')
     this.mc.stopMoving()
     this.say('Tá bom, fico aqui de guarda!', 'command')
   }
 
   private stopEverything(): void {
+    const wasPlaying = this.game !== null
+    // `command()` aborta o sinal, e é isso que faz a sessão do jogo terminar.
     this.state.command('IDLE')
     this.mc.stopMoving()
-    this.say('Parei!', 'command')
+    if (wasPlaying) this.sayGame('jogo_cancelado')
+    else this.say('Parei!', 'command')
   }
 
   private async runWorldAction(intent: Intent): Promise<void> {
@@ -360,6 +396,192 @@ export class CompanionBot {
     } finally {
       if (this.state.state === 'ACTION') this.state.resume()
     }
+  }
+
+  // ───────────────────────────── JOGOS ─────────────────────────────────
+
+  /**
+   * Começa uma rodada. Todo caminho de recusa fala no chat: uma criança que
+   * convidou para brincar não pode receber silêncio de volta.
+   */
+  private async startGame(game: string, role?: 'bot_esconde' | 'bot_procura'): Promise<void> {
+    // Fala própria, não a de jogo desconhecido: aquela OFERECE o
+    // esconde-esconde, e oferecer o que está desligado é prometer o que o bot
+    // não faz.
+    if (!this.config.games.enabled) {
+      this.sayGame('jogo_desligado')
+      return
+    }
+
+    if (this.game !== null) {
+      this.sayGame('jogo_ja_rolando')
+      return
+    }
+
+    const bot = this.mc.raw
+    if (!bot) return
+
+    if (!this.snapshot().ownerVisible) {
+      this.say('Não tô te vendo! Cadê você?', 'command')
+      return
+    }
+
+    // O estado precisa existir antes da sessão: é dele que sai o `AbortSignal`
+    // que `dudu, para` e a defesa usam para cancelar a rodada de verdade.
+    this.state.command('GAME', { actionLabel: game })
+
+    const session = createSession(
+      { game, ...(role ? { role } : {}) },
+      {
+        world: this.gameWorld(),
+        hideAndSeek: this.config.games.hideAndSeek,
+        signal: this.state.signal,
+      },
+    )
+
+    // Jogo que o bot não conhece: recusa honesta e volta ao que estava fazendo.
+    if (!session) {
+      this.state.command('IDLE')
+      this.sayGame('jogo_desconhecido')
+      return
+    }
+
+    this.game = session
+    this.gameDimension = this.snapshot().dimension
+
+    try {
+      const result = await session.run()
+      this.logger.info(
+        { jogo: result.game, papel: result.role, desfecho: result.outcome, fase: result.phase },
+        'rodada encerrada',
+      )
+    } catch (err) {
+      // Cancelamento já foi anunciado por quem cancelou.
+      if (!(err instanceof GameAborted)) {
+        this.logger.error({ err: String(err) }, 'rodada falhou')
+        this.say('Deu ruim na brincadeira, desculpa!', 'command')
+      }
+    } finally {
+      this.game = null
+      this.gameDimension = null
+      // Só volta para IDLE se ninguém já assumiu o estado (defesa, novo comando).
+      if (this.state.state === 'GAME') this.state.command('IDLE')
+    }
+  }
+
+  private sayGame(entryId: string): void {
+    const line = this.repertoire.say(entryId, this.snapshot())
+    if (line) this.say(line.text, 'repertoire', line.entryId)
+  }
+
+  /**
+   * Adapta o mundo real para a interface estreita que a sessão do jogo usa.
+   *
+   * Toda percepção "cara" (raycast) mora aqui, sob demanda: no laço de defesa,
+   * que roda a cada 250 ms, ela não entra.
+   */
+  private gameWorld(): GameWorld {
+    const ownerName = this.config.ownerPlayer
+    const seeDistance = this.config.games.hideAndSeek.seeDistance
+
+    const ownerEntity = () => this.mc.raw?.players[ownerName]?.entity ?? null
+
+    return {
+      ownerPosition: () => {
+        const owner = ownerEntity()
+        if (!owner) return null
+        // Trocar de dimensão encerra a rodada: o jogador não está mais no mesmo
+        // mundo, mesmo que a entidade ainda apareça por um instante.
+        if (this.gameDimension && this.snapshot().dimension !== this.gameDimension) return null
+        return { x: owner.position.x, y: owner.position.y, z: owner.position.z }
+      },
+
+      botPosition: () => this.snapshot().position,
+
+      ownerYaw: () => (ownerEntity() as { yaw?: number } | null)?.yaw ?? 0,
+
+      ownerCanSee: (position) => {
+        const owner = ownerEntity()
+        if (!owner) return false
+        return hasLineOfSight(raycastWorldFrom(this.mc.raw), owner.position, position, {
+          maxDistance: seeDistance,
+        })
+      },
+
+      ownerFacing: (position) => {
+        const owner = ownerEntity()
+        if (!owner) return false
+        const yaw = (owner as { yaw?: number }).yaw ?? 0
+        return isInFieldOfView(owner.position, yaw, position, DEFAULT_FOV_HALF_ANGLE)
+      },
+
+      botCanSeeOwner: () => {
+        const owner = ownerEntity()
+        if (!owner) return false
+        return hasLineOfSight(
+          raycastWorldFrom(this.mc.raw),
+          this.snapshot().position,
+          owner.position,
+          { maxDistance: seeDistance },
+        )
+      },
+
+      // Sem consulta cara: o pathfinder só descobre de verdade tentando andar.
+      // O que dá para descartar de graça é o que está fora do mundo carregado.
+      isReachable: (position) => Number.isFinite(position.x) && Number.isFinite(position.z),
+
+      goto: (position) => this.gameGoto(position),
+
+      stopMoving: () => this.mc.stopMoving(),
+
+      say: (entryId) => this.sayGame(entryId),
+
+      sayRaw: (text) => this.say(text, 'command'),
+
+      sleep: (ms) => this.gameSleep(ms),
+
+      now: () => Date.now(),
+    }
+  }
+
+  /**
+   * Caminha até um ponto durante o jogo. Resolve `false` quando não chegou —
+   * a sessão decide o que fazer, e nenhuma falha de pathfinder chega ao chat
+   * como erro técnico.
+   */
+  private async gameGoto(position: Vec3Like): Promise<boolean> {
+    const bot = this.mc.raw
+    if (!bot) return false
+
+    try {
+      await bot.pathfinder.goto(
+        new goals.GoalNear(position.x, position.y, position.z, GAME_GOAL_RANGE),
+      )
+    } catch {
+      // Caminho travado ou rota recalculada: não é erro para o jogador.
+    }
+
+    return distance(this.snapshot().position, position) <= GAME_GOAL_RANGE + 1
+  }
+
+  /** Espera cancelável: o `abort` da rodada não pode ficar preso num timer. */
+  private gameSleep(ms: number): Promise<void> {
+    const signal = this.state.signal
+    return new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) return reject(new GameAborted('rodada cancelada'))
+
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort)
+        resolve()
+      }, ms)
+
+      function onAbort(): void {
+        clearTimeout(timer)
+        reject(new GameAborted('rodada cancelada'))
+      }
+
+      signal?.addEventListener('abort', onAbort, { once: true })
+    })
   }
 
   // ──────────────────────────── DEFESA ─────────────────────────────────
@@ -403,21 +625,21 @@ export class CompanionBot {
         return
 
       case 'retreat':
-        if (this.state.interrupt('EMERGENCY')) {
+        if (this.interruptForDefense('EMERGENCY')) {
           this.sayCombat('combate_recuo', snapshot)
           this.retreatToOwner(snapshot)
         }
         return
 
       case 'flee-creeper':
-        if (this.state.canInterrupt('DEFEND') && this.state.interrupt('DEFEND')) {
+        if (this.state.canInterrupt('DEFEND') && this.interruptForDefense('DEFEND')) {
           this.sayCombat('combate_creeper', snapshot)
         }
         this.fleeFrom(plan.threat.entity.position)
         return
 
       case 'unarmed':
-        if (this.state.canInterrupt('DEFEND') && this.state.interrupt('DEFEND')) {
+        if (this.state.canInterrupt('DEFEND') && this.interruptForDefense('DEFEND')) {
           this.sayCombat('combate_desarmado', snapshot)
         }
         this.retreatToOwner(snapshot)
@@ -429,12 +651,30 @@ export class CompanionBot {
     }
   }
 
+  /**
+   * Interrompe por prioridade e, se havia brincadeira, avisa que ela acabou.
+   *
+   * A rodada NÃO é retomada depois do combate: o esconderijo já foi queimado e
+   * a criança já saiu do lugar. Ver: bot_games_delta.md → "Fim do combate não
+   * retoma o jogo".
+   */
+  private interruptForDefense(
+    to: 'DEFEND' | 'EMERGENCY',
+    context: { targets?: number[] } = {},
+  ): boolean {
+    const wasPlaying = this.game !== null
+    const result = this.state.interrupt(to, context)
+    if (!result) return false
+    if (wasPlaying) this.sayGame('jogo_cancelado_monstro')
+    return true
+  }
+
   private engage(entityId: number, snapshot: WorldSnapshot): void {
     const bot = this.mc.raw
     if (!bot) return
 
     if (this.state.state !== 'DEFEND') {
-      if (!this.state.interrupt('DEFEND', { targets: [entityId] })) return
+      if (!this.interruptForDefense('DEFEND', { targets: [entityId] })) return
       this.engagementStartedAt = Date.now()
       this.sayCombat('combate_inicio', snapshot)
       void equipBestWeapon(bot).catch(() => {})

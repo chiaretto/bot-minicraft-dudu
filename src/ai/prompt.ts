@@ -73,6 +73,9 @@ export function buildInterpretPrompt(ctx: ConversationContext): string {
     '  "vem cá" -> {"type":"FOLLOW","params":{}}',
     '  "constrói uma casa" -> {"type":"UNKNOWN","params":{}}',
     '  "você gosta de diamante?" -> {"type":"CHAT","params":{}}',
+    '  "bora brincar de esconder" -> {"type":"PLAY_GAME","params":{"game":"esconde_esconde","role":"bot_esconde"}}',
+    '  "some daí que eu vou te achar" -> {"type":"PLAY_GAME","params":{"game":"esconde_esconde","role":"bot_esconde"}}',
+    '  "fica de olho fechado que eu me escondo" -> {"type":"PLAY_GAME","params":{"game":"esconde_esconde","role":"bot_procura"}}',
     '',
     `O jogador se chama ${ctx.owner}.`,
   ].join('\n')
