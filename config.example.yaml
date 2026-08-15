@@ -1,0 +1,124 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# bot-minicraft-dudu — configuração
+# Copie para `config.yaml` e ajuste. Segredos NÃO entram aqui: use `.env`.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# OBRIGATÓRIO: nome de usuário Minecraft do jogador dono.
+# É o único jogador que o bot obedece e o único que ele protege.
+ownerPlayer: 'Miguel'
+
+server:
+  host: 'localhost'
+  port: 25565
+  # Precisa bater com a versão do servidor. O bot valida no startup e falha
+  # com mensagem clara se estiver diferente.
+  version: '1.21.4'
+  # 'offline' para servidor local / mundo aberto em LAN (não exige conta).
+  # 'microsoft' exige conta real e MINECRAFT_PASSWORD no .env.
+  auth: 'offline'
+  # Nome com que o bot aparece no jogo.
+  username: 'Dudu'
+  reconnect:
+    enabled: true
+    initialDelayMs: 1000
+    maxDelayMs: 60000
+    maxAttempts: 10
+
+persona:
+  name: 'Dudu'
+  description: 'Você é o Dudu, um amigo animado e brincalhão que joga Minecraft junto.'
+  # Contada pelo repertório E injetada no prompt da IA, para as duas fontes
+  # não divergirem sobre a origem do bot.
+  originStory: 'Seu pai me criou pra jogar com você!'
+
+# Nível 2 da cascata: respostas locais, instantâneas e de graça.
+dialogue:
+  enabled: true
+  # Abaixo desta confiança o repertório desiste e a mensagem vai para a IA.
+  # Aumente se o bot estiver respondendo besteira; diminua se ele estiver
+  # chamando a IA demais.
+  minConfidence: 0.7
+  catalogPath: 'data/repertoire.yaml'
+  # Falas por evento do jogo (anoiteceu, dono morreu...).
+  spontaneous: true
+  spontaneousCooldownMs: 60000
+
+# Histórico de conversa: um arquivo JSONL por dia.
+memory:
+  dir: 'data/conversations'
+  # Quantas trocas vão como contexto para a IA.
+  shortTermWindow: 10
+  # null = guardar para sempre. Ex.: 90 apaga arquivos com mais de 90 dias.
+  retentionDays: null
+  # Ao reiniciar no mesmo dia, relê o arquivo de hoje e retoma o contexto.
+  resumeToday: true
+
+defense:
+  enabled: true
+  protectRadius: 16
+  # Abaixo desta vida o bot desengaja e recua, mesmo em combate.
+  criticalHealth: 6
+  engagementTimeoutMs: 30000
+  maxSimultaneousTargets: 3
+  # Creeper dentro deste raio do dono nunca vai para corpo a corpo.
+  creeperSafeDistance: 10
+
+# Nível 3 da cascata: só recebe o que comando e repertório não resolveram.
+llm:
+  # 'ollama' = modelo local (padrão, sem custo, sem internet)
+  # 'gemini' = nuvem (exige GEMINI_API_KEY no .env)
+  # 'none'   = sem IA; o bot roda só com comandos e repertório
+  provider: 'ollama'
+
+  # ATENÇÃO PRIVACIDADE: com o primário local e um fallback de nuvem, as
+  # mensagens do jogador PASSAM A SAIR DA MÁQUINA quando o local falhar.
+  # Deixe null para que nada trafegue para fora em nenhuma hipótese.
+  fallbackProvider: null
+
+  ollama:
+    # Pode apontar para outra máquina da rede: http://192.168.0.20:11434
+    # Rodar o modelo em outro PC elimina a disputa de recurso com o Minecraft.
+    baseUrl: 'http://localhost:11434'
+    # Rode antes: ollama pull qwen3:4b
+    # Abaixo de 3B o português degrada. Ver tabela no README.
+    model: 'qwen3:4b'
+    # Maior que o do Gemini de propósito: modelo local na mesma máquina do
+    # jogo é mais lento.
+    timeoutMs: 12000
+    # Mantém o modelo carregado entre conversas, evitando recarga de segundos.
+    keepAlive: '30m'
+
+  gemini:
+    model: 'gemini-2.0-flash'
+    timeoutMs: 5000
+
+  # Carrega o modelo na inicialização, para a primeira conversa não pagar o
+  # custo do carregamento.
+  warmUpOnStart: true
+  # Passando disso sem resposta, o bot fala algo de espera no chat.
+  fillerAfterMs: 2000
+  # O que fazer com uma segunda mensagem enquanto já há inferência em voo.
+  # 'repertoire' responde local; 'queue' enfileira. Nunca roda em paralelo:
+  # duas gerações ao mesmo tempo engasgam o Minecraft.
+  queueBehavior: 'repertoire'
+  maxCallsPerMinute: 10
+  circuitBreakerThreshold: 3
+  circuitBreakerResetMs: 60000
+
+behavior:
+  followDistance: 3
+  stayTolerance: 2
+  actionTimeoutMs: 60000
+  noProgressMs: 10000
+  # Só estes blocos podem ser quebrados. Protege a construção do jogador de
+  # uma alucinação da IA.
+  collectAllowlist:
+    - 'oak_log'
+    - 'birch_log'
+    - 'spruce_log'
+    - 'dirt'
+    - 'sand'
+    - 'cobblestone'
+    - 'stone'
+
+logLevel: 'info'

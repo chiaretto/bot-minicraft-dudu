@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+
+# Conversas do jogador — nunca versionadas.
+# Ver openspec: conversation_memory_delta.md → "Privacidade e retenção".
+data/
+
+# O repertório é copiado para data/ na primeira execução; a fonte versionada
+# fica em src/dialogue/default-repertoire.yaml
+
+*.log
+.DS_Store
+coverage/

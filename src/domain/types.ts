@@ -1,0 +1,93 @@
+/** Estados da máquina de comportamento, em ordem crescente de prioridade. */
+export type BotState = 'IDLE' | 'FOLLOW' | 'STAY' | 'ACTION' | 'DEFEND' | 'EMERGENCY'
+
+/**
+ * Prioridade declarada. Um estado de prioridade maior sempre interrompe o menor,
+ * e o interrompido vai para a pilha de retomada.
+ * Ver: player_defense_delta.md → "Prioridade entre estados".
+ */
+export const STATE_PRIORITY: Record<BotState, number> = {
+  IDLE: 0,
+  FOLLOW: 1,
+  STAY: 1,
+  ACTION: 2,
+  DEFEND: 3,
+  EMERGENCY: 4,
+}
+
+export interface Vec3Like {
+  x: number
+  y: number
+  z: number
+}
+
+export type TimeOfDay = 'dia' | 'tarde' | 'noite'
+
+export interface InventoryItem {
+  name: string
+  count: number
+}
+
+export interface NearbyEntity {
+  id: number
+  name: string
+  type: 'hostile' | 'passive' | 'player' | 'other'
+  position: Vec3Like
+  distanceToBot: number
+  distanceToOwner: number | null
+  /** Nome da entidade que este mob está perseguindo, quando o servidor informa. */
+  targetName: string | null
+  /** Creeper com o pavio aceso. */
+  isIgnited?: boolean
+  /** Mob domesticado — nunca é alvo válido. */
+  isTamed?: boolean
+}
+
+/** Retrato do estado do bot e do mundo num instante. */
+export interface WorldSnapshot {
+  position: Vec3Like
+  health: number
+  food: number
+  timeOfDay: TimeOfDay
+  isNight: boolean
+  inventory: InventoryItem[]
+  ownerVisible: boolean
+  ownerPosition: Vec3Like | null
+  ownerHealth: number | null
+  nearbyEntities: NearbyEntity[]
+  dimension: string
+  state: BotState
+}
+
+export interface ChatMessage {
+  username: string
+  text: string
+  isOwner: boolean
+}
+
+/** Ameaça classificada pelo vigia de defesa. */
+export interface Threat {
+  entity: NearbyEntity
+  /** `true` quando o hostil está atacando ou mirando o dono. */
+  targetingOwner: boolean
+  /** Creeper exige tratamento especial: nunca corpo a corpo perto do dono. */
+  isCreeper: boolean
+  distanceToOwner: number
+}
+
+export type TurnSource = 'command' | 'repertoire' | 'llm' | 'spontaneous'
+
+/** Uma linha do histórico de conversa. */
+export interface ConversationTurn {
+  ts: string
+  speaker: string
+  text: string
+  source: TurnSource
+  botState: BotState
+  sessionId: string
+  provider?: string
+  entryId?: string
+  latencyMs?: number
+  botHealth?: number
+  dimension?: string
+}

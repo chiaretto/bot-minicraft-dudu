@@ -2,7 +2,8 @@
 
 **Change ID:** `add-minecraft-companion-bot`
 **Created:** 2026-08-15
-**Status:** Draft
+**Status:** Implementation Complete
+**Implementado:** 2026-08-15
 
 ---
 
