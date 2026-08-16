@@ -87,14 +87,15 @@ export const hideAndSeekSchema = z
     touchDistance: z.number().positive().default(2),
     /** Alcance máximo do "ver" do bot, mesmo com caminho livre. */
     seeDistance: z.number().positive().default(20),
-    countTo: z.number().int().positive().default(10),
+    /** Ele conta até 20, um número por segundo. */
+    countTo: z.number().int().positive().default(20),
     /**
-     * Ritmo da contagem. O padrão faz a contagem inteira levar **20 segundos**
-     * (10 × 2 s) — o mesmo tempo que o bot leva procurando esconderijo, para a
-     * criança ter a mesma folga para se esconder que ele tem.
+     * Ritmo da contagem. Com `countTo: 20`, um número por segundo faz a
+     * contagem inteira levar **20 segundos** — o mesmo tempo que o bot leva
+     * procurando esconderijo, para a criança ter a mesma folga que ele.
      * O `ChatSender` impõe um piso de 900 ms; abaixo disso não adianta pedir.
      */
-    countIntervalMs: z.number().int().positive().default(2000),
+    countIntervalMs: z.number().int().positive().default(1000),
     /**
      * Erros de propósito antes de procurar de verdade. NÃO é enfeite: é a única
      * coisa que impede o bot de "achar" na hora, já que o protocolo entrega a

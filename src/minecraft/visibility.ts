@@ -188,6 +188,45 @@ export function coverAround(
   return solid
 }
 
+/**
+ * Onde um bot conseguiria ficar de pé nesta coluna, ou `null` se não houver
+ * lugar. Devolve a posição dos PÉS, com dois blocos de ar acima.
+ *
+ * Sem isto, um ponto candidato herda a altura do jogador — e num morro isso faz
+ * a medição acontecer dentro da terra: cobertura 8, invisível, esconderijo
+ * perfeito no papel. Aí o pathfinder leva o bot para o topo do morro, à vista
+ * de todo mundo. Foi o que aconteceu em jogo.
+ */
+export function resolveGround(
+  source: BlockSource | null | undefined,
+  position: Vec3Like,
+  options: { searchUp?: number; searchDown?: number } = {},
+): Vec3Like | null {
+  if (!source) return null
+
+  const searchUp = options.searchUp ?? 8
+  const searchDown = options.searchDown ?? 12
+  const x = Math.floor(position.x)
+  const z = Math.floor(position.z)
+  const from = Math.floor(position.y) + searchUp
+  const to = Math.floor(position.y) - searchDown
+
+  try {
+    // De cima para baixo: a primeira superfície válida é onde alguém andando
+    // chegaria, e não uma caverna qualquer embaixo dela.
+    for (let y = from; y >= to; y--) {
+      if (!isSolid(source.blockAt({ x, y, z }))) continue
+      const feet = source.blockAt({ x, y: y + 1, z })
+      const head = source.blockAt({ x, y: y + 2, z })
+      if (!isSolid(feet) && !isSolid(head)) return { x: position.x, y: y + 1, z: position.z }
+    }
+  } catch {
+    // Chunk fora de alcance: candidato descartado, nunca derruba a rodada.
+  }
+
+  return null
+}
+
 /** O que a fábrica de consulta de blocos precisa de um bot. */
 export interface BlockQuerySource {
   blockAt(position: Vec3): BlockLike | null | undefined

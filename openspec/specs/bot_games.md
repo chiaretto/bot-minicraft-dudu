@@ -175,18 +175,38 @@ a procura. Quem encosta nele ganha.
 - **THEN** o bot recusa a rodada com fala honesta
 - **AND** **não** fala `pode procurar`
 
-#### Scenario: Cobertura fraca é melhor que desistir
-- **GIVEN** nenhum ponto atinge a cobertura mínima
-- **AND** existe ao menos um ponto fora da linha de visão do jogador
+#### Scenario: Cobertura fraca serve de reserva
+- **GIVEN** nenhum ponto atinge a cobertura ideal (2 direções)
+- **AND** existe ponto com cobertura de ao menos 1 direção
 - **WHEN** `hideSearchMs` se esgota
-- **THEN** o bot se esconde nesse ponto mesmo assim
+- **THEN** o bot se esconde no de maior cobertura entre eles
 - **AND** a brincadeira continua normalmente
+
+#### Scenario: Cobertura zero nunca é aceita
+- **GIVEN** todo ponto fora da linha de visão está em campo aberto
+- **WHEN** `hideSearchMs` se esgota
+- **THEN** o bot **não** se esconde em nenhum deles
+- **AND** recusa a rodada com fala honesta
+
+> Estar fora da linha de visão **naquele instante** não é esconderijo: o jogador
+> vira a cabeça e acabou. Aceitar cobertura zero como reserva foi o que manteve
+> o defeito de pé mesmo depois da primeira correção.
+
+#### Scenario: Candidato é medido no chão de verdade
+- **GIVEN** um ponto candidato num morro acima do jogador
+- **WHEN** o bot avalia visibilidade e cobertura
+- **THEN** a medição acontece na altura em que ele ficaria **de pé** ali
+- **AND** não na altura do jogador — que cairia dentro da terra do morro,
+  dando "cobertura máxima, invisível" para um lugar totalmente exposto
+- **AND** candidato sem chão conhecido (chunk fora de alcance) é descartado
 
 #### Scenario: Onde ele parou é o que vale
 - **GIVEN** o bot chegou perto do esconderijo, mas não exatamente nele
 - **WHEN** a posição final é avaliada
-- **THEN** a checagem de visão usa a posição **real** do bot, não a pedida
-- **AND** se ela estiver exposta, a rodada é recusada em vez de começar errada
+- **THEN** a checagem usa a posição **real** do bot, não a pedida
+- **AND** confere visão **e** cobertura nessa posição
+- **AND** se ela estiver exposta ou descoberta, a rodada é recusada em vez de
+  começar errada
 
 #### Scenario: Avisar só depois de escondido
 - **GIVEN** o bot está a caminho do esconderijo
@@ -241,9 +261,9 @@ verdade. Achar exige ver.
 #### Scenario: Contar até 10 no chat
 - **GIVEN** `Miguel` digita `dudu, eu vou me esconder`
 - **WHEN** a rodada começa no papel de quem procura
-- **THEN** o bot conta de 1 até `countTo` (padrão 10) no chat
+- **THEN** o bot conta de 1 até `countTo` (padrão **20**) no chat
 - **AND** manda um número por mensagem, respeitando `countIntervalMs`
-- **AND** a contagem inteira leva **20 segundos** com os padrões (10 x 2 s) — o
+- **AND** a contagem inteira leva **20 segundos** com os padrões (20 x 1 s) — o
   mesmo tempo que o bot leva procurando esconderijo, para os dois lados da
   brincadeira terem a mesma folga para se esconder
 - **AND** avisa quando termina a contagem, antes de sair procurando

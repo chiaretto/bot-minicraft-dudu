@@ -19,6 +19,7 @@ import {
   hasLineOfSight,
   isInFieldOfView,
   raycastWorldFrom,
+  resolveGround,
   DEFAULT_FOV_HALF_ANGLE,
 } from '../minecraft/visibility.js'
 import { distance } from '../minecraft/snapshot.js'
@@ -525,6 +526,8 @@ export class CompanionBot {
       },
 
       coverAt: (position) => coverAround(blockSourceFrom(this.mc.raw), position),
+
+      groundAt: (position) => resolveGround(blockSourceFrom(this.mc.raw), position),
 
       botCanSeeOwner: () => {
         const owner = ownerEntity()

@@ -129,8 +129,8 @@ games:
     hideSearchMs: 20000                 # tempo andando atrás de um lugar coberto
     touchDistance: 2                    # encostou nessa distância, achou
     seeDistance: 20                     # alcance máximo do "ver" do bot
-    countTo: 10                         # até quanto ele conta
-    countIntervalMs: 2000               # 10 x 2 s = contagem de 20 s
+    countTo: 20                         # até quanto ele conta
+    countIntervalMs: 1000               # 20 x 1 s = contagem de 20 s
     fakeSearches: 2                     # erros de propósito antes de procurar
     fakeSearchMinDistanceFromOwner: 8   # busca falsa longe do jogador
     roundTimeoutMs: 180000              # 3 min: rodada nunca fica pendurada

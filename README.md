@@ -218,18 +218,21 @@ avisa `pode procurar`. Chegue perto dele (2 blocos) e ele admite a derrota. Se
 você desistir, fale `desisto` ou `cadê você` que ele aparece.
 
 Não basta estar fora do seu campo de visão: ficar parado no meio do campo aberto
-só porque você está de costas não conta como esconderijo — você vira a cabeça e
-acabou a brincadeira. Se o lugar for aberto demais e ele não achar nada em 20
-segundos, ele fala isso e sugere ir para outro lugar. Ajuste `hideSearchMs` se
-o seu mundo for muito descampado.
+só porque você está de costas **não** conta como esconderijo — você vira a cabeça
+e acabou a brincadeira. Ele exige bloco sólido em volta, medido na altura real do
+terreno, e confere de novo no lugar onde de fato parou de andar.
+
+Se o lugar for aberto demais e ele não achar nada em 20 segundos, ele **desiste e
+fala isso** em vez de se esconder mal. Num mundo muito descampado (deserto,
+planície), aumente `hideSearchMs` ou brinque perto de construções e árvores.
 
 ### Quando ele procura
 
-Fale `dudu, eu vou me esconder` (ou `conta até 10`). Ele conta de 1 a 10 no chat,
-um número a cada 2 segundos — **a contagem inteira leva 20 segundos**, o mesmo
-tempo que ele leva procurando esconderijo, para você ter a mesma folga que ele.
-Depois sai procurando, e **vai errar duas vezes de propósito** antes de procurar
-de verdade. Quando conseguir te ver, vai até você e fala que achou.
+Fale `dudu, eu vou me esconder` (ou `conta até 10`). Ele **conta de 1 a 20** no
+chat, um número por segundo — a contagem leva 20 segundos, o mesmo tempo que ele
+leva procurando esconderijo, para você ter a mesma folga que ele. Depois sai
+procurando, e **vai errar duas vezes de propósito** antes de procurar de verdade.
+Quando conseguir te ver, vai até você e fala que achou.
 
 ### Por que ele erra de propósito
 

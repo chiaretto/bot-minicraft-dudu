@@ -151,15 +151,16 @@ describe('config: jogos', () => {
   it('aplica os defaults quando o bloco está ausente', () => {
     const c = parseConfig(minimal)
     expect(c.games.enabled).toBe(true)
-    expect(c.games.hideAndSeek.countTo).toBe(10)
+    expect(c.games.hideAndSeek.countTo).toBe(20)
     expect(c.games.hideAndSeek.fakeSearches).toBe(2)
     expect(c.games.hideAndSeek.touchDistance).toBe(2)
     expect(c.games.hideAndSeek.roundTimeoutMs).toBe(180_000)
     expect(c.games.hideAndSeek.hideSearchMs).toBe(20_000)
   })
 
-  it('a contagem inteira leva 20 segundos, igual à busca por esconderijo', () => {
+  it('conta até 20, e a contagem leva 20 segundos', () => {
     const { countTo, countIntervalMs, hideSearchMs } = parseConfig(minimal).games.hideAndSeek
+    expect(countTo).toBe(20)
     expect(countTo * countIntervalMs).toBe(20_000)
     // Os dois lados da brincadeira têm a mesma folga para se esconder.
     expect(countTo * countIntervalMs).toBe(hideSearchMs)
@@ -177,7 +178,7 @@ describe('config: jogos', () => {
     const c = parseConfig({ ...minimal, games: { enabled: false } })
     expect(c.games.enabled).toBe(false)
     // Mesmo desligado, os parâmetros continuam válidos e com default.
-    expect(c.games.hideAndSeek.countTo).toBe(10)
+    expect(c.games.hideAndSeek.countTo).toBe(20)
   })
 
   it('recusa faixa de distância invertida apontando o campo', () => {

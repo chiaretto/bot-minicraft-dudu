@@ -29,6 +29,8 @@ interface FakeOptions {
   isReachable?: (p: Vec3Like) => boolean
   /** Cobertura sólida em volta do ponto. Padrão: coberto em toda parte. */
   coverAt?: (p: Vec3Like) => number
+  /** Chão da coluna. Padrão: terreno plano na altura pedida. */
+  groundAt?: (p: Vec3Like) => Vec3Like | null
   /** `false` faz o `goto` resolver sem ter chegado. */
   arrives?: boolean
   /** Quanto o relógio anda a cada `sleep`/`goto`. */
@@ -72,6 +74,9 @@ class FakeWorld implements GameWorld {
   }
   coverAt(p: Vec3Like): number {
     return this.options.coverAt?.(p) ?? 4
+  }
+  groundAt(p: Vec3Like): Vec3Like | null {
+    return this.options.groundAt ? this.options.groundAt(p) : { ...p }
   }
   botCanSeeOwner(): boolean {
     return this.options.botCanSeeOwner?.() ?? false
@@ -264,30 +269,105 @@ describe('esconde-esconde: o bot se esconde', () => {
   })
 
   it('respeita o tempo de busca configurado', async () => {
+    // Sem cobertura em lugar nenhum: ele procura até o prazo e então desiste.
     const world = new FakeWorld({ ownerCanSee: () => false, coverAt: () => 0 })
-    let procurouAte = 0
+    let desistiuEm = 0
     world.onTick = (w) => {
-      if (!procurouAte && w.said.includes('jogo_pode_procurar')) procurouAte = w.clock
+      if (!desistiuEm && w.said.includes('jogo_sem_esconderijo')) desistiuEm = w.clock
     }
 
     await session(world, 'bot_esconde', { hideSearchMs: 5_000 }).run()
 
     // Procurou o tempo pedido e parou — não anda para sempre.
-    expect(procurouAte).toBeGreaterThanOrEqual(5_000)
-    expect(procurouAte).toBeLessThan(15_000)
+    expect(world.clock).toBeGreaterThanOrEqual(5_000)
+    expect(world.clock).toBeLessThan(15_000)
   })
 
-  it('sem cobertura em lugar nenhum, aceita o menos ruim em vez de desistir', async () => {
-    // Tudo escondido do jogador, nada com cobertura: ainda dá para brincar.
+  // ── Regressão: segundo relato em jogo, 2026-08-16 ───────────────────────
+  // Continuava aparecendo no campo de visão. Causa: a reserva do fim da busca
+  // aceitava cobertura ZERO — campo aberto que só estava fora da linha de visão
+  // naquele instante. O jogador virava a cabeça e o bot estava lá.
+  it('nunca aceita cobertura zero, nem como último recurso', async () => {
     const world = new FakeWorld({ ownerCanSee: () => false, coverAt: () => 0 })
+
+    const result = await session(world, 'bot_esconde', { hideSearchMs: 2_000 }).run()
+
+    expect(result.outcome).toBe('cancelado')
+    expect(world.said).toContain('jogo_sem_esconderijo')
+    expect(world.said).not.toContain('jogo_pode_procurar')
+  })
+
+  it('cobertura fraca serve de reserva, cobertura nenhuma não', async () => {
+    // Um único ponto com cobertura 1: pouco, mas é atrás de alguma coisa.
+    const abrigo = { x: 0, z: -16 }
+    const world = new FakeWorld({
+      ownerCanSee: () => false,
+      coverAt: (p) => (Math.hypot(p.x - abrigo.x, p.z - abrigo.z) < 7 ? 1 : 0),
+    })
     world.onTick = (w) => {
       if (w.said.includes('jogo_pode_procurar')) w.ownerPos = { ...w.botPos }
     }
 
-    const result = await session(world, 'bot_esconde', { hideSearchMs: 2_000 }).run()
+    const result = await session(world, 'bot_esconde', { hideSearchMs: 5_000 }).run()
 
     expect(world.said).toContain('jogo_pode_procurar')
+    expect(world.coverAt(world.visited.at(-1)!)).toBeGreaterThanOrEqual(1)
     expect(result.outcome).toBe('perdeu')
+  })
+
+  // Candidato herdava a altura do jogador: num morro isso media dentro da
+  // terra (cobertura 8, invisível) e o bot ia parar no topo, à vista.
+  it('mede o candidato no chão de verdade, não na altura do jogador', async () => {
+    const medidos: Vec3Like[] = []
+    const world = new FakeWorld({
+      ownerCanSee: () => false,
+      // O terreno está 5 blocos acima do jogador em todo lugar.
+      groundAt: (p) => ({ x: p.x, y: p.y + 5, z: p.z }),
+      coverAt: (p) => {
+        medidos.push(p)
+        return 4
+      },
+    })
+    world.onTick = (w) => {
+      if (w.said.includes('jogo_pode_procurar')) w.ownerPos = { ...w.botPos }
+    }
+
+    await session(world, 'bot_esconde').run()
+
+    // Toda medição aconteceu na altura resolvida, não na do jogador.
+    expect(medidos.length).toBeGreaterThan(0)
+    for (const p of medidos) expect(p.y).toBe(69)
+    expect(world.visited[0]!.y).toBe(69)
+  })
+
+  it('descarta candidato sem chão conhecido', async () => {
+    const world = new FakeWorld({ ownerCanSee: () => false, groundAt: () => null })
+
+    const result = await session(world, 'bot_esconde', { hideSearchMs: 2_000 }).run()
+
+    expect(result.outcome).toBe('cancelado')
+    expect(world.said).toContain('jogo_sem_esconderijo')
+  })
+
+  it('recusa se parar num lugar descoberto, mesmo fora da linha de visão', async () => {
+    // Escolhe um ponto bom, mas o pathfinder o larga no descampado.
+    let chegou = false
+    const world = new FakeWorld({
+      ownerCanSee: () => false,
+      coverAt: () => (chegou ? 0 : 4),
+    })
+    const original = world.goto.bind(world)
+    world.goto = async (p) => {
+      const r = await original(p)
+      chegou = true
+      return r
+    }
+
+    const result = await session(world, 'bot_esconde').run()
+
+    expect(result.outcome).toBe('cancelado')
+    expect(world.said).toContain('jogo_sem_esconderijo')
+    expect(world.said).not.toContain('jogo_pode_procurar')
   })
 
   it('recusa com fala honesta quando não há esconderijo', async () => {
@@ -351,11 +431,11 @@ describe('esconde-esconde: o bot se esconde', () => {
 describe('esconde-esconde: o bot procura', () => {
   const far = { ownerPosition: { x: 40, y: 64, z: 0 } }
 
-  it('conta de 1 a 10 no chat, um número por mensagem', async () => {
+  it('conta de 1 a 20 no chat, um número por mensagem', async () => {
     const world = new FakeWorld({ ...far, botCanSeeOwner: () => true })
     await session(world, 'bot_procura').run()
 
-    expect(world.raw).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    expect(world.raw).toEqual(Array.from({ length: 20 }, (_, i) => String(i + 1)))
     expect(world.said).toContain('jogo_contando_fim')
   })
 

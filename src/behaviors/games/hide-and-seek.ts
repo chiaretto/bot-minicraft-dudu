@@ -7,7 +7,18 @@ import {
   rankHidingSpots,
   sampleCandidates,
   horizontalDistance,
+  type Candidate,
+  type ScoredSpot,
 } from './spots.js'
+
+/** Cobertura que faz o bot parar de procurar na hora: um canto, uma parede. */
+const IDEAL_COVER = 2
+
+/**
+ * Piso absoluto de cobertura. Abaixo disto não é esconderijo, é campo aberto
+ * fora da linha de visão por acaso — e o jogador vira a cabeça.
+ */
+const MIN_COVER = 1
 
 /** Cancelamento da rodada: `dudu, para`, defesa, emergência, desconexão. */
 export class GameAborted extends Error {
@@ -30,6 +41,11 @@ export interface GameWorld {
   ownerFacing(position: Vec3Like): boolean
   /** Quantas direções ao redor do ponto têm bloco sólido (0 a 8). */
   coverAt(position: Vec3Like): number
+  /**
+   * Onde o bot ficaria de pé nesta coluna, ou `null` se não houver lugar.
+   * Sem isto, a medição acontece na altura do jogador — dentro de um morro.
+   */
+  groundAt(position: Vec3Like): Vec3Like | null
   /** O bot enxerga o jogador agora, com o caminho livre de verdade? */
   botCanSeeOwner(): boolean
   /** O pathfinder consegue chegar a este ponto? */
@@ -130,8 +146,9 @@ export class HideAndSeekSession {
     world.stopMoving()
 
     // Onde ele parou é o que vale, não onde ele pediu para ir: o pathfinder
-    // entrega "perto o suficiente", e perto o suficiente pode ser exposto.
-    if (world.ownerCanSee(world.botPosition())) {
+    // entrega "perto o suficiente", e perto o suficiente pode ser descampado.
+    const parou = world.botPosition()
+    if (world.ownerCanSee(parou) || world.coverAt(parou) < MIN_COVER) {
       world.say('jogo_sem_esconderijo')
       return this.finish('cancelado')
     }
@@ -156,7 +173,7 @@ export class HideAndSeekSession {
 
     // Melhor achado até agora, com cobertura abaixo do ideal. Serve de reserva:
     // esconder atrás de pouca coisa ainda é melhor que desistir da brincadeira.
-    let fallback: Vec3Like | null = null
+    let fallback: ScoredSpot | null = null
 
     while (world.now() < deadline) {
       this.guard()
@@ -168,10 +185,14 @@ export class HideAndSeekSession {
 
       // Cobertura em pelo menos 2 direções: um canto, uma parede, uma árvore
       // grossa. Com 1 só o jogador contorna e vê na hora.
-      const solid = ranked.find((s) => s.cover >= 2)
+      const solid = ranked.find((s) => s.cover >= IDEAL_COVER)
       if (solid) return solid.position
 
-      if (!fallback && ranked.length > 0) fallback = ranked[0]!.position
+      // A reserva NUNCA é campo aberto. Um ponto com cobertura 0 está fora da
+      // linha de visão só neste instante — o jogador vira a cabeça e acabou.
+      // Aceitar isso era o que fazia o bot "se esconder" à vista de todos.
+      const best = ranked.find((s) => s.cover >= MIN_COVER)
+      if (best && (!fallback || best.cover > fallback.cover)) fallback = best
 
       // Nada bom daqui: muda de vista e tenta de novo.
       const scout = pickScoutPoint(
@@ -183,14 +204,14 @@ export class HideAndSeekSession {
       await world.goto(scout)
     }
 
-    return fallback
+    return fallback?.position ?? null
   }
 
-  private rankSpotsFromHere(owner: Vec3Like) {
+  private rankSpotsFromHere(owner: Vec3Like): ScoredSpot[] {
     const world = this.deps.world
     const { hideMinDistance, hideMaxDistance, hideCandidateSamples } = this.deps.config
 
-    const candidates = sampleCandidates(
+    const sampled = sampleCandidates(
       owner,
       {
         minDistance: hideMinDistance,
@@ -199,6 +220,17 @@ export class HideAndSeekSession {
       },
       this.random,
     )
+
+    // Cada candidato desce (ou sobe) até o chão de verdade ANTES de ser medido.
+    // Medir na altura do jogador faz um ponto no morro parecer enterrado —
+    // cobertura máxima, invisível — e o bot acaba de pé no topo, à vista.
+    const candidates: Candidate[] = []
+    for (const c of sampled) {
+      const ground = world.groundAt(c.position)
+      // Sem chão conhecido (chunk fora de alcance) o candidato não serve.
+      if (!ground) continue
+      candidates.push({ position: ground, distanceToOwner: horizontalDistance(ground, owner) })
+    }
 
     return rankHidingSpots(candidates, {
       minDistance: hideMinDistance,
