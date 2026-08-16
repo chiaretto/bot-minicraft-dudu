@@ -5,7 +5,7 @@ import {
   type GameWorld,
 } from '../src/behaviors/games/hide-and-seek.js'
 import { createSession, resolveGame, resolveRole } from '../src/behaviors/games/index.js'
-import { hideAndSeekSchema } from '../src/config/schema.js'
+import { hideAndSeekSchema, tagSchema } from '../src/config/schema.js'
 import { hasLineOfSight, type RaycastWorld } from '../src/minecraft/visibility.js'
 import type { GameRole } from '../src/domain/games.js'
 import type { Vec3Like } from '../src/domain/types.js'
@@ -46,6 +46,8 @@ class FakeWorld implements GameWorld {
   said: string[] = []
   raw: string[] = []
   visited: Vec3Like[] = []
+  chases: number[] = []
+  sprinting = false
   stops = 0
   botPos: Vec3Like = { x: 0, y: 64, z: 0 }
   ownerPos: Vec3Like | null
@@ -91,6 +93,12 @@ class FakeWorld implements GameWorld {
     if (arrives) this.botPos = { ...position }
     this.onTick?.(this)
     return arrives
+  }
+  chaseOwner(distance: number): void {
+    this.chases.push(distance)
+  }
+  setSprinting(on: boolean): void {
+    this.sprinting = on
   }
   stopMoving(): void {
     this.stops++
@@ -751,6 +759,7 @@ describe('registro de jogos', () => {
   const deps = {
     world: new FakeWorld(),
     hideAndSeek: config,
+    tag: tagSchema.parse({}),
     signal: null,
   }
 
@@ -765,9 +774,9 @@ describe('registro de jogos', () => {
     expect(createSession({ game: 'poquer' }, deps)).toBeNull()
   })
 
-  it('o papel padrão é o bot se esconder', () => {
-    expect(resolveRole()).toBe('bot_esconde')
-    expect(resolveRole('bot_procura')).toBe('bot_procura')
+  it('o papel padrão do esconde-esconde é o bot se esconder', () => {
+    expect(resolveRole('esconde_esconde')).toBe('bot_esconde')
+    expect(resolveRole('esconde_esconde', 'bot_procura')).toBe('bot_procura')
   })
 
   it('a sessão criada nasce com fase de fim até rodar', () => {

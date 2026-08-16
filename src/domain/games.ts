@@ -5,22 +5,38 @@
  */
 
 /** Catálogo FECHADO de jogos. Pedido fora da lista nunca inicia rodada. */
-export const GAME_NAMES = ['esconde_esconde'] as const
+export const GAME_NAMES = ['esconde_esconde', 'pega_pega'] as const
 
 export type GameName = (typeof GAME_NAMES)[number]
 
-export const GAME_ROLES = ['bot_esconde', 'bot_procura'] as const
+export const GAME_ROLES = ['bot_esconde', 'bot_procura', 'bot_pega', 'bot_foge'] as const
 
 export type GameRole = (typeof GAME_ROLES)[number]
 
+/** Que papéis fazem sentido em cada jogo. Papel de um jogo não vale em outro. */
+export const ROLES_BY_GAME: Record<GameName, readonly GameRole[]> = {
+  esconde_esconde: ['bot_esconde', 'bot_procura'],
+  pega_pega: ['bot_pega', 'bot_foge'],
+}
+
 /**
- * Papel padrão quando o convite não diz quem se esconde.
- * "vamos brincar" de uma criança de 7 anos quer dizer "some daí que eu te acho".
+ * Papel padrão de cada jogo, quando o convite não diz quem faz o quê.
+ *
+ * No esconde-esconde, "vamos brincar" de uma criança de 7 anos quer dizer
+ * "some daí que eu te acho". No pega-pega quer dizer "corre atrás de mim" — nos
+ * dois casos ela quer a parte ativa para si, e o bot fica com a outra ponta.
  */
-export const DEFAULT_ROLE: GameRole = 'bot_esconde'
+export const DEFAULT_ROLE_BY_GAME: Record<GameName, GameRole> = {
+  esconde_esconde: 'bot_esconde',
+  pega_pega: 'bot_pega',
+}
 
 export function isGameName(value: string): value is GameName {
   return (GAME_NAMES as readonly string[]).includes(value)
+}
+
+export function isRoleValidForGame(game: GameName, role: GameRole): boolean {
+  return ROLES_BY_GAME[game].includes(role)
 }
 
 /**
@@ -29,16 +45,21 @@ export function isGameName(value: string): value is GameName {
  * encheria `BotState` de estados que só um jogo entende.
  */
 export const GAME_PHASES = [
-  // Papel: o bot se esconde.
+  // Esconde-esconde, papel: o bot se esconde.
   'escolhendo_esconderijo',
   'indo_para_esconderijo',
   'escondido',
-  // Papel: o bot procura.
-  'contando',
+  // Esconde-esconde, papel: o bot procura.
   'busca_falsa',
   'busca_real',
   'indo_ate_jogador',
-  // Comum.
+  // Pega-pega.
+  'perseguindo',
+  'fugindo',
+  /** Cansou de fugir: parado de propósito, esperando ser pego. */
+  'entregue',
+  // Comum aos dois jogos.
+  'contando',
   'fim',
 ] as const
 
@@ -46,8 +67,12 @@ export type GamePhase = (typeof GAME_PHASES)[number]
 
 /**
  * Como a rodada acabou, do ponto de vista do bot.
+ *
  * `cancelado` cobre tanto a interrupção (defesa, `para`, desconexão) quanto a
  * recusa antes de começar (nenhum esconderijo válido no lugar).
+ *
+ * `tempo_esgotado` é a REDE DE SEGURANÇA do `roundTimeoutMs`, não regra de jogo:
+ * o bot cansar no pega-pega é `perdeu`, porque desistir de correr é perder.
  */
 export type GameOutcome = 'ganhou' | 'perdeu' | 'cancelado' | 'tempo_esgotado'
 

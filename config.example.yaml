@@ -100,6 +100,38 @@ games:
     # Depois disso a rodada acaba sozinha, com o bot se entregando ou pedindo
     # dica. Serve para nenhuma brincadeira ficar pendurada para sempre.
     roundTimeoutMs: 180000
+  tag:
+    # Pega-pega. Quando é a vez de o bot pegar, ele conta até 5 parado (a sua
+    # vantagem de saída) e só então sai correndo atrás.
+    countTo: 5
+    countIntervalMs: 1000
+    # 60 s correndo atrás sem pegar: ele para, diz que cansou e perde.
+    chaseTimeoutMs: 60000
+    # 60 s fugindo sem ser pego: ele para, diz que cansou e se deixa pegar.
+    fleeTimeoutMs: 60000
+    # Já entregue, quanto ele espera parado até alguém encostar nele.
+    surrenderTimeoutMs: 30000
+    # Encostar a esta distância conta como "peguei".
+    touchDistance: 2
+    # O quanto ele cola em você enquanto persegue.
+    chaseFollowDistance: 1
+    # ATENÇÃO: estes dois NÃO são simétricos de propósito, e é o que faz a
+    # brincadeira valer a pena. Com sprint nos dois papéis o bot ganha sempre;
+    # sem sprint em nenhum, ele nunca pega ninguém e toda rodada acaba em
+    # "cansei". Correndo atrás ele corre de verdade; fugindo, não.
+    chaseSprint: true
+    fleeSprint: false
+    # De quanto em quanto ele muda de rumo enquanto foge.
+    fleeStepMin: 8
+    fleeStepMax: 16
+    # Ele nunca foge para além disso: sumir do seu campo de visão acabaria com
+    # a graça e viraria caminhada solitária.
+    fleeMaxDistanceFromOwner: 40
+    # Quantos destinos de fuga ele avalia por vez.
+    fleeCandidateSamples: 16
+    # Rede de segurança, como no esconde-esconde. Precisa caber a contagem, o
+    # tempo de correr e a espera de quem já se entregou.
+    roundTimeoutMs: 180000
 
 # Nível 3 da cascata: só recebe o que comando e repertório não resolveram.
 llm:

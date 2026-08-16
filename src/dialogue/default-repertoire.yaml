@@ -73,12 +73,14 @@ entries:
        'voce se move', 'voce sabe brincar', 'voce sabe jogar', 'que brincadeira voce sabe',
        'voce brinca de que', 'quais jogos voce sabe']
     responses:
-      - 'Eu sei te seguir, ficar de guarda, te defender dos monstros e brincar de esconde-esconde!'
+      - 'Eu sei te seguir, ficar de guarda, te defender dos monstros e brincar de esconde-esconde e pega-pega!'
       - "Posso ir com você (fala 'vem'), ficar parado ('fica aqui') e parar tudo ('para')."
       - 'Sei andar com você, ficar vigiando um lugar e brigar com zumbi que te atacar!'
-      - "Meu forte: te acompanhar, te proteger e brincar. Manda 'vamos brincar' que eu me escondo!"
+      - "Meu forte: te acompanhar, te proteger e brincar. Manda 'vamos brincar' que eu escolho com você!"
       - "Fala 'vem', 'fica aqui' ou 'para' que eu obedeço. E se um monstro te atacar eu já parto pra cima!"
-      - "Sei brincar de esconde-esconde! Fala 'vamos brincar' que eu escondo, ou 'eu vou me esconder' que eu conto até 10."
+      # 2026-08-16: o pega-pega entrou aqui junto com o esconde-esconde.
+      - "Sei brincar de esconde-esconde e de pega-pega! Fala 'esconde esconde' ou 'pega pega'."
+      - "No pega-pega eu conto até 5 e corro atrás de você! Fala 'me pega' que eu já vou."
 
   # ────────────────────── 6. ESTADO / COMO ESTÁ ──────────────────────
   - id: estado_bot
@@ -180,7 +182,7 @@ entries:
 
   # ─────────────────── 14. PERGUNTAS SOBRE O JOGO ────────────────────
   # Perguntas sobre o MUNDO (hora, lugar). Não confundir com as entradas
-  # `jogo_*` da brincadeira de esconde-esconde, mais abaixo.
+  # `jogo_*` e `pega_*` das brincadeiras, mais abaixo.
   - id: jogo_perguntas
     specificity: 3
     patterns: ['que horas sao', 'ta de noite', 'ta de dia', 'onde a gente ta', 'onde estamos', 'que lugar e esse', 'qual a coordenada']
@@ -315,7 +317,7 @@ entries:
       - 'Minha vida tá acabando, me desculpa!'
       - 'Preciso fugir, {owner}! Tô quase morrendo!'
 
-  # ─────────────── 24. ESCONDE-ESCONDE (instantâneos) ────────────────
+  # ─────────────── 24. BRINCADEIRAS (instantâneos) ───────────────────
   # Faladas pela sessão do jogo, por id, nunca pela IA — o mesmo motivo dos
   # avisos de combate: uma pausa de 4 s esperando modelo estraga a brincadeira.
   # NÃO confundir com `jogo_perguntas`, que é sobre o mundo (hora, coordenada).
@@ -440,13 +442,27 @@ entries:
       - 'Ok! Depois a gente brinca de novo, {owner}.'
 
   # Jogo que o bot não conhece.
+  # 2026-08-16: passou a oferecer as DUAS brincadeiras. Esconder uma capacidade
+  # nova é tão desonesto quanto prometer uma que não existe.
   - id: jogo_desconhecido
     trigger: fallback
     responses:
-      - 'Essa eu ainda não aprendi. Mas eu sei brincar de esconde-esconde!'
-      - 'Não sei jogar isso não. Bora de esconde-esconde?'
-      - 'Ainda não aprendi essa! A que eu sei é esconde-esconde.'
-      - 'Essa aí eu não sei. Mas me chama pro esconde-esconde!'
+      - 'Essa eu ainda não aprendi. Eu sei esconde-esconde e pega-pega!'
+      - 'Não sei jogar isso não. Bora de esconde-esconde ou de pega-pega?'
+      - 'Ainda não aprendi essa! As que eu sei são esconde-esconde e pega-pega.'
+      - 'Essa aí eu não sei. Mas me chama pro esconde-esconde ou pro pega-pega!'
+      - 'Não conheço essa! Sei brincar de esconde-esconde e de pega-pega.'
+
+  # Convite sem dizer qual brincadeira. Com duas no registro, escolher pela
+  # criança seria decidir por ela — ele pergunta. Ver 2026-08-16.
+  - id: jogo_qual_brincadeira
+    trigger: fallback
+    responses:
+      - 'Oba! Você quer esconde-esconde ou pega-pega?'
+      - 'Bora! Escolhe: esconde-esconde ou pega-pega?'
+      - 'Eu sei duas: esconde-esconde e pega-pega. Qual você quer?'
+      - 'Vamos sim! Fala qual: esconde-esconde ou pega-pega?'
+      - 'Aêê! Prefere esconde-esconde ou pega-pega hoje?'
 
   # Jogos desligados na configuração (`games.enabled: false`).
   # Entrada separada de `jogo_desconhecido` de propósito: aquela OFERECE o
@@ -468,6 +484,92 @@ entries:
       - 'Calma que o jogo de agora nem acabou!'
       - 'Já tô brincando com você! Termina essa primeiro.'
       - 'Essa rodada ainda tá valendo, {owner}!'
+
+  # ───────────────── 25. PEGA-PEGA (instantâneos) ────────────────────
+  # 2026-08-16: segunda brincadeira que o bot sabe. Mesma regra das falas de
+  # esconde-esconde — saem da sessão por id, nunca da IA.
+  # Ver: openspec/changes/add-bot-game-pega-pega/specs/local_dialogue_delta.md
+
+  # Aceitou pegar: avisa que vai contar antes de sair correndo.
+  - id: pega_aceito_pego
+    trigger: fallback
+    responses:
+      - 'Oba, pega-pega! Vou contar até 5, corre!'
+      - 'Bora! Conto até 5 e vou atrás de você!'
+      - 'Adoro pega-pega! Já vou contando, foge daí!'
+      - 'Tô dentro, {owner}! Corre que eu já vou.'
+      - 'Aêê! Deixa eu contar até 5 primeiro.'
+
+  # Aceitou fugir: nada de contagem, ele já sai correndo.
+  - id: pega_aceito_fujo
+    trigger: fallback
+    responses:
+      - 'Tá bom, eu corro! Vem me pegar!'
+      - 'Já tô fugindo! Corre atrás, {owner}!'
+      - 'Bora! Aposto que você não me pega.'
+      - 'Tô saindo daqui! Vem, vem!'
+      - 'Pode vir! Eu sou rapidinho.'
+
+  # A contagem até 5 acabou.
+  - id: pega_vou_pegar
+    trigger: fallback
+    responses:
+      - 'Lá vou eu! Corre!'
+      - 'Cinco! Tô indo te pegar!'
+      - 'Acabou a contagem, corre {owner}!'
+      - 'Tô atrás de você agora!'
+      - 'Pronto ou não, lá vou eu!'
+
+  # Encostou no jogador.
+  - id: pega_te_peguei
+    trigger: fallback
+    responses:
+      - 'Te peguei!!'
+      - 'Peguei, peguei! Ganhei essa!'
+      - 'Encostei em você! Agora você me pega?'
+      - 'Peguei você, {owner}! Bora de novo?'
+      - 'Tuc! Peguei!'
+
+  # 60 s correndo atrás sem pegar. Derrota com graça, sem reclamar da criança.
+  - id: pega_cansei_pegando
+    trigger: fallback
+    responses:
+      - 'Ufa, cansei! Você corre demais, ganhou!'
+      - 'Não consigo te pegar! Você ganhou essa.'
+      - 'Cansei de correr! Você é rápido, {owner}.'
+      - 'Perdi essa! Bora de novo que agora eu pego.'
+      - 'Ai, cansei! Você venceu, corredor!'
+
+  # O jogador encostou nele enquanto ele fugia.
+  - id: pega_fui_pego
+    trigger: fallback
+    responses:
+      - 'Ahh, me pegou! Perdi!'
+      - 'Você me pegou! Agora é a minha vez de pegar?'
+      - 'Aiii, encostou em mim! Você ganhou.'
+      - 'Me pegou! Você corre muito, {owner}!'
+      - 'Peguei não, fui pego! Bora de novo?'
+
+  # 60 s fugindo: ele PARA de propósito. A fala precisa deixar isso claro,
+  # senão a criança acha que o bot travou.
+  - id: pega_cansei_fugindo
+    trigger: fallback
+    responses:
+      - 'Cansei de correr! Parei aqui, pode vir me pegar.'
+      - 'Ufa! Não corro mais. Vem cá que eu deixo você pegar.'
+      - 'Tô paradinho! Pode encostar em mim, você ganhou.'
+      - 'Chega de correr! Vem me pegar, tô te esperando.'
+      - 'Parei de propósito! Vem cá pegar, {owner}.'
+
+  # O jogador desistiu de correr atrás.
+  - id: pega_me_entrego
+    trigger: fallback
+    responses:
+      - 'Tá bom, eu paro! Foi divertido!'
+      - 'Parei! Da próxima você me pega.'
+      - 'Beleza, chega de correr. Bora brincar de outra?'
+      - 'Tô aqui ó! Cansou? A gente joga de novo depois.'
+      - 'Parei de fugir! Quer tentar mais uma vez?'
 
   # ═══════════════════════════════════════════════════════════════════
   # Entradas abaixo nasceram da análise do log de conversas.

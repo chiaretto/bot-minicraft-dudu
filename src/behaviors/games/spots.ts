@@ -1,12 +1,13 @@
 import type { Vec3Like } from '../../domain/types.js'
 
 /**
- * Escolha de esconderijo e dos pontos de busca falsa.
+ * Escolha de esconderijo, dos pontos de busca falsa e do rumo de fuga.
  *
  * Módulo PURO de propósito: nada de `mineflayer`, nada de I/O, nada de relógio.
  * É aqui que mora a regra da brincadeira, e regra que dá para testar sem
  * servidor é regra que continua valendo depois do próximo refactor.
- * Ver: bot_games_delta.md → "Esconde-esconde — o bot se esconde".
+ * Ver: bot_games_delta.md → "Esconde-esconde — o bot se esconde" e
+ * "Pega-pega — o bot foge".
  */
 
 export interface Candidate {
@@ -228,4 +229,83 @@ export function pickFakeSearchSpots(
   }
 
   return spots
+}
+
+export interface FleeOptions {
+  /** Salto mínimo a partir de onde o bot está agora. */
+  stepMin: number
+  stepMax: number
+  /** Teto de distância até o jogador: fugir demais some do campo de visão. */
+  maxDistanceFromOwner: number
+  samples: number
+  /** Onde o bot ficaria de pé nessa coluna. Candidato sem chão é descartado. */
+  groundAt?: (position: Vec3Like) => Vec3Like | null
+  isReachable?: (position: Vec3Like) => boolean
+}
+
+/**
+ * Para onde correr quando alguém está vindo te pegar.
+ *
+ * Duas camadas de critério, e a segunda existe por um motivo concreto: no teto
+ * de distância (`maxDistanceFromOwner`) TODO ponto que aumenta a distância está
+ * fora do teto, e exigir ganho positivo deixaria o bot parado esperando ser
+ * pego. Então:
+ *
+ * 1. o melhor ponto que **aumenta** a distância até o jogador, dentro do teto;
+ * 2. se nenhum aumenta, o mais distante do jogador que ainda não corre para os
+ *    braços dele — é a corrida de lado, que é o que uma criança faz também.
+ *
+ * `null` quer dizer encurralado: nem lateral sobrou. Quem chama tenta de novo
+ * no próximo passo, em vez de travar a rodada.
+ */
+export function pickFleePoint(
+  owner: Vec3Like,
+  bot: Vec3Like,
+  options: FleeOptions,
+  random: () => number = Math.random,
+): Vec3Like | null {
+  const { stepMin, stepMax, maxDistanceFromOwner, samples } = options
+  if (samples <= 0) return null
+
+  const current = horizontalDistance(bot, owner)
+  const step = (Math.PI * 2) / samples
+  // Começa na direção contrária à do jogador: o rumo óbvio é avaliado primeiro,
+  // e o giro completo cobre o resto quando ele está bloqueado.
+  const away = Math.atan2(bot.z - owner.z, bot.x - owner.x)
+  const spread = Math.max(0, stepMax - stepMin)
+
+  let best: { position: Vec3Like; distance: number } | null = null
+  let lateral: { position: Vec3Like; distance: number } | null = null
+
+  for (let i = 0; i < samples; i++) {
+    const angle = away + step * i + (random() - 0.5) * step * 0.5
+    const radius = stepMin + random() * spread
+
+    const raw = {
+      x: bot.x + Math.cos(angle) * radius,
+      y: bot.y,
+      z: bot.z + Math.sin(angle) * radius,
+    }
+
+    // Medir na altura do bot num terreno acidentado escolhe ponto dentro do
+    // morro, exatamente como acontecia na escolha de esconderijo.
+    const position = options.groundAt ? options.groundAt(raw) : raw
+    if (!position) continue
+    if (options.isReachable && !options.isReachable(position)) continue
+
+    const distance = horizontalDistance(position, owner)
+    if (distance > maxDistanceFromOwner) continue
+
+    if (distance > current) {
+      if (!best || distance > best.distance) best = { position, distance }
+      continue
+    }
+
+    // Reserva: de lado serve, correr para cima de quem persegue não.
+    if (distance >= stepMin && (!lateral || distance > lateral.distance)) {
+      lateral = { position, distance }
+    }
+  }
+
+  return (best ?? lateral)?.position ?? null
 }

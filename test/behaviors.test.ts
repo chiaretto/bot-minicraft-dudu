@@ -89,9 +89,7 @@ describe('parser de comandos', () => {
 
   it('reconhece o convite de brincar sem chamar a IA', () => {
     for (const text of [
-      'vamos brincar',
       'dudu, vamos brincar de esconde esconde',
-      'bora brincar',
       'vamos jogar esconde esconde',
       'esconde esconde',
       'quer brincar de esconde esconde',
@@ -104,9 +102,56 @@ describe('parser de comandos', () => {
     }
   })
 
-  it('o convite genérico faz o bot ser quem se esconde', () => {
-    const parsed = parseCommand('dudu, vamos brincar', 'Dudu')
-    expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.role).toBe('bot_esconde')
+  // Com duas brincadeiras no registro, começar uma delas seria escolher pela
+  // criança. Ele pergunta — e o nome de cada jogo já é um convite sozinho.
+  it('o convite genérico pergunta qual brincadeira, sem começar rodada', () => {
+    for (const text of ['dudu, vamos brincar', 'bora brincar', 'vamos jogar', 'quer brincar']) {
+      const parsed = parseCommand(text, 'Dudu')
+      expect(parsed?.intent.type, text).toBe('ASK_WHICH_GAME')
+    }
+  })
+
+  it('reconhece o convite de pega-pega, com as variantes do nome', () => {
+    for (const text of [
+      'dudu, vamos brincar de pega pega',
+      'pega pega',
+      'pique pega',
+      'pira pega',
+      'bora de pega pega',
+      'quer jogar pega pega',
+    ]) {
+      const parsed = parseCommand(text, 'Dudu')
+      expect(parsed?.intent.type, text).toBe('PLAY_GAME')
+      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.game, text).toBe(
+        'pega_pega',
+      )
+      // Sem dizer quem faz o quê, quem corre atrás é o bot.
+      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.role, text).toBe(
+        'bot_pega',
+      )
+    }
+  })
+
+  it('mandar correr atrás põe o bot no papel de quem pega', () => {
+    for (const text of ['me pega', 'dudu, vem me pegar', 'corre atras de mim', 'tenta me pegar']) {
+      const parsed = parseCommand(text, 'Dudu')
+      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.role, text).toBe(
+        'bot_pega',
+      )
+    }
+  })
+
+  it('avisar que vai pegar põe o bot no papel de quem foge', () => {
+    for (const text of ['eu vou te pegar', 'dudu, eu te pego', 'voce corre', 'sai correndo']) {
+      const parsed = parseCommand(text, 'Dudu')
+      expect(parsed?.intent.type, text).toBe('PLAY_GAME')
+      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.game, text).toBe(
+        'pega_pega',
+      )
+      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.role, text).toBe(
+        'bot_foge',
+      )
+    }
   })
 
   it('reconhece o papel de quem procura', () => {
@@ -141,8 +186,14 @@ describe('parser de comandos', () => {
   })
 
   it('remove enfeite no fim do convite', () => {
-    expect(parseCommand('vamos brincar agora', 'Dudu')?.intent.type).toBe('PLAY_GAME')
+    expect(parseCommand('vamos brincar agora', 'Dudu')?.intent.type).toBe('ASK_WHICH_GAME')
     expect(parseCommand('se esconde vai', 'Dudu')?.intent.type).toBe('PLAY_GAME')
+    expect(parseCommand('me pega ai', 'Dudu')?.intent.type).toBe('PLAY_GAME')
+  })
+
+  it('tolera caixa e pontuação no convite de pega-pega', () => {
+    const parsed = parseCommand('DUDU, VAMOS BRINCAR DE PEGA-PEGA!!!', 'Dudu')
+    expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.game).toBe('pega_pega')
   })
 
   it('não confunde "vamos" sozinho com convite de brincadeira', () => {
@@ -154,6 +205,12 @@ describe('parser de comandos', () => {
 describe('desistência no jogo', () => {
   it('reconhece que o jogador desistiu', () => {
     for (const text of ['desisto', 'dudu, desisto', 'cade voce', 'me entrego', 'nao acho voce']) {
+      expect(isGiveUp(text, 'Dudu'), text).toBe(true)
+    }
+  })
+
+  it('reconhece a desistência do pega-pega', () => {
+    for (const text of ['nao te pego', 'cansei', 'dudu, para de correr', 'nao consigo te pegar']) {
       expect(isGiveUp(text, 'Dudu'), text).toBe(true)
     }
   })

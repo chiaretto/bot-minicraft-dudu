@@ -190,6 +190,23 @@ export class MinecraftClient extends EventEmitter {
     return true
   }
 
+  /**
+   * Liga ou desliga a corrida de verdade no cálculo de rota.
+   *
+   * É o botão de equilíbrio do pega-pega: com sprint nos dois papéis o bot pega
+   * sempre e a criança desiste de brincar; sem sprint em nenhum, ele nunca pega
+   * ninguém. O objetivo é reemitido para a rota atual ser recalculada — mudar a
+   * flag sozinha só valeria para o próximo caminho.
+   */
+  setSprinting(allowed: boolean): void {
+    const bot = this.bot
+    const movements = bot?.pathfinder.movements as { allowSprinting?: boolean } | undefined
+    if (!bot || !movements || movements.allowSprinting === allowed) return
+
+    movements.allowSprinting = allowed
+    bot.pathfinder.setMovements(movements as Parameters<typeof bot.pathfinder.setMovements>[0])
+  }
+
   gotoPosition(x: number, y: number, z: number, range = 1): boolean {
     const bot = this.bot
     if (!bot) return false

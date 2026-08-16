@@ -10,8 +10,13 @@ import { AiLayer } from '../ai/index.js'
 import { MessageRouter, type RouteResult } from '../behaviors/router.js'
 import { StateMachine } from '../behaviors/state-machine.js'
 import { classifyThreats, planDefense, canStrike } from '../behaviors/defense/threat-watcher.js'
-import { createSession, type GameSession, type GameWorld } from '../behaviors/games/index.js'
-import { GameAborted } from '../behaviors/games/hide-and-seek.js'
+import {
+  createSession,
+  GameAborted,
+  type GameSession,
+  type GameWorld,
+} from '../behaviors/games/index.js'
+import type { GameRole } from '../domain/games.js'
 import { isGiveUp } from '../behaviors/commands.js'
 import {
   blockSourceFrom,
@@ -339,6 +344,11 @@ export class CompanionBot {
         return
       case 'PLAY_GAME':
         return this.startGame(intent.params.game, intent.params.role)
+      case 'ASK_WHICH_GAME':
+        // Perguntar "qual você quer?" com as brincadeiras desligadas seria
+        // oferecer o que o bot não pode fazer. Ver project.md → "Público do bot".
+        this.sayGame(this.config.games.enabled ? 'jogo_qual_brincadeira' : 'jogo_desligado')
+        return
       default:
         return this.runWorldAction(intent)
     }
@@ -410,7 +420,7 @@ export class CompanionBot {
    * Começa uma rodada. Todo caminho de recusa fala no chat: uma criança que
    * convidou para brincar não pode receber silêncio de volta.
    */
-  private async startGame(game: string, role?: 'bot_esconde' | 'bot_procura'): Promise<void> {
+  private async startGame(game: string, role?: GameRole): Promise<void> {
     // Fala própria, não a de jogo desconhecido: aquela OFERECE o
     // esconde-esconde, e oferecer o que está desligado é prometer o que o bot
     // não faz.
@@ -441,11 +451,13 @@ export class CompanionBot {
       {
         world: this.gameWorld(),
         hideAndSeek: this.config.games.hideAndSeek,
+        tag: this.config.games.tag,
         signal: this.state.signal,
       },
     )
 
-    // Jogo que o bot não conhece: recusa honesta e volta ao que estava fazendo.
+    // Jogo que o bot não conhece — ou papel que não é daquele jogo: recusa
+    // honesta e volta ao que estava fazendo.
     if (!session) {
       this.state.command('IDLE')
       this.sayGame('jogo_desconhecido')
@@ -470,6 +482,10 @@ export class CompanionBot {
     } finally {
       this.game = null
       this.gameDimension = null
+      // Rodada cancelada não pode deixar o bot correndo pelo mundo: a sessão
+      // desliga o sprint no caminho normal, mas quem foi interrompido no meio
+      // de uma falha pode nunca ter chegado lá.
+      this.mc.setSprinting(false)
       // Só volta para IDLE se ninguém já assumiu o estado (defesa, novo comando).
       if (this.state.state === 'GAME') this.state.command('IDLE')
     }
@@ -545,6 +561,15 @@ export class CompanionBot {
       isReachable: (position) => Number.isFinite(position.x) && Number.isFinite(position.z),
 
       goto: (position) => this.gameGoto(position),
+
+      // Objetivo DINÂMICO: o pathfinder recalcula sozinho enquanto o jogador
+      // corre. Um ponto parado não serve para perseguir quem se move — quando o
+      // bot chegasse, o jogador já não estaria lá.
+      chaseOwner: (distance) => {
+        this.mc.followOwner(distance)
+      },
+
+      setSprinting: (on) => this.mc.setSprinting(on),
 
       stopMoving: () => this.mc.stopMoving(),
 

@@ -98,10 +98,22 @@ describe('validação de intenção', () => {
     expect(intent.type === 'PLAY_GAME' && intent.params.role).toBeUndefined()
   })
 
-  it('rejeita papel fora dos dois possíveis', () => {
+  it('rejeita papel fora dos possíveis', () => {
     expect(
       validateIntent({ type: 'PLAY_GAME', params: { game: 'esconde_esconde', role: 'juiz' } }),
     ).toEqual(UNKNOWN_INTENT)
+  })
+
+  it('aceita os papéis do pega-pega — a combinação com o jogo é do registro', () => {
+    for (const role of ['bot_pega', 'bot_foge']) {
+      const intent = validateIntent({ type: 'PLAY_GAME', params: { game: 'pega_pega', role } })
+      expect(intent.type, role).toBe('PLAY_GAME')
+    }
+  })
+
+  it('aceita o convite genérico, que não escolhe jogo nenhum', () => {
+    const intent = validateIntent({ type: 'ASK_WHICH_GAME', params: {} })
+    expect(intent.type).toBe('ASK_WHICH_GAME')
   })
 
   it('rejeita PLAY_GAME sem nome de jogo', () => {

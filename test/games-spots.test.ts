@@ -5,6 +5,7 @@ import {
   rankHidingSpots,
   pickScoutPoint,
   pickFakeSearchSpots,
+  pickFleePoint,
   horizontalDistance,
   type Candidate,
 } from '../src/behaviors/games/spots.js'
@@ -260,5 +261,103 @@ describe('buscas falsas', () => {
     const a = pickFakeSearchSpots(owner, bot, options, seeded(1))
     const b = pickFakeSearchSpots(owner, bot, options, seeded(2))
     expect(a).not.toEqual(b)
+  })
+})
+
+// ───────────────────────────── PEGA-PEGA: FUGA ─────────────────────────────
+
+describe('ponto de fuga', () => {
+  const options = {
+    stepMin: 8,
+    stepMax: 16,
+    maxDistanceFromOwner: 40,
+    samples: 16,
+  }
+
+  it('sempre se afasta de quem está vindo pegar', () => {
+    const bot: Vec3Like = { x: 5, y: 64, z: 0 }
+
+    for (let seed = 1; seed <= 20; seed++) {
+      const spot = pickFleePoint(owner, bot, options, seeded(seed))!
+      expect(spot, `seed ${seed}`).not.toBeNull()
+      expect(horizontalDistance(spot, owner)).toBeGreaterThan(horizontalDistance(bot, owner))
+    }
+  })
+
+  it('respeita o salto configurado', () => {
+    const bot: Vec3Like = { x: 5, y: 64, z: 0 }
+    const spot = pickFleePoint(owner, bot, options, seeded(7))!
+
+    const salto = horizontalDistance(spot, bot)
+    expect(salto).toBeGreaterThanOrEqual(options.stepMin - 0.001)
+    expect(salto).toBeLessThanOrEqual(options.stepMax + 0.001)
+  })
+
+  it('nunca foge para além do teto de distância do jogador', () => {
+    // Já quase no teto: qualquer passo na direção óbvia estouraria o limite.
+    const bot: Vec3Like = { x: 36, y: 64, z: 0 }
+
+    for (let seed = 1; seed <= 20; seed++) {
+      const spot = pickFleePoint(owner, bot, options, seeded(seed))
+      expect(spot, `seed ${seed}`).not.toBeNull()
+      expect(horizontalDistance(spot!, owner)).toBeLessThanOrEqual(options.maxDistanceFromOwner)
+    }
+  })
+
+  // No teto, TODO ponto que aumenta a distância está fora do limite. Exigir
+  // ganho positivo deixaria o bot parado esperando ser pego — e parado não é
+  // fuga, é entrega.
+  it('corre de lado quando o teto trava o critério principal', () => {
+    const bot: Vec3Like = { x: 40, y: 64, z: 0 }
+    const spot = pickFleePoint(owner, bot, options, seeded(3))
+
+    expect(spot).not.toBeNull()
+    expect(horizontalDistance(spot!, owner)).toBeLessThanOrEqual(options.maxDistanceFromOwner)
+    // De lado, sim; para cima de quem persegue, não.
+    expect(horizontalDistance(spot!, owner)).toBeGreaterThanOrEqual(options.stepMin)
+  })
+
+  it('descarta candidato sem chão conhecido', () => {
+    const bot: Vec3Like = { x: 5, y: 64, z: 0 }
+    const spot = pickFleePoint(owner, bot, { ...options, groundAt: () => null }, seeded(5))
+
+    expect(spot).toBeNull()
+  })
+
+  it('mede o candidato no chão de verdade', () => {
+    const bot: Vec3Like = { x: 5, y: 64, z: 0 }
+    const spot = pickFleePoint(
+      owner,
+      bot,
+      { ...options, groundAt: (p) => ({ ...p, y: p.y + 5 }) },
+      seeded(5),
+    )!
+
+    expect(spot.y).toBe(69)
+  })
+
+  it('descarta candidato que o pathfinder não alcança', () => {
+    const bot: Vec3Like = { x: 5, y: 64, z: 0 }
+    const spot = pickFleePoint(owner, bot, { ...options, isReachable: () => false }, seeded(5))
+
+    expect(spot).toBeNull()
+  })
+
+  it('encurralado devolve null em vez de travar a rodada', () => {
+    const bot: Vec3Like = { x: 5, y: 64, z: 0 }
+    // Teto menor que o salto mínimo: nenhum candidato cabe.
+    const spot = pickFleePoint(owner, bot, { ...options, maxDistanceFromOwner: 2 }, seeded(5))
+
+    expect(spot).toBeNull()
+  })
+
+  it('é determinístico com o mesmo sorteio e varia entre rodadas', () => {
+    const bot: Vec3Like = { x: 5, y: 64, z: 0 }
+    expect(pickFleePoint(owner, bot, options, seeded(42))).toEqual(
+      pickFleePoint(owner, bot, options, seeded(42)),
+    )
+    expect(pickFleePoint(owner, bot, options, seeded(1))).not.toEqual(
+      pickFleePoint(owner, bot, options, seeded(2)),
+    )
   })
 })

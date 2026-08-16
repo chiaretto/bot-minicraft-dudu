@@ -218,8 +218,80 @@ describe('config: jogos', () => {
 
   it('não introduz nenhuma chave de segredo', () => {
     const c = parseConfig({ ...minimal, games: { enabled: true } })
-    for (const key of Object.keys(c.games.hideAndSeek)) {
+    for (const key of [...Object.keys(c.games.hideAndSeek), ...Object.keys(c.games.tag)]) {
       expect(FORBIDDEN_YAML_KEYS as readonly string[]).not.toContain(key)
+    }
+  })
+})
+
+describe('config: pega-pega', () => {
+  it('aplica os defaults quando o sub-bloco está ausente', () => {
+    const { tag } = parseConfig(minimal).games
+    expect(tag.countTo).toBe(5)
+    expect(tag.countTo * tag.countIntervalMs).toBe(5_000)
+    expect(tag.chaseTimeoutMs).toBe(60_000)
+    expect(tag.fleeTimeoutMs).toBe(60_000)
+    expect(tag.touchDistance).toBe(2)
+    expect(tag.roundTimeoutMs).toBe(180_000)
+  })
+
+  // O equilíbrio da brincadeira mora aqui: com sprint nos dois papéis o bot
+  // ganha sempre, sem sprint em nenhum ele nunca pega ninguém.
+  it('corre atrás com sprint e foge sem sprint', () => {
+    const { tag } = parseConfig(minimal).games
+    expect(tag.chaseSprint).toBe(true)
+    expect(tag.fleeSprint).toBe(false)
+  })
+
+  it('config antiga, sem o sub-bloco tag, continua válida', () => {
+    const c = parseConfig({ ...minimal, games: { enabled: true, hideAndSeek: { countTo: 15 } } })
+    expect(c.games.hideAndSeek.countTo).toBe(15)
+    expect(c.games.tag.countTo).toBe(5)
+  })
+
+  it('muda um campo só sem mexer no resto', () => {
+    const c = parseConfig({ ...minimal, games: { tag: { chaseSprint: false } } })
+    expect(c.games.tag.chaseSprint).toBe(false)
+    expect(c.games.tag.fleeStepMin).toBe(8)
+    expect(c.games.hideAndSeek.countTo).toBe(20)
+  })
+
+  it('recusa faixa de fuga invertida apontando o campo', () => {
+    const raw = { ...minimal, games: { tag: { fleeStepMin: 20, fleeStepMax: 10 } } }
+    expect(() => parseConfig(raw)).toThrow(ConfigError)
+    expect(() => parseConfig(raw)).toThrow(/fleeStepMin/)
+  })
+
+  it('recusa salto de fuga maior que o teto de distância do jogador', () => {
+    const raw = { ...minimal, games: { tag: { fleeStepMax: 50, fleeMaxDistanceFromOwner: 40 } } }
+    expect(() => parseConfig(raw)).toThrow(ConfigError)
+    expect(() => parseConfig(raw)).toThrow(/fleeStepMax/)
+  })
+
+  it('recusa toque maior que o salto de fuga', () => {
+    const raw = { ...minimal, games: { tag: { touchDistance: 10, fleeStepMin: 8 } } }
+    expect(() => parseConfig(raw)).toThrow(ConfigError)
+    expect(() => parseConfig(raw)).toThrow(/touchDistance/)
+  })
+
+  it('recusa rede de segurança menor que a rodada inteira', () => {
+    const raw = { ...minimal, games: { tag: { roundTimeoutMs: 30_000 } } }
+    expect(() => parseConfig(raw)).toThrow(ConfigError)
+    expect(() => parseConfig(raw)).toThrow(/roundTimeoutMs/)
+  })
+
+  it('recusa valores fora de faixa', () => {
+    for (const tag of [
+      { countTo: 0 },
+      { chaseTimeoutMs: 0 },
+      { fleeTimeoutMs: -1 },
+      { surrenderTimeoutMs: 0 },
+      { fleeCandidateSamples: 0 },
+      { chaseFollowDistance: 0 },
+    ]) {
+      expect(() => parseConfig({ ...minimal, games: { tag } }), JSON.stringify(tag)).toThrow(
+        ConfigError,
+      )
     }
   })
 })
