@@ -107,9 +107,17 @@ describe('matcher', () => {
   })
 })
 
-describe('repertório do esconde-esconde', () => {
+describe('repertório das brincadeiras', () => {
   /** Toda fala que a sessão do jogo emite por id. */
   const FALAS_DA_SESSAO = [
+    'pega_aceito_pego',
+    'pega_aceito_fujo',
+    'pega_vou_pegar',
+    'pega_te_peguei',
+    'pega_cansei_pegando',
+    'pega_fui_pego',
+    'pega_cansei_fugindo',
+    'pega_me_entrego',
     'jogo_aceito',
     'jogo_mande_contar',
     'jogo_pode_procurar',
@@ -129,6 +137,7 @@ describe('repertório do esconde-esconde', () => {
     'jogo_desconhecido',
     'jogo_desligado',
     'jogo_ja_rolando',
+    'jogo_qual_brincadeira',
   ]
 
   const TODAS = [...FALAS_DA_SESSAO, ...FALAS_DO_BOT]
@@ -185,20 +194,53 @@ describe('repertório do esconde-esconde', () => {
     }
   })
 
-  it('a recusa de jogo desconhecido oferece o que o bot sabe', () => {
+  it('a recusa de jogo desconhecido oferece as DUAS brincadeiras', () => {
+    // Esconder uma capacidade nova é tão desonesto quanto prometer uma que não
+    // existe: o bot passou a saber pega-pega, e a recusa precisa dizer isso.
     const entry = catalog.entries.find((e) => e.id === 'jogo_desconhecido')!
     for (const response of entry.responses) {
-      const text = typeof response === 'string' ? response : response.text
-      expect(text.toLowerCase(), text).toContain('esconde')
+      const text = (typeof response === 'string' ? response : response.text).toLowerCase()
+      expect(text, text).toContain('esconde')
+      expect(text, text).toContain('pega-pega')
     }
   })
 
-  it('com os jogos desligados, o bot NÃO oferece esconde-esconde', () => {
+  it('a pergunta de qual brincadeira nomeia as duas', () => {
+    const entry = catalog.entries.find((e) => e.id === 'jogo_qual_brincadeira')!
+    for (const response of entry.responses) {
+      const text = (typeof response === 'string' ? response : response.text).toLowerCase()
+      expect(text, text).toContain('esconde-esconde')
+      expect(text, text).toContain('pega-pega')
+    }
+  })
+
+  it('com os jogos desligados, o bot NÃO oferece brincadeira nenhuma', () => {
     // Oferecer o que está desligado é prometer o que o bot não faz.
     const entry = catalog.entries.find((e) => e.id === 'jogo_desligado')!
     for (const response of entry.responses) {
-      const text = typeof response === 'string' ? response : response.text
-      expect(text.toLowerCase(), text).not.toContain('esconde-esconde')
+      const text = (typeof response === 'string' ? response : response.text).toLowerCase()
+      expect(text, text).not.toContain('esconde-esconde')
+      expect(text, text).not.toContain('pega-pega')
+    }
+  })
+
+  it('a entrega do pega-pega deixa claro que ele parou de propósito', () => {
+    // Sem isso a criança acha que o bot travou, em vez de entender que é para
+    // chegar perto e encostar.
+    const entry = catalog.entries.find((e) => e.id === 'pega_cansei_fugindo')!
+    for (const response of entry.responses) {
+      const text = (typeof response === 'string' ? response : response.text).toLowerCase()
+      expect(text, text).toMatch(/parei|parad|n[ãa]o corro mais|chega de correr/)
+      // E convida a criança a vir encostar: parar calado seria só travar.
+      expect(text, text).toMatch(/pegar|encostar|vem/)
+    }
+  })
+
+  it('cansar não vira reclamação nem tristeza', () => {
+    for (const id of ['pega_cansei_pegando', 'pega_fui_pego']) {
+      const entry = catalog.entries.find((e) => e.id === id)!
+      const textos = entry.responses.map((r) => (typeof r === 'string' ? r : r.text)).join(' ')
+      expect(textos, id).not.toMatch(/trapa|roubou|n[ãa]o vale|injust|doente|triste/i)
     }
   })
 
@@ -214,6 +256,7 @@ describe('repertório do esconde-esconde', () => {
     const entry = catalog.entries.find((e) => e.id === 'capacidades')!
     const textos = entry.responses.map((r) => (typeof r === 'string' ? r : r.text)).join(' ')
     expect(textos.toLowerCase()).toContain('esconde-esconde')
+    expect(textos.toLowerCase()).toContain('pega-pega')
     // E a pergunta direta chega na entrada certa.
     expect(rep.respond('voce sabe brincar', snapshot())?.entryId).toBe('capacidades')
   })

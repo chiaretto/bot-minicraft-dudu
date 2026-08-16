@@ -18,6 +18,7 @@ export const INTENT_TYPES = [
   'DEFENSE_ON',
   'DEFENSE_OFF',
   'PLAY_GAME',
+  'ASK_WHICH_GAME',
   'CHAT',
   'UNKNOWN',
 ] as const
@@ -59,6 +60,9 @@ export const intentSchema = z.discriminatedUnion('type', [
       role: z.enum(GAME_ROLES).optional(),
     }),
   }),
+  // Convite sem nome de jogo. Com duas brincadeiras no registro, escolher pela
+  // criança seria decidir por ela; o bot pergunta qual das duas ela quer.
+  z.object({ type: z.literal('ASK_WHICH_GAME'), params: z.object({}).default({}) }),
   z.object({
     type: z.literal('CHAT'),
     params: z.object({ text: z.string() }).default({ text: '' }),

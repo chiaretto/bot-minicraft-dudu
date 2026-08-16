@@ -2,7 +2,8 @@
 
 **Componente:** `configuration`
 **Origem:** `add-minecraft-companion-bot` (2026-08-15)
-**Atualizado por:** `add-bot-games-hide-and-seek` (2026-08-15)
+**Atualizado por:** `add-bot-games-hide-and-seek` (2026-08-15), `fix-hide-and-seek-cover` (2026-08-16),
+`add-bot-game-pega-pega` (2026-08-16)
 
 ---
 
@@ -115,9 +116,10 @@ aparecem em log ou mensagem de erro.
 
 ### Requirement: Bloco `games`
 
-Os parâmetros da brincadeira são configuráveis, com defaults que funcionam sem
+Os parâmetros das brincadeiras são configuráveis, com defaults que funcionam sem
 ninguém mexer em nada. As distâncias são o que o pai ajusta se a rodada ficar
-fácil ou difícil demais para a criança.
+fácil ou difícil demais para a criança. O bloco tem **um sub-bloco por jogo**:
+`hideAndSeek` e `tag`.
 
 ```yaml
 games:
@@ -125,26 +127,59 @@ games:
   hideAndSeek:
     hideMinDistance: 10                 # esconderijo nunca colado no jogador
     hideMaxDistance: 30                 # nem tão longe que vire caminhada
-    hideCandidateSamples: 24            # pontos avaliados antes de desistir
+    hideCandidateSamples: 24            # pontos avaliados por volta da procura
+    hideSearchMs: 20000                 # tempo andando atrás de um lugar coberto
     touchDistance: 2                    # encostou nessa distância, achou
     seeDistance: 20                     # alcance máximo do "ver" do bot
-    countTo: 10                         # até quanto ele conta
-    countIntervalMs: 1000               # piso real de 900 ms (throttle do chat)
+    countTo: 20                         # até quanto ele conta
+    countIntervalMs: 1000               # 20 x 1 s = contagem de 20 s
     fakeSearches: 2                     # erros de propósito antes de procurar
     fakeSearchMinDistanceFromOwner: 8   # busca falsa longe do jogador
     roundTimeoutMs: 180000              # 3 min: rodada nunca fica pendurada
+  tag:
+    countTo: 5                          # conta 5 antes de sair correndo
+    countIntervalMs: 1000               # 5 x 1 s = vantagem de saída de 5 s
+    chaseTimeoutMs: 60000               # 60 s atrás; depois cansa e perde
+    fleeTimeoutMs: 60000                # 60 s fugindo; depois se entrega
+    surrenderTimeoutMs: 30000           # entregue: espera parado ser pego
+    touchDistance: 2                    # encostou nessa distância, pegou
+    chaseFollowDistance: 1              # o quanto ele cola perseguindo
+    chaseSprint: true                   # perseguindo ele corre de verdade
+    fleeSprint: false                   # fugindo não, senão nunca é pego
+    fleeStepMin: 8                      # salto mínimo de cada rumo de fuga
+    fleeStepMax: 16                     # salto máximo de cada rumo de fuga
+    fleeMaxDistanceFromOwner: 40        # nunca some do campo de visão
+    fleeCandidateSamples: 16            # destinos avaliados por escolha
+    roundTimeoutMs: 180000              # rede de segurança
 ```
+
+> **Os dois sprints não são simétricos de propósito.** Com sprint nos dois
+> papéis o bot ganha sempre e a criança para de brincar; sem sprint em nenhum,
+> ele nunca pega ninguém e toda rodada acaba em "cansei". Ligado só na
+> perseguição, cada lado tem uma chance real.
 
 #### Scenario: Configuração ausente
 - **GIVEN** `config.yaml` não tem o bloco `games`
 - **WHEN** o bot inicia
 - **THEN** os defaults acima são aplicados
-- **AND** a brincadeira funciona sem nenhuma configuração
+- **AND** as duas brincadeiras funcionam sem nenhuma configuração
+
+#### Scenario: Jogo novo não quebra config antiga
+- **GIVEN** um `config.yaml` escrito antes do pega-pega existir, sem `games.tag`
+- **WHEN** o bot inicia
+- **THEN** ele inicia normalmente, com o pega-pega nos defaults
+- **AND** nenhuma migração de arquivo é necessária
+
+#### Scenario: Configuração parcial de um jogo só
+- **GIVEN** `config.yaml` traz `games.tag.chaseSprint: false` e mais nada
+- **WHEN** o bot inicia
+- **THEN** só esse campo muda; todo o resto de `tag` e todo o `hideAndSeek` ficam
+  nos defaults
 
 #### Scenario: Desligar os jogos
 - **GIVEN** `games.enabled` é `false`
 - **WHEN** o bot inicia
-- **THEN** nenhum convite inicia rodada
+- **THEN** nenhum convite inicia rodada, em nenhum dos dois jogos
 - **AND** o parser de comandos continua reconhecendo o convite, para o bot poder
   responder honestamente em vez de cair em `nao_entendi`
 
@@ -165,6 +200,31 @@ games:
 - **WHEN** a config é carregada
 - **THEN** o startup falha — uma busca falsa desse tamanho encostaria no jogador
   e acabaria a brincadeira antes de começar
+
+#### Scenario: Faixa de fuga invertida
+- **GIVEN** `fleeStepMin` é maior que `fleeStepMax`
+- **WHEN** a config é carregada
+- **THEN** a validação recusa apontando o campo
+
+#### Scenario: Fuga além do teto do jogador
+- **GIVEN** `fleeStepMax` é maior que `fleeMaxDistanceFromOwner`
+- **WHEN** a config é carregada
+- **THEN** a validação recusa — um salto de fuga maior que o teto garantiria
+  candidato inválido em toda escolha
+
+#### Scenario: Toque maior que o salto de fuga
+- **GIVEN** `touchDistance` é maior ou igual a `fleeStepMin`
+- **WHEN** a config é carregada
+- **THEN** a validação recusa: o bot chegaria ao destino de fuga já dentro da
+  distância de ser pego, e a rodada acabaria sozinha
+
+#### Scenario: Tempo do jogo maior que a rede de segurança
+- **GIVEN** `countTo × countIntervalMs + max(chaseTimeoutMs, fleeTimeoutMs) +
+  surrenderTimeoutMs` passa de `roundTimeoutMs`
+- **WHEN** a config é carregada
+- **THEN** a validação recusa
+- **AND** a mensagem diz de quanto `roundTimeoutMs` precisa ser — senão a rede de
+  segurança dispara antes da regra do jogo valer
 
 #### Scenario: Nada de segredo novo
 - **GIVEN** o bloco `games`

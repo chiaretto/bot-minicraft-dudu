@@ -2,7 +2,8 @@
 
 **Componente:** `player_commands`
 **Origem:** `add-minecraft-companion-bot` (2026-08-15)
-**Atualizado por:** `add-bot-games-hide-and-seek` (2026-08-15)
+**Atualizado por:** `add-bot-games-hide-and-seek` (2026-08-15),
+`add-bot-game-pega-pega` (2026-08-16)
 
 ---
 
@@ -224,18 +225,26 @@ O dono liga e desliga a defesa automática por chat. Comportamento detalhado em
 
 ### Requirement: Intenção `PLAY_GAME`
 
-O catálogo fechado de intenções ganha `PLAY_GAME`, com o nome do jogo obrigatório
-e o papel opcional. Continua valendo a regra de ouro: intenção fora do catálogo,
-ou com params inválidos, vira `UNKNOWN` e nenhuma ação de mundo acontece.
+O catálogo fechado de intenções tem `PLAY_GAME`, com o nome do jogo obrigatório
+e o papel opcional. `GAME_ROLES` cobre os papéis dos dois jogos, e o papel é
+validado **contra o jogo pedido**. Continua valendo a regra de ouro: intenção
+fora do catálogo, ou com params inválidos, vira `UNKNOWN` e nenhuma ação de mundo
+acontece.
 
 #### Scenario: Intenção válida com papel explícito
-- **GIVEN** o registro conhece `esconde_esconde`
-- **WHEN** chega `PLAY_GAME{game: "esconde_esconde", role: "bot_esconde"}`
-- **THEN** a intenção é aceita e a rodada começa no papel de quem se esconde
+- **GIVEN** o registro conhece `pega_pega`
+- **WHEN** chega `PLAY_GAME{game: "pega_pega", role: "bot_foge"}`
+- **THEN** a intenção é aceita e a rodada começa no papel de quem foge
 
 #### Scenario: Intenção válida sem papel
 - **WHEN** chega `PLAY_GAME{game: "esconde_esconde"}`
-- **THEN** o papel padrão é `bot_esconde` — o bot é quem se esconde
+- **THEN** o papel padrão do jogo é aplicado: `bot_esconde`
+- **AND** para `PLAY_GAME{game: "pega_pega"}`, o padrão é `bot_pega`
+
+#### Scenario: Papel de outro jogo
+- **WHEN** chega `PLAY_GAME{game: "pega_pega", role: "bot_procura"}`
+- **THEN** o schema aceita a forma, mas o registro recusa a combinação
+- **AND** nenhuma rodada começa e o bot responde no chat
 
 #### Scenario: Papel inválido
 - **WHEN** chega `PLAY_GAME{game: "esconde_esconde", role: "juiz"}`
@@ -249,19 +258,52 @@ ou com params inválidos, vira `UNKNOWN` e nenhuma ação de mundo acontece.
 
 ---
 
+### Requirement: Intenção `ASK_WHICH_GAME`
+
+O catálogo fechado de intenções tem `ASK_WHICH_GAME`, sem params: o convite que
+não nomeia o jogo. Ela **nunca** inicia rodada.
+
+#### Scenario: Convite genérico com os jogos ligados
+- **GIVEN** `games.enabled` é `true`
+- **WHEN** a intenção `ASK_WHICH_GAME` é executada
+- **THEN** o bot pergunta no chat qual das duas brincadeiras a criança quer
+- **AND** o estado não muda e nenhuma sessão é criada
+
+#### Scenario: Convite genérico com os jogos desligados
+- **GIVEN** `games.enabled` é `false`
+- **WHEN** a intenção `ASK_WHICH_GAME` é executada
+- **THEN** o bot responde que agora não dá para brincar
+- **AND** **não** nomeia nenhuma das brincadeiras — perguntar "qual você quer?"
+  com tudo desligado é oferecer o que o bot não pode fazer
+
+> É por causa deste segundo cenário que o convite genérico é intenção, e não uma
+> entrada de repertório com padrões próprios: só o wiring conhece a configuração,
+> e o repertório responderia igual nos dois casos.
+
+---
+
 ### Requirement: Convites de brincadeira no parser determinístico
 
 Convidar para brincar é reconhecido por regex, antes de qualquer chamada de rede.
 Com `llm.provider: 'none'` a brincadeira funciona igual.
 
 #### Scenario: Convite genérico
-- **WHEN** `Miguel` digita `dudu, vamos brincar` (ou `bora brincar`, `vamos jogar`)
-- **THEN** o parser devolve `PLAY_GAME{game: "esconde_esconde", role: "bot_esconde"}`
+- **WHEN** `Miguel` digita `dudu, vamos brincar` (ou `bora brincar`, `vamos
+  jogar`, `quer brincar`)
+- **THEN** o parser devolve `ASK_WHICH_GAME`, **não** `PLAY_GAME`
+- **AND** o bot pergunta qual das duas brincadeiras ela quer
 - **AND** nenhuma chamada de IA acontece
 
 #### Scenario: Convite nomeando o jogo
 - **WHEN** `Miguel` digita `dudu, vamos brincar de esconde esconde`
 - **THEN** o parser devolve `PLAY_GAME{game: "esconde_esconde", role: "bot_esconde"}`
+- **AND** com `de pega pega` no lugar, devolve `PLAY_GAME{game: "pega_pega",
+  role: "bot_pega"}`
+
+#### Scenario: Variantes regionais do nome do pega-pega
+- **WHEN** `Miguel` digita `pique pega`, `pira pega` ou `bora de pega pega`
+- **THEN** todas casam com o mesmo jogo `pega_pega`
+- **AND** nenhuma delas vira jogo separado no registro
 
 #### Scenario: Mandar o bot se esconder
 - **WHEN** `Miguel` digita `dudu, se esconde` (ou `vai se esconder`, `voce se esconde`)
@@ -272,15 +314,57 @@ Com `llm.provider: 'none'` a brincadeira funciona igual.
   `me procura`, `vem me achar`)
 - **THEN** o parser devolve `PLAY_GAME` com o papel de quem procura
 
+#### Scenario: Mandar o bot correr atrás
+- **WHEN** `Miguel` digita `dudu, me pega` (ou `vem me pegar`, `corre atras de
+  mim`, `tenta me pegar`, `voce pega`)
+- **THEN** o parser devolve `PLAY_GAME` com o papel de quem pega
+
+#### Scenario: Avisar que vai pegar
+- **WHEN** `Miguel` digita `dudu, eu vou te pegar` (ou `eu te pego`, `voce
+  corre`, `sai correndo`)
+- **THEN** o parser devolve `PLAY_GAME{game: "pega_pega", role: "bot_foge"}`
+
+#### Scenario: Padrão de papel vem antes do genérico
+- **GIVEN** os padrões são avaliados em ordem
+- **WHEN** `Miguel` digita `eu vou te pegar`
+- **THEN** o papel resolvido é `bot_foge`, não o padrão do jogo
+- **AND** a ordem segue a mesma regra já usada em `eu vou me esconder`
+
 #### Scenario: Padrões normalizados
 - **GIVEN** os padrões rodam sobre texto já normalizado
 - **WHEN** `Miguel` digita `DUDU, VAMOS BRINCAR DE ESCONDE-ESCONDE!!!`
 - **THEN** a normalização entrega `vamos brincar de esconde esconde`
 - **AND** o comando casa normalmente
+- **AND** o mesmo vale para `DUDU, VAMOS BRINCAR DE PEGA-PEGA!!!`
 
 #### Scenario: Enfeite no fim da frase
-- **WHEN** `Miguel` digita `dudu, vamos brincar agora`
+- **WHEN** `Miguel` digita `dudu, vamos brincar agora` ou `dudu, me pega ai`
 - **THEN** o filler final é removido na segunda passada e o comando casa
+
+---
+
+### Requirement: Desistência com sentido por jogo
+
+`desisto` e suas variantes são reconhecidas fora do catálogo de intenções: só
+fazem sentido com uma rodada em andamento. Cada jogo entende a desistência do
+seu jeito.
+
+#### Scenario: Desistir com o bot fugindo
+- **GIVEN** uma rodada de pega-pega com o bot no papel `bot_foge`
+- **WHEN** `Miguel` digita `dudu, desisto` (ou `nao te pego`, `cansei`)
+- **THEN** o bot para de fugir e se entrega
+- **AND** a rodada termina com o bot perdendo
+
+#### Scenario: Desistir com o bot pegando
+- **GIVEN** uma rodada de pega-pega com o bot no papel `bot_pega`
+- **WHEN** `Miguel` digita `dudu, desisto`
+- **THEN** o bot entende que o jogador parou de correr
+- **AND** encosta nele e declara que pegou
+
+#### Scenario: Desistir fora de rodada
+- **GIVEN** nenhuma rodada em andamento
+- **WHEN** `Miguel` digita `desisto`
+- **THEN** a mensagem desce na cascata normalmente, como conversa
 
 ---
 

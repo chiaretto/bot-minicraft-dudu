@@ -73,14 +73,28 @@ export const hideAndSeekSchema = z
     hideMinDistance: z.number().positive().default(10),
     /** Nem tão longe que a brincadeira vire caminhada. */
     hideMaxDistance: z.number().positive().default(30),
-    /** Pontos avaliados antes de o bot desistir de achar esconderijo. */
+    /** Pontos avaliados a cada rodada de busca por esconderijo. */
     hideCandidateSamples: z.number().int().positive().default(24),
+    /**
+     * Quanto tempo o bot anda procurando um lugar de verdade para se esconder.
+     *
+     * Sem isso ele aceitava o primeiro ponto "não visível" e ficava parado no
+     * campo aberto, de costas para o jogador. Procurar leva tempo: é andar até
+     * achar uma construção, uma árvore ou um barranco que realmente tape.
+     */
+    hideSearchMs: z.number().int().positive().default(20_000),
     /** Encostou a esta distância, achou. */
     touchDistance: z.number().positive().default(2),
     /** Alcance máximo do "ver" do bot, mesmo com caminho livre. */
     seeDistance: z.number().positive().default(20),
-    countTo: z.number().int().positive().default(10),
-    /** O `ChatSender` impõe um piso de 900 ms; abaixo disso não adianta pedir. */
+    /** Ele conta até 20, um número por segundo. */
+    countTo: z.number().int().positive().default(20),
+    /**
+     * Ritmo da contagem. Com `countTo: 20`, um número por segundo faz a
+     * contagem inteira levar **20 segundos** — o mesmo tempo que o bot leva
+     * procurando esconderijo, para a criança ter a mesma folga que ele.
+     * O `ChatSender` impõe um piso de 900 ms; abaixo disso não adianta pedir.
+     */
     countIntervalMs: z.number().int().positive().default(1000),
     /**
      * Erros de propósito antes de procurar de verdade. NÃO é enfeite: é a única
@@ -112,9 +126,88 @@ export const hideAndSeekSchema = z
     }
   })
 
+/**
+ * Parâmetros do pega-pega. Os defaults funcionam sem ninguém mexer em nada; os
+ * dois sprints são o que se ajusta quando a rodada fica fácil ou impossível
+ * para a criança.
+ * Ver: configuration_delta.md → "Sub-bloco `games.tag`".
+ */
+export const tagSchema = z
+  .object({
+    /** Ele conta 5 antes de sair correndo atrás. */
+    countTo: z.number().int().positive().default(5),
+    /** 5 x 1 s = a vantagem de saída da criança. */
+    countIntervalMs: z.number().int().positive().default(1000),
+    /** Correndo atrás: passou disso, ele cansa e perde. */
+    chaseTimeoutMs: z.number().int().positive().default(60_000),
+    /** Fugindo: passou disso, ele para e se deixa pegar. */
+    fleeTimeoutMs: z.number().int().positive().default(60_000),
+    /** Quanto ele espera parado, já entregue, até alguém encostar. */
+    surrenderTimeoutMs: z.number().int().positive().default(30_000),
+    /** Encostou a esta distância, pegou. */
+    touchDistance: z.number().positive().default(2),
+    /** O quanto ele cola no jogador enquanto persegue. */
+    chaseFollowDistance: z.number().positive().default(1),
+    /**
+     * Os dois sprints NÃO são simétricos de propósito. Com sprint nos dois
+     * papéis o bot ganha sempre e a criança para de brincar; sem sprint em
+     * nenhum, ele nunca pega ninguém e toda rodada acaba em "cansei".
+     */
+    chaseSprint: z.boolean().default(true),
+    fleeSprint: z.boolean().default(false),
+    /** Salto mínimo de cada ponto de fuga, a partir de onde o bot está. */
+    fleeStepMin: z.number().positive().default(8),
+    fleeStepMax: z.number().positive().default(16),
+    /** Fugir mundo afora tira o bot do campo de visão da criança. */
+    fleeMaxDistanceFromOwner: z.number().positive().default(40),
+    fleeCandidateSamples: z.number().int().positive().default(16),
+    /** Rede de segurança: rodada nunca fica pendurada. */
+    roundTimeoutMs: z.number().int().positive().default(180_000),
+  })
+  .superRefine((cfg, ctx) => {
+    if (cfg.fleeStepMin > cfg.fleeStepMax) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['fleeStepMin'],
+        message: `não pode ser maior que fleeStepMax (${cfg.fleeStepMax})`,
+      })
+    }
+    // Salto maior que o teto garantiria candidato inválido em toda escolha.
+    if (cfg.fleeStepMax > cfg.fleeMaxDistanceFromOwner) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['fleeStepMax'],
+        message: `não pode ser maior que fleeMaxDistanceFromOwner (${cfg.fleeMaxDistanceFromOwner})`,
+      })
+    }
+    // Com o toque maior que o salto, o bot chegaria ao ponto de fuga já dentro
+    // da distância de ser pego, e a rodada acabaria sozinha.
+    if (cfg.touchDistance >= cfg.fleeStepMin) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['touchDistance'],
+        message: `precisa ser menor que fleeStepMin (${cfg.fleeStepMin})`,
+      })
+    }
+    // A rede de segurança não pode disparar antes da regra do jogo valer: seria
+    // o bot morrendo no meio da frase em vez de perder por cansaço.
+    const needed =
+      cfg.countTo * cfg.countIntervalMs +
+      Math.max(cfg.chaseTimeoutMs, cfg.fleeTimeoutMs) +
+      cfg.surrenderTimeoutMs
+    if (needed > cfg.roundTimeoutMs) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['roundTimeoutMs'],
+        message: `precisa ser de pelo menos ${needed} ms, senão a rodada acaba antes da regra do jogo valer`,
+      })
+    }
+  })
+
 export const gamesSchema = z.object({
   enabled: z.boolean().default(true),
   hideAndSeek: hideAndSeekSchema.default({}),
+  tag: tagSchema.default({}),
 })
 
 export const ollamaSchema = z.object({
@@ -188,6 +281,7 @@ export type LlmConfig = z.infer<typeof llmSchema>
 export type DefenseConfig = z.infer<typeof defenseSchema>
 export type GamesConfig = z.infer<typeof gamesSchema>
 export type HideAndSeekConfig = z.infer<typeof hideAndSeekSchema>
+export type TagConfig = z.infer<typeof tagSchema>
 export type DialogueConfig = z.infer<typeof dialogueSchema>
 export type MemoryConfig = z.infer<typeof memorySchema>
 export type BehaviorConfig = z.infer<typeof behaviorSchema>

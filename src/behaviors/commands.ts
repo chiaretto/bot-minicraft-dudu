@@ -123,18 +123,12 @@ const COMMANDS: CommandPattern[] = [
       /^some daqui que eu te acho$/,
       /^eu vou te achar$/,
       /^eu vou te procurar$/,
-      // Convite genérico: "vamos brincar" de uma criança de 7 anos quer dizer
-      // "some daí que eu te acho". O papel padrão é o bot se esconder.
-      /^vamos brincar$/,
       /^vamos brincar de esconde esconde$/,
       /^vamos brincar de esconde$/,
-      /^vamos jogar$/,
       /^vamos jogar esconde esconde$/,
-      /^bora brincar$/,
       /^bora brincar de esconde esconde$/,
       /^bora jogar esconde esconde$/,
       /^bora de esconde esconde$/,
-      /^quer brincar$/,
       /^quer brincar de esconde esconde$/,
       /^quer jogar esconde esconde$/,
       /^brincar de esconde esconde$/,
@@ -142,10 +136,78 @@ const COMMANDS: CommandPattern[] = [
       /^vamos de esconde esconde$/,
     ],
   },
+  // ── Pega-pega ──────────────────────────────────────────────────────────
+  // Como no esconde-esconde, o papel explícito vem ANTES do convite pelo nome
+  // do jogo: "eu vou te pegar" também casaria com um convite qualquer, e o
+  // papel sairia trocado — quem corre atrás seria o bot, não a criança.
+  {
+    intent: { type: 'PLAY_GAME', params: { game: 'pega_pega', role: 'bot_foge' } },
+    patterns: [
+      /^eu vou te pegar$/,
+      /^eu te pego$/,
+      /^eu pego voce$/,
+      /^eu vou correr atras de voce$/,
+      /^voce corre$/,
+      /^voce foge$/,
+      /^corre que eu vou te pegar$/,
+      /^corre que eu to indo$/,
+      /^sai correndo$/,
+      /^foge de mim$/,
+      /^foge que eu te pego$/,
+    ],
+  },
+  {
+    intent: { type: 'PLAY_GAME', params: { game: 'pega_pega', role: 'bot_pega' } },
+    patterns: [
+      /^me pega$/,
+      /^vem me pegar$/,
+      /^tenta me pegar$/,
+      /^corre atras de mim$/,
+      /^vem correndo atras de mim$/,
+      /^voce pega$/,
+      /^voce me pega$/,
+      // Nome do jogo, com as variantes regionais que a criança pode usar.
+      // Todas são o MESMO jogo: pique-pega não é outra brincadeira.
+      /^pega pega$/,
+      /^pique pega$/,
+      /^pira pega$/,
+      /^vamos brincar de pega pega$/,
+      /^vamos brincar de pique pega$/,
+      /^vamos jogar pega pega$/,
+      /^bora brincar de pega pega$/,
+      /^bora jogar pega pega$/,
+      /^bora de pega pega$/,
+      /^quer brincar de pega pega$/,
+      /^quer jogar pega pega$/,
+      /^brincar de pega pega$/,
+      /^vamos de pega pega$/,
+    ],
+  },
+  // Convite genérico, sem nome de jogo. Com duas brincadeiras no registro,
+  // começar uma delas seria escolher pela criança — ele pergunta.
+  // A pergunta não precisa de estado pendente: o nome de cada jogo já é, aqui
+  // em cima, um convite válido sozinho.
+  {
+    intent: { type: 'ASK_WHICH_GAME', params: {} },
+    patterns: [
+      /^vamos brincar$/,
+      /^vamos jogar$/,
+      /^bora brincar$/,
+      /^bora jogar$/,
+      /^quer brincar$/,
+      /^quer jogar$/,
+      /^brincar$/,
+      /^vamos brincar de alguma coisa$/,
+    ],
+  },
 ]
 
 /**
- * O jogador desistiu de procurar e quer que o bot apareça.
+ * O jogador desistiu da rodada.
+ *
+ * O que isso significa depende do jogo: no esconde-esconde o bot aparece; no
+ * pega-pega ele para de fugir e se entrega, ou entende que a criança parou de
+ * correr e vai pegá-la. Quem interpreta é a sessão.
  *
  * Não é intenção do catálogo: só faz sentido com uma rodada em andamento, e
  * fora dela `cade voce` é conversa que o repertório responde. Quem chama
@@ -164,6 +226,13 @@ const GIVE_UP_PATTERNS: RegExp[] = [
   /^nao to achando voce$/,
   /^aparece$/,
   /^sai dai$/,
+  // Pega-pega: desistir é parar de correr, dos dois lados.
+  /^nao te pego$/,
+  /^nao consigo te pegar$/,
+  /^cansei$/,
+  /^cansei de correr$/,
+  /^para de correr$/,
+  /^para de fugir$/,
 ]
 
 export function isGiveUp(text: string, botName: string): boolean {

@@ -184,8 +184,11 @@ llm:
 | `dudu, não briga`                    | desliga a defesa automática        |
 | `dudu, pode brigar`                  | religa a defesa                    |
 | `dudu, olha pra mim`                 | vira para você                     |
-| `dudu, vamos brincar` / `se esconde` | brinca de esconde-esconde (ele esconde) |
+| `dudu, vamos brincar`                | pergunta qual das duas brincadeiras |
+| `dudu, esconde esconde` / `se esconde` | brinca de esconde-esconde (ele esconde) |
 | `dudu, eu vou me esconder` / `conta até 10` | brinca de esconde-esconde (ele procura) |
+| `dudu, pega pega` / `me pega`        | brinca de pega-pega (ele corre atrás) |
+| `dudu, eu vou te pegar` / `você corre` | brinca de pega-pega (ele foge)     |
 
 O vocativo é opcional: `oi dudu`, `dudu, oi` e `oi` funcionam igual.
 
@@ -205,22 +208,42 @@ diretamente.
 
 ## Brincadeiras
 
-Por enquanto o bot sabe **uma**: esconde-esconde. Nos dois papéis, e sem precisar
-de IA nenhuma ligada.
+O bot sabe **duas**: esconde-esconde e pega-pega. Nos dois papéis de cada uma, e
+sem precisar de IA nenhuma ligada.
+
+Fale `dudu, vamos brincar` sem dizer qual e ele **pergunta** qual você quer — com
+duas brincadeiras, escolher por você seria decidir no seu lugar. Responder
+`esconde esconde` ou `pega pega` já começa a rodada.
+
+---
+
+## Esconde-esconde
 
 ### Quando ele se esconde
 
-Fale `dudu, vamos brincar` (ou `se esconde`). Ele pede que você feche o olho e
-conte até 10, procura um lugar que você **não esteja enxergando**, caminha até lá
-e só então avisa `pode procurar`. Chegue perto dele (2 blocos) e ele admite a
-derrota. Se você desistir, fale `desisto` ou `cadê você` que ele aparece.
+Fale `dudu, esconde esconde` (ou `se esconde`). Ele pede que você feche o olho e
+conte até 10, e então **anda procurando um esconderijo de verdade** por até 20
+segundos: um ponto que você não esteja enxergando **e** que tenha alguma coisa
+sólida em volta — uma parede, uma árvore, um barranco. Só quando chega lá é que
+avisa `pode procurar`. Chegue perto dele (2 blocos) e ele admite a derrota. Se
+você desistir, fale `desisto` ou `cadê você` que ele aparece.
+
+Não basta estar fora do seu campo de visão: ficar parado no meio do campo aberto
+só porque você está de costas **não** conta como esconderijo — você vira a cabeça
+e acabou a brincadeira. Ele exige bloco sólido em volta, medido na altura real do
+terreno, e confere de novo no lugar onde de fato parou de andar.
+
+Se o lugar for aberto demais e ele não achar nada em 20 segundos, ele **desiste e
+fala isso** em vez de se esconder mal. Num mundo muito descampado (deserto,
+planície), aumente `hideSearchMs` ou brinque perto de construções e árvores.
 
 ### Quando ele procura
 
-Fale `dudu, eu vou me esconder` (ou `conta até 10`). Ele conta de 1 a 10 no chat,
-um número por mensagem, e sai procurando. **Ele vai errar duas vezes de
-propósito** antes de procurar de verdade. Quando conseguir te ver, vai até você e
-fala que achou.
+Fale `dudu, eu vou me esconder` (ou `conta até 10`). Ele **conta de 1 a 20** no
+chat, um número por segundo — a contagem leva 20 segundos, o mesmo tempo que ele
+leva procurando esconderijo, para você ter a mesma folga que ele. Depois sai
+procurando, e **vai errar duas vezes de propósito** antes de procurar de verdade.
+Quando conseguir te ver, vai até você e fala que achou.
 
 ### Por que ele erra de propósito
 
@@ -235,15 +258,62 @@ Então o jogo tem regras que tornam a busca honesta:
 - **"Achei" exige ver de verdade**: o caminho até você precisa estar livre. Atrás
   de uma parede sólida você não é achado, mesmo com ele sabendo a coordenada.
 
-Ajuste a dificuldade no bloco `games` do `config.yaml`: `hideMaxDistance` deixa o
-esconderijo mais longe, `fakeSearches` faz ele demorar mais para achar.
+Ajuste a dificuldade no bloco `games.hideAndSeek` do `config.yaml`:
+`hideMaxDistance` deixa o esconderijo mais longe, `fakeSearches` faz ele demorar
+mais para achar.
 
-### O que interrompe a brincadeira
+---
 
-`dudu, para`, um monstro aparecendo, vida crítica, morte do bot, você sair do
-servidor ou trocar de dimensão. A rodada **não é retomada** depois: o esconderijo
-já foi queimado e você já saiu do lugar — recomeçar é mais claro para uma criança
-que "voltar de onde parou".
+## Pega-pega
+
+Também chamado de pique-pega ou pira-pega — todas as variantes do nome funcionam.
+
+### Quando ele pega
+
+Fale `dudu, pega pega` (ou `me pega`, `corre atrás de mim`). Ele **conta até 5**
+no chat, parado, e só então sai correndo atrás de você — a contagem é sua
+vantagem de saída. Se encostar em você (2 blocos), ganhou.
+
+Depois de **60 segundos correndo sem alcançar**, ele para, diz que cansou e
+**perde**. Não é bug nem desistência silenciosa: ele fala no chat e para de se
+mover.
+
+### Quando ele foge
+
+Fale `dudu, eu vou te pegar` (ou `você corre`). Ele sai correndo **na hora**, sem
+contar — quem conta é quem pega. Encoste nele e ele admite que foi pego.
+
+Depois de **60 segundos fugindo sem ser pego**, ele para de propósito, avisa que
+cansou e **se deixa pegar** — fica parado esperando você chegar.
+
+### Por que ele corre atrás com sprint e foge sem
+
+Esse desequilíbrio é a brincadeira inteira:
+
+| Papel | Sprint | O que acontece |
+| --- | --- | --- |
+| ele pega | **ligado** | andando você é alcançado; correndo, escapa |
+| ele foge | **desligado** | correndo você alcança; andando, não |
+
+Com sprint nos dois lados ele ganha sempre e a criança desiste de brincar. Sem
+sprint em nenhum, ele nunca pega ninguém e toda rodada acaba em "cansei". Ajuste
+em `games.tag`: `chaseSprint`, `fleeSprint`, `chaseTimeoutMs`, `fleeTimeoutMs`.
+
+Fugindo, ele nunca se afasta mais que `fleeMaxDistanceFromOwner` (40 blocos) de
+você: sumir do seu campo de visão acabaria com a graça.
+
+Em qualquer papel, `desisto` encerra a rodada — fugindo ele para e se entrega;
+correndo atrás, ele entende que você parou e vai te pegar.
+
+---
+
+## O que interrompe uma brincadeira
+
+Vale para as duas: `dudu, para`, um monstro aparecendo, vida crítica, morte do
+bot, você sair do servidor ou trocar de dimensão. Ele **para de se mover na
+hora** — inclusive no meio de uma corrida — e a rodada **não é retomada** depois:
+o esconderijo já foi queimado e você já saiu do lugar, e recomeçar é mais claro
+para uma criança que "voltar de onde parou".
 
 Em lugar apertado (dentro de casa, túnel) pode não existir esconderijo válido. Ele
 avisa no chat e sugere ir para um lugar aberto, em vez de ficar mudo.
