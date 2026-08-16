@@ -73,15 +73,28 @@ export const hideAndSeekSchema = z
     hideMinDistance: z.number().positive().default(10),
     /** Nem tão longe que a brincadeira vire caminhada. */
     hideMaxDistance: z.number().positive().default(30),
-    /** Pontos avaliados antes de o bot desistir de achar esconderijo. */
+    /** Pontos avaliados a cada rodada de busca por esconderijo. */
     hideCandidateSamples: z.number().int().positive().default(24),
+    /**
+     * Quanto tempo o bot anda procurando um lugar de verdade para se esconder.
+     *
+     * Sem isso ele aceitava o primeiro ponto "não visível" e ficava parado no
+     * campo aberto, de costas para o jogador. Procurar leva tempo: é andar até
+     * achar uma construção, uma árvore ou um barranco que realmente tape.
+     */
+    hideSearchMs: z.number().int().positive().default(20_000),
     /** Encostou a esta distância, achou. */
     touchDistance: z.number().positive().default(2),
     /** Alcance máximo do "ver" do bot, mesmo com caminho livre. */
     seeDistance: z.number().positive().default(20),
     countTo: z.number().int().positive().default(10),
-    /** O `ChatSender` impõe um piso de 900 ms; abaixo disso não adianta pedir. */
-    countIntervalMs: z.number().int().positive().default(1000),
+    /**
+     * Ritmo da contagem. O padrão faz a contagem inteira levar **20 segundos**
+     * (10 × 2 s) — o mesmo tempo que o bot leva procurando esconderijo, para a
+     * criança ter a mesma folga para se esconder que ele tem.
+     * O `ChatSender` impõe um piso de 900 ms; abaixo disso não adianta pedir.
+     */
+    countIntervalMs: z.number().int().positive().default(2000),
     /**
      * Erros de propósito antes de procurar de verdade. NÃO é enfeite: é a única
      * coisa que impede o bot de "achar" na hora, já que o protocolo entrega a

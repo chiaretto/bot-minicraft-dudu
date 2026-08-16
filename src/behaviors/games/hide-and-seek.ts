@@ -3,7 +3,8 @@ import type { GamePhase, GameResult, GameRole } from '../../domain/games.js'
 import type { Vec3Like } from '../../domain/types.js'
 import {
   pickFakeSearchSpots,
-  pickHidingSpot,
+  pickScoutPoint,
+  rankHidingSpots,
   sampleCandidates,
   horizontalDistance,
 } from './spots.js'
@@ -23,10 +24,12 @@ export interface GameWorld {
   botPosition(): Vec3Like
   /** Para onde o jogador está olhando agora, em radianos. */
   ownerYaw(): number
-  /** O jogador enxerga este ponto? */
+  /** O jogador enxerga este ponto? Occlusão de verdade, não só distância. */
   ownerCanSee(position: Vec3Like): boolean
   /** Este ponto está no cone de visão atual do jogador? */
   ownerFacing(position: Vec3Like): boolean
+  /** Quantas direções ao redor do ponto têm bloco sólido (0 a 8). */
+  coverAt(position: Vec3Like): number
   /** O bot enxerga o jogador agora, com o caminho livre de verdade? */
   botCanSeeOwner(): boolean
   /** O pathfinder consegue chegar a este ponto? */
@@ -98,10 +101,7 @@ export class HideAndSeekSession {
     const world = this.deps.world
     this.phase = 'escolhendo_esconderijo'
 
-    const spot = this.chooseHidingSpot()
-    // Em túnel ou dentro de casa pode não existir lugar sem linha de visão.
-    // Recusar em voz alta é melhor que se esconder onde o jogador está olhando.
-    if (!spot) {
+    if (!world.ownerPosition()) {
       world.say('jogo_sem_esconderijo')
       return this.finish('cancelado')
     }
@@ -109,15 +109,29 @@ export class HideAndSeekSession {
     world.say('jogo_aceito')
     world.say('jogo_mande_contar')
 
+    // Procurar leva tempo: o bot anda pelo entorno até achar algo que realmente
+    // tape. Sem isso ele aceitava o primeiro ponto fora da linha de visão e
+    // ficava parado no campo aberto, de costas para a criança.
+    const spot = await this.searchForHidingSpot()
+    this.guard()
+
+    // Em túnel ou dentro de casa pode não existir lugar com cobertura.
+    // Recusar em voz alta é melhor que se esconder onde o jogador está olhando.
+    if (!spot) {
+      world.stopMoving()
+      world.say('jogo_sem_esconderijo')
+      return this.finish('cancelado')
+    }
+
     this.phase = 'indo_para_esconderijo'
     // Nada de falar `pode procurar` antes de chegar: seria entregar o caminho.
-    const arrived = await world.goto(spot)
+    await world.goto(spot)
     this.guard()
     world.stopMoving()
 
-    // Não chegar não cancela a rodada: esconder onde deu é melhor que largar a
-    // criança contando até 10 para nada.
-    if (!arrived && world.ownerCanSee(world.botPosition())) {
+    // Onde ele parou é o que vale, não onde ele pediu para ir: o pathfinder
+    // entrega "perto o suficiente", e perto o suficiente pode ser exposto.
+    if (world.ownerCanSee(world.botPosition())) {
       world.say('jogo_sem_esconderijo')
       return this.finish('cancelado')
     }
@@ -127,12 +141,55 @@ export class HideAndSeekSession {
     return this.waitToBeFound()
   }
 
-  private chooseHidingSpot(): Vec3Like | null {
+  /**
+   * Anda pelo entorno procurando um esconderijo de verdade, até o tempo acabar.
+   *
+   * Duas coisas justificam o passeio. A primeira é que o raycast só enxerga
+   * chunk carregado, então procurar sem sair do lugar devolve sempre a mesma
+   * resposta. A segunda é que exigir cobertura de verdade descarta a maioria dos
+   * pontos — e é aceitável demorar, porque a criança está contando até 10.
+   */
+  private async searchForHidingSpot(): Promise<Vec3Like | null> {
     const world = this.deps.world
-    const owner = world.ownerPosition()
-    if (!owner) return null
+    const { hideSearchMs, hideMinDistance, hideMaxDistance } = this.deps.config
+    const deadline = world.now() + hideSearchMs
 
+    // Melhor achado até agora, com cobertura abaixo do ideal. Serve de reserva:
+    // esconder atrás de pouca coisa ainda é melhor que desistir da brincadeira.
+    let fallback: Vec3Like | null = null
+
+    while (world.now() < deadline) {
+      this.guard()
+
+      const owner = world.ownerPosition()
+      if (!owner) return null
+
+      const ranked = this.rankSpotsFromHere(owner)
+
+      // Cobertura em pelo menos 2 direções: um canto, uma parede, uma árvore
+      // grossa. Com 1 só o jogador contorna e vê na hora.
+      const solid = ranked.find((s) => s.cover >= 2)
+      if (solid) return solid.position
+
+      if (!fallback && ranked.length > 0) fallback = ranked[0]!.position
+
+      // Nada bom daqui: muda de vista e tenta de novo.
+      const scout = pickScoutPoint(
+        owner,
+        world.botPosition(),
+        { minDistance: hideMinDistance, maxDistance: hideMaxDistance },
+        this.random,
+      )
+      await world.goto(scout)
+    }
+
+    return fallback
+  }
+
+  private rankSpotsFromHere(owner: Vec3Like) {
+    const world = this.deps.world
     const { hideMinDistance, hideMaxDistance, hideCandidateSamples } = this.deps.config
+
     const candidates = sampleCandidates(
       owner,
       {
@@ -143,12 +200,13 @@ export class HideAndSeekSession {
       this.random,
     )
 
-    return pickHidingSpot(candidates, {
+    return rankHidingSpots(candidates, {
       minDistance: hideMinDistance,
       maxDistance: hideMaxDistance,
       isVisibleToOwner: (p) => world.ownerCanSee(p),
       isInOwnerFov: (p) => world.ownerFacing(p),
       isReachable: (p) => world.isReachable(p),
+      coverAt: (p) => world.coverAt(p),
     })
   }
 

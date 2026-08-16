@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   sampleCandidates,
   pickHidingSpot,
+  rankHidingSpots,
+  pickScoutPoint,
   pickFakeSearchSpots,
   horizontalDistance,
   type Candidate,
@@ -126,6 +128,83 @@ describe('escolha de esconderijo', () => {
       isInOwnerFov: (p) => p.x > 0,
     })
     expect(spot).toEqual({ x: 25, y: 64, z: 0 })
+  })
+})
+
+describe('ranking de esconderijos', () => {
+  const base = { minDistance: 10, maxDistance: 30 }
+
+  it('cobertura ganha de distância', () => {
+    // Foi ordenar por distância que mandava o bot para o meio do descampado.
+    const candidates = [candidate(28, 0), candidate(-12, 0)]
+    const spot = pickHidingSpot(candidates, {
+      ...base,
+      isVisibleToOwner: () => false,
+      coverAt: (p) => (p.x < 0 ? 5 : 0),
+    })
+    expect(spot).toEqual({ x: -12, y: 64, z: 0 })
+  })
+
+  it('descarta o que fica abaixo da cobertura mínima', () => {
+    const candidates = [candidate(12, 0), candidate(-20, 0)]
+    expect(
+      pickHidingSpot(candidates, {
+        ...base,
+        isVisibleToOwner: () => false,
+        coverAt: () => 1,
+        minCover: 2,
+      }),
+    ).toBeNull()
+  })
+
+  it('ordena por cobertura, depois por estar atrás, depois por distância', () => {
+    const ranked = rankHidingSpots(
+      [candidate(11, 0), candidate(29, 0), candidate(-15, 0), candidate(-25, 0)],
+      {
+        ...base,
+        isVisibleToOwner: () => false,
+        isInOwnerFov: (p) => p.x > 0,
+        coverAt: (p) => (Math.abs(p.x) > 20 ? 4 : 1),
+      },
+    )
+    // Melhor: cobertura alta E atrás. Depois cobertura alta na frente.
+    expect(ranked[0]!.position).toEqual({ x: -25, y: 64, z: 0 })
+    expect(ranked[1]!.position).toEqual({ x: 29, y: 64, z: 0 })
+    expect(ranked.map((r) => r.cover)).toEqual([4, 4, 1, 1])
+  })
+
+  it('visibilidade continua sendo eliminatória, cobertura não salva', () => {
+    const candidates = [candidate(-12, 0)]
+    expect(
+      pickHidingSpot(candidates, {
+        ...base,
+        isVisibleToOwner: () => true,
+        coverAt: () => 8,
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('ponto de reconhecimento', () => {
+  const options = { minDistance: 10, maxDistance: 30 }
+  const owner: Vec3Like = { x: 0, y: 64, z: 0 }
+
+  it('fica dentro da faixa de distância do jogador', () => {
+    for (let seed = 1; seed <= 25; seed++) {
+      const p = pickScoutPoint(owner, { x: 12, y: 64, z: 0 }, options, seeded(seed))
+      const d = horizontalDistance(p, owner)
+      expect(d, `seed ${seed}`).toBeGreaterThanOrEqual(10)
+      expect(d, `seed ${seed}`).toBeLessThanOrEqual(30)
+    }
+  })
+
+  it('gira em volta em vez de voltar para onde já estava', () => {
+    const bot = { x: 20, y: 64, z: 0 }
+    for (let seed = 1; seed <= 25; seed++) {
+      const p = pickScoutPoint(owner, bot, options, seeded(seed))
+      // Um giro de pelo menos ~54°: o próximo ponto não é uma repetição do atual.
+      expect(horizontalDistance(p, bot), `seed ${seed}`).toBeGreaterThan(8)
+    }
   })
 })
 

@@ -71,18 +71,24 @@ games:
     # achando fácil demais; diminua se ela cansar de procurar.
     hideMinDistance: 10
     hideMaxDistance: 30
-    # Quantos lugares ele avalia antes de desistir. Em lugar apertado (dentro
-    # de casa, túnel) pode não existir nenhum bom, e aí ele avisa no chat.
+    # Quantos lugares ele avalia a cada volta da procura.
     hideCandidateSamples: 24
+    # Quanto tempo ele anda procurando um esconderijo de verdade — atrás de uma
+    # construção, de uma árvore, de um barranco. Ele só aceita ponto que tenha
+    # o que tape; sem isso ficava parado no campo aberto, de costas pra você.
+    # Aumente se o mundo for muito aberto e ele estiver desistindo.
+    hideSearchMs: 20000
     # Chegar a esta distância do bot escondido conta como "achei você".
     touchDistance: 2
     # Até onde o bot enxerga. Ele só diz que achou com o caminho livre de
     # verdade: quem está atrás de uma parede não é achado.
     seeDistance: 20
-    # Até quanto ele conta, e o ritmo da contagem no chat. O chat do jogo tem
-    # um piso de 900 ms entre mensagens, então pedir menos que isso não muda.
+    # Até quanto ele conta, e o ritmo da contagem no chat.
+    # 10 números × 2 s = a contagem inteira leva 20 segundos, o mesmo tempo que
+    # ele leva procurando esconderijo — assim a criança tem a mesma folga.
+    # O chat do jogo tem um piso de 900 ms entre mensagens: pedir menos não muda.
     countTo: 10
-    countIntervalMs: 1000
+    countIntervalMs: 2000
     # Quantas vezes ele procura no lugar errado DE PROPÓSITO antes de procurar
     # de verdade. Aumente para ele demorar mais para achar.
     # Isto não é enfeite: o bot sabe onde você está o tempo todo (o jogo conta

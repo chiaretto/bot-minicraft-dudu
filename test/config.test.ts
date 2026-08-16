@@ -155,6 +155,22 @@ describe('config: jogos', () => {
     expect(c.games.hideAndSeek.fakeSearches).toBe(2)
     expect(c.games.hideAndSeek.touchDistance).toBe(2)
     expect(c.games.hideAndSeek.roundTimeoutMs).toBe(180_000)
+    expect(c.games.hideAndSeek.hideSearchMs).toBe(20_000)
+  })
+
+  it('a contagem inteira leva 20 segundos, igual à busca por esconderijo', () => {
+    const { countTo, countIntervalMs, hideSearchMs } = parseConfig(minimal).games.hideAndSeek
+    expect(countTo * countIntervalMs).toBe(20_000)
+    // Os dois lados da brincadeira têm a mesma folga para se esconder.
+    expect(countTo * countIntervalMs).toBe(hideSearchMs)
+  })
+
+  it('permite ajustar o tempo de busca por esconderijo', () => {
+    const c = parseConfig({ ...minimal, games: { hideAndSeek: { hideSearchMs: 45_000 } } })
+    expect(c.games.hideAndSeek.hideSearchMs).toBe(45_000)
+    expect(() => parseConfig({ ...minimal, games: { hideAndSeek: { hideSearchMs: 0 } } })).toThrow(
+      ConfigError,
+    )
   })
 
   it('permite desligar os jogos', () => {

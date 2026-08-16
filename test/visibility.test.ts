@@ -5,6 +5,9 @@ import {
   directionTo,
   atEyeLevel,
   raycastWorldFrom,
+  coverAround,
+  isSolid,
+  blockSourceFrom,
   EYE_HEIGHT,
   DEFAULT_FOV_HALF_ANGLE,
   type RaycastWorld,
@@ -143,6 +146,82 @@ describe('campo de visão', () => {
 
   it('quem está no mesmo ponto está sempre à vista', () => {
     expect(isInFieldOfView(from, 0, { ...from }, DEFAULT_FOV_HALF_ANGLE)).toBe(true)
+  })
+})
+
+describe('cobertura sólida', () => {
+  const solido = { boundingBox: 'block', name: 'stone' }
+  const vazio = { boundingBox: 'empty', name: 'air' }
+
+  it('conta zero em campo aberto', () => {
+    expect(coverAround({ blockAt: () => vazio }, from)).toBe(0)
+  })
+
+  it('conta as oito direções quando está tudo fechado', () => {
+    expect(coverAround({ blockAt: () => solido }, from)).toBe(8)
+  })
+
+  it('folhagem e placa não escondem ninguém', () => {
+    // Caixa vazia é o mesmo critério que o pathfinder usa para obstáculo.
+    expect(
+      coverAround({ blockAt: () => ({ boundingBox: 'empty', name: 'oak_leaves' }) }, from),
+    ).toBe(0)
+  })
+
+  it('parede de um lado só conta as direções daquele lado', () => {
+    // Parede em x maior: cobre leste, nordeste e sudeste.
+    const source = { blockAt: (p: Vec3Like) => (p.x > from.x ? solido : vazio) }
+    expect(coverAround(source, from)).toBe(3)
+  })
+
+  it('degrau de um bloco não conta: o bot tem dois de altura', () => {
+    const source = { blockAt: (p: Vec3Like) => (p.y <= from.y ? solido : vazio) }
+    expect(coverAround(source, from)).toBe(0)
+  })
+
+  it('sem mundo, não há cobertura', () => {
+    expect(coverAround(null, from)).toBe(0)
+    expect(coverAround(undefined, from)).toBe(0)
+  })
+
+  it('chunk que lança não derruba a rodada', () => {
+    const source = {
+      blockAt: () => {
+        throw new Error('chunk não carregado')
+      },
+    }
+    expect(coverAround(source, from)).toBe(0)
+  })
+
+  it('bloco ausente conta como sem cobertura', () => {
+    expect(coverAround({ blockAt: () => null }, from)).toBe(0)
+  })
+
+  it('isSolid distingue caixa de bloco de caixa vazia', () => {
+    expect(isSolid(solido)).toBe(true)
+    expect(isSolid(vazio)).toBe(false)
+    expect(isSolid(null)).toBe(false)
+  })
+})
+
+describe('adaptador de consulta de bloco', () => {
+  it('devolve null sem bot', () => {
+    expect(blockSourceFrom(null)).toBeNull()
+  })
+
+  it('converte para Vec3 antes de consultar', () => {
+    // O `getBlock` do prismarine chama `pos.floored()`: objeto solto lançaria.
+    let received: unknown = null
+    const source = blockSourceFrom({
+      blockAt: (p) => {
+        received = p
+        return null
+      },
+    })
+    source?.blockAt({ x: 1.7, y: 64, z: -3.2 })
+    const vec = received as { floored: () => { x: number } }
+    expect(typeof vec.floored).toBe('function')
+    expect(vec.floored().x).toBe(1)
   })
 })
 

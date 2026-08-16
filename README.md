@@ -211,16 +211,25 @@ de IA nenhuma ligada.
 ### Quando ele se esconde
 
 Fale `dudu, vamos brincar` (ou `se esconde`). Ele pede que você feche o olho e
-conte até 10, procura um lugar que você **não esteja enxergando**, caminha até lá
-e só então avisa `pode procurar`. Chegue perto dele (2 blocos) e ele admite a
-derrota. Se você desistir, fale `desisto` ou `cadê você` que ele aparece.
+conte até 10, e então **anda procurando um esconderijo de verdade** por até 20
+segundos: um ponto que você não esteja enxergando **e** que tenha alguma coisa
+sólida em volta — uma parede, uma árvore, um barranco. Só quando chega lá é que
+avisa `pode procurar`. Chegue perto dele (2 blocos) e ele admite a derrota. Se
+você desistir, fale `desisto` ou `cadê você` que ele aparece.
+
+Não basta estar fora do seu campo de visão: ficar parado no meio do campo aberto
+só porque você está de costas não conta como esconderijo — você vira a cabeça e
+acabou a brincadeira. Se o lugar for aberto demais e ele não achar nada em 20
+segundos, ele fala isso e sugere ir para outro lugar. Ajuste `hideSearchMs` se
+o seu mundo for muito descampado.
 
 ### Quando ele procura
 
 Fale `dudu, eu vou me esconder` (ou `conta até 10`). Ele conta de 1 a 10 no chat,
-um número por mensagem, e sai procurando. **Ele vai errar duas vezes de
-propósito** antes de procurar de verdade. Quando conseguir te ver, vai até você e
-fala que achou.
+um número a cada 2 segundos — **a contagem inteira leva 20 segundos**, o mesmo
+tempo que ele leva procurando esconderijo, para você ter a mesma folga que ele.
+Depois sai procurando, e **vai errar duas vezes de propósito** antes de procurar
+de verdade. Quando conseguir te ver, vai até você e fala que achou.
 
 ### Por que ele erra de propósito
 

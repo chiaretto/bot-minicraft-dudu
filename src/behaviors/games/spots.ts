@@ -74,42 +74,100 @@ export interface HidingSpotOptions {
   isInOwnerFov?: (position: Vec3Like) => boolean
   /** `false` derruba o candidato — usado para exigir ponto alcançável. */
   isReachable?: (position: Vec3Like) => boolean
+  /**
+   * Quantas direções ao redor do ponto têm bloco sólido. É o que separa
+   * "atrás de uma parede" de "no descampado, fora da linha de visão por acaso".
+   */
+  coverAt?: (position: Vec3Like) => number
+  /** Abaixo disto o ponto não conta como esconderijo de verdade. */
+  minCover?: number
+}
+
+export interface ScoredSpot {
+  position: Vec3Like
+  cover: number
+  distanceToOwner: number
+  behind: boolean
+}
+
+/**
+ * Ordena os esconderijos possíveis, do melhor para o pior.
+ *
+ * Critério, em ordem: **cobertura** (tem o que tapar), depois estar fora do
+ * cone de visão atual, depois distância. A cobertura vem primeiro de propósito
+ * — foi justamente ordenar por distância que fazia o bot atravessar o mapa e
+ * parar no meio do nada, de costas para a criança.
+ */
+export function rankHidingSpots(
+  candidates: readonly Candidate[],
+  options: HidingSpotOptions,
+): ScoredSpot[] {
+  const viable: ScoredSpot[] = []
+
+  for (const c of candidates) {
+    if (c.distanceToOwner < options.minDistance) continue
+    if (c.distanceToOwner > options.maxDistance) continue
+    if (options.isReachable && !options.isReachable(c.position)) continue
+    // A regra que não se negocia: o jogador não pode estar enxergando o ponto.
+    if (options.isVisibleToOwner(c.position)) continue
+
+    const cover = options.coverAt ? options.coverAt(c.position) : 0
+    if (options.minCover !== undefined && cover < options.minCover) continue
+
+    viable.push({
+      position: c.position,
+      cover,
+      distanceToOwner: c.distanceToOwner,
+      behind: options.isInOwnerFov ? !options.isInOwnerFov(c.position) : false,
+    })
+  }
+
+  return viable.sort((a, b) => {
+    if (b.cover !== a.cover) return b.cover - a.cover
+    if (a.behind !== b.behind) return a.behind ? -1 : 1
+    return b.distanceToOwner - a.distanceToOwner
+  })
 }
 
 /**
  * Escolhe o esconderijo, ou `null` quando não existe ponto bom ali.
  *
  * `null` não é falha: em túnel ou dentro de casa pode realmente não haver lugar
- * sem linha de visão, e a resposta certa é o bot dizer isso no chat — nunca
- * ficar mudo nem se esconder num lugar que o jogador está olhando.
+ * sem linha de visão, e a resposta certa é o bot continuar procurando — e, no
+ * fim do tempo, dizer isso no chat.
  */
 export function pickHidingSpot(
   candidates: readonly Candidate[],
   options: HidingSpotOptions,
 ): Vec3Like | null {
-  const viable = candidates.filter((c) => {
-    if (c.distanceToOwner < options.minDistance) return false
-    if (c.distanceToOwner > options.maxDistance) return false
-    if (options.isReachable && !options.isReachable(c.position)) return false
-    // A regra que não se negocia: o jogador não pode estar enxergando o ponto.
-    return !options.isVisibleToOwner(c.position)
-  })
+  return rankHidingSpots(candidates, options)[0]?.position ?? null
+}
 
-  if (viable.length === 0) return null
+/**
+ * Para onde andar quando nenhum candidato daqui presta.
+ *
+ * Serve para mudar de vista e carregar outro pedaço do mundo: o raycast só
+ * enxerga chunk carregado, então procurar sem sair do lugar devolve sempre a
+ * mesma resposta.
+ */
+export function pickScoutPoint(
+  owner: Vec3Like,
+  bot: Vec3Like,
+  options: { minDistance: number; maxDistance: number },
+  random: () => number = Math.random,
+): Vec3Like {
+  // Gira em torno do jogador em vez de sortear do zero: assim o bot varre o
+  // entorno de forma parecida com quem procura mesmo, sem ficar indo e voltando.
+  const current = Math.atan2(bot.z - owner.z, bot.x - owner.x)
+  const angle = current + (Math.PI / 2) * (0.6 + random() * 0.8)
+  const spread = options.maxDistance - options.minDistance
+  const radius = options.minDistance + random() * Math.max(0, spread)
 
-  // Desempate: entre dois pontos igualmente escondidos, o que está às costas do
-  // jogador é melhor — a caminhada até lá aparece menos.
-  const behind = options.isInOwnerFov
-    ? viable.filter((c) => !options.isInOwnerFov!(c.position))
-    : []
-  const pool = behind.length > 0 ? behind : viable
-
-  // Entre os do bolso escolhido, o mais longe: mais tempo de brincadeira.
-  let best = pool[0] as Candidate
-  for (const candidate of pool) {
-    if (candidate.distanceToOwner > best.distanceToOwner) best = candidate
+  return {
+    x: owner.x + Math.cos(angle) * radius,
+    y: owner.y,
+    z: owner.z + Math.sin(angle) * radius,
   }
-  return best.position
 }
 
 export interface FakeSearchOptions {

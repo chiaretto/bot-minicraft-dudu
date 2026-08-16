@@ -14,6 +14,8 @@ import { createSession, type GameSession, type GameWorld } from '../behaviors/ga
 import { GameAborted } from '../behaviors/games/hide-and-seek.js'
 import { isGiveUp } from '../behaviors/commands.js'
 import {
+  blockSourceFrom,
+  coverAround,
   hasLineOfSight,
   isInFieldOfView,
   raycastWorldFrom,
@@ -38,6 +40,9 @@ const THREAT_TICK_MS = 250
 
 /** Folga do `GoalNear` ao caminhar durante o jogo. */
 const GAME_GOAL_RANGE = 1
+
+/** Teto por caminhada dentro de uma rodada, para a busca não passar do tempo. */
+const GAME_WALK_TIMEOUT_MS = 8_000
 
 /**
  * Composition root: monta as dependências e liga os laços.
@@ -503,8 +508,12 @@ export class CompanionBot {
       ownerCanSee: (position) => {
         const owner = ownerEntity()
         if (!owner) return false
+        // O alcance cobre TODA a faixa de esconderijo, de propósito.
+        // Com um alcance menor que `hideMaxDistance`, todo ponto além dele
+        // voltava "não visível" por pura aritmética — e o bot ia parar no meio
+        // do campo aberto achando que estava escondido.
         return hasLineOfSight(raycastWorldFrom(this.mc.raw), owner.position, position, {
-          maxDistance: seeDistance,
+          maxDistance: Math.max(seeDistance, this.config.games.hideAndSeek.hideMaxDistance + 8),
         })
       },
 
@@ -514,6 +523,8 @@ export class CompanionBot {
         const yaw = (owner as { yaw?: number }).yaw ?? 0
         return isInFieldOfView(owner.position, yaw, position, DEFAULT_FOV_HALF_ANGLE)
       },
+
+      coverAt: (position) => coverAround(blockSourceFrom(this.mc.raw), position),
 
       botCanSeeOwner: () => {
         const owner = ownerEntity()
@@ -554,11 +565,18 @@ export class CompanionBot {
     if (!bot) return false
 
     try {
-      await bot.pathfinder.goto(
-        new goals.GoalNear(position.x, position.y, position.z, GAME_GOAL_RANGE),
-      )
+      // Teto por caminhada. Sem ele, um pathfinder emperrado seguraria a busca
+      // por esconderijo além do tempo prometido — e o `hideSearchMs` só é
+      // conferido ENTRE as caminhadas.
+      await Promise.race([
+        bot.pathfinder.goto(
+          new goals.GoalNear(position.x, position.y, position.z, GAME_GOAL_RANGE),
+        ),
+        this.gameSleep(GAME_WALK_TIMEOUT_MS),
+      ])
     } catch {
-      // Caminho travado ou rota recalculada: não é erro para o jogador.
+      // Caminho travado, rota recalculada ou rodada cancelada: quem trata o
+      // cancelamento é o `guard()` da sessão, no próximo passo.
     }
 
     return distance(this.snapshot().position, position) <= GAME_GOAL_RANGE + 1

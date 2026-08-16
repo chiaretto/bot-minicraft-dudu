@@ -127,6 +127,86 @@ export function isInFieldOfView(
 /** Meio-cone padrão: ~70°, um campo de visão de jogo generoso. */
 export const DEFAULT_FOV_HALF_ANGLE = (70 * Math.PI) / 180
 
+/** Um bloco, reduzido ao que interessa para saber se ele tapa alguma coisa. */
+export interface BlockLike {
+  boundingBox?: string
+  name?: string
+}
+
+/** Forma mínima para consultar blocos avulsos — testável sem servidor. */
+export interface BlockSource {
+  blockAt(position: Vec3Like): BlockLike | null | undefined
+}
+
+export function isSolid(block: BlockLike | null | undefined): boolean {
+  if (!block) return false
+  // `boundingBox` é o que o próprio pathfinder usa para decidir o que é
+  // obstáculo. Folhagem e placa têm caixa vazia e não escondem ninguém.
+  return block.boundingBox === 'block'
+}
+
+/**
+ * Conta quantas direções ao redor do ponto têm bloco sólido na altura do corpo.
+ *
+ * É a diferença entre "escondido atrás de alguma coisa" e "parado no meio do
+ * campo aberto por acaso fora da linha de visão". Um ponto encostado numa
+ * parede continua escondido quando o jogador anda; um ponto no descampado não.
+ */
+export function coverAround(
+  source: BlockSource | null | undefined,
+  position: Vec3Like,
+  radius = 1,
+): number {
+  if (!source) return 0
+
+  const directions = [
+    { x: radius, z: 0 },
+    { x: -radius, z: 0 },
+    { x: 0, z: radius },
+    { x: 0, z: -radius },
+    { x: radius, z: radius },
+    { x: radius, z: -radius },
+    { x: -radius, z: radius },
+    { x: -radius, z: -radius },
+  ]
+
+  let solid = 0
+  for (const dir of directions) {
+    try {
+      // Duas alturas: um degrau de um bloco não esconde um bot de dois blocos.
+      const atFeet = source.blockAt({ x: position.x + dir.x, y: position.y, z: position.z + dir.z })
+      const atHead = source.blockAt({
+        x: position.x + dir.x,
+        y: position.y + 1,
+        z: position.z + dir.z,
+      })
+      if (isSolid(atFeet) && isSolid(atHead)) solid++
+    } catch {
+      // Chunk fora de alcance: conta como sem cobertura, nunca derruba a rodada.
+    }
+  }
+  return solid
+}
+
+/** O que a fábrica de consulta de blocos precisa de um bot. */
+export interface BlockQuerySource {
+  blockAt(position: Vec3): BlockLike | null | undefined
+}
+
+/**
+ * Adapta o `blockAt` do `mineflayer` para a interface testável acima.
+ *
+ * A conversão para `Vec3` é obrigatória pelo mesmo motivo do raycast: o
+ * `getBlock` do prismarine faz `pos.floored()`, e um objeto solto `{x,y,z}`
+ * faria a consulta lançar no meio da rodada.
+ */
+export function blockSourceFrom(source: BlockQuerySource | null | undefined): BlockSource | null {
+  if (!source) return null
+  return {
+    blockAt: (position) => source.blockAt(new Vec3(position.x, position.y, position.z)),
+  }
+}
+
 /** O que a fábrica precisa de um bot para consultar o mundo. */
 export interface RaycastSource {
   world?: {

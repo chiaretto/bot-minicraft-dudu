@@ -144,9 +144,49 @@ a procura. Quem encosta nele ganha.
 - **WHEN** o bot escolhe o ponto
 - **THEN** o ponto está entre `hideMinDistance` e `hideMaxDistance` do jogador
 - **AND** o jogador **não** tem linha de visão até o ponto
-- **AND** entre dois pontos igualmente válidos, o que está fora do cone de visão
-  atual do jogador é preferido
+- **AND** o ponto tem **cobertura sólida** em ao menos 2 direções
+- **AND** entre dois pontos válidos, vence o de mais cobertura; empatados, vence
+  o que está fora do cone de visão atual; empatados de novo, o mais distante
 - **AND** o ponto é alcançável pelo pathfinder
+
+> **Cobertura é obrigatória, e distância nunca substitui oclusão.** O alcance do
+> raycast que testa a visão do jogador cobre toda a faixa de esconderijo. Com um
+> alcance menor que `hideMaxDistance`, todo ponto além dele voltaria "não
+> visível" por aritmética, e o bot pararia no campo aberto achando que estava
+> escondido — foi exatamente esse o defeito relatado em jogo em 2026-08-16.
+
+#### Scenario: Procurar andando até achar cobertura
+- **GIVEN** o bot aceitou se esconder
+- **WHEN** nenhum ponto avaliado a partir da posição atual tem cobertura
+- **THEN** o bot caminha para outro ponto de observação e avalia de novo
+- **AND** repete até achar cobertura ou estourar `hideSearchMs` (padrão 20 s)
+- **AND** só então segue para o esconderijo escolhido
+
+#### Scenario: Estar fora do campo de visão não basta
+- **GIVEN** um ponto sem cobertura nenhuma, no descampado
+- **AND** o jogador está de costas para ele
+- **WHEN** o bot avalia o ponto
+- **THEN** o ponto **não** é aceito como esconderijo
+- **AND** o bot continua procurando
+
+#### Scenario: Mundo aberto sem esconderijo nenhum
+- **GIVEN** o jogador enxerga qualquer ponto da faixa, a qualquer distância
+- **WHEN** `hideSearchMs` se esgota
+- **THEN** o bot recusa a rodada com fala honesta
+- **AND** **não** fala `pode procurar`
+
+#### Scenario: Cobertura fraca é melhor que desistir
+- **GIVEN** nenhum ponto atinge a cobertura mínima
+- **AND** existe ao menos um ponto fora da linha de visão do jogador
+- **WHEN** `hideSearchMs` se esgota
+- **THEN** o bot se esconde nesse ponto mesmo assim
+- **AND** a brincadeira continua normalmente
+
+#### Scenario: Onde ele parou é o que vale
+- **GIVEN** o bot chegou perto do esconderijo, mas não exatamente nele
+- **WHEN** a posição final é avaliada
+- **THEN** a checagem de visão usa a posição **real** do bot, não a pedida
+- **AND** se ela estiver exposta, a rodada é recusada em vez de começar errada
 
 #### Scenario: Avisar só depois de escondido
 - **GIVEN** o bot está a caminho do esconderijo
@@ -203,6 +243,9 @@ verdade. Achar exige ver.
 - **WHEN** a rodada começa no papel de quem procura
 - **THEN** o bot conta de 1 até `countTo` (padrão 10) no chat
 - **AND** manda um número por mensagem, respeitando `countIntervalMs`
+- **AND** a contagem inteira leva **20 segundos** com os padrões (10 x 2 s) — o
+  mesmo tempo que o bot leva procurando esconderijo, para os dois lados da
+  brincadeira terem a mesma folga para se esconder
 - **AND** avisa quando termina a contagem, antes de sair procurando
 
 #### Scenario: Duas buscas erradas de propósito

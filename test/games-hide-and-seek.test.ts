@@ -27,6 +27,8 @@ interface FakeOptions {
   ownerFacing?: (p: Vec3Like) => boolean
   botCanSeeOwner?: () => boolean
   isReachable?: (p: Vec3Like) => boolean
+  /** Cobertura sólida em volta do ponto. Padrão: coberto em toda parte. */
+  coverAt?: (p: Vec3Like) => number
   /** `false` faz o `goto` resolver sem ter chegado. */
   arrives?: boolean
   /** Quanto o relógio anda a cada `sleep`/`goto`. */
@@ -67,6 +69,9 @@ class FakeWorld implements GameWorld {
   }
   ownerFacing(p: Vec3Like): boolean {
     return this.options.ownerFacing?.(p) ?? false
+  }
+  coverAt(p: Vec3Like): number {
+    return this.options.coverAt?.(p) ?? 4
   }
   botCanSeeOwner(): boolean {
     return this.options.botCanSeeOwner?.() ?? false
@@ -200,16 +205,102 @@ describe('esconde-esconde: o bot se esconde', () => {
     expect(world.visited).toHaveLength(1)
   })
 
-  it('recusa com fala honesta quando não há esconderijo', async () => {
-    // Lugar apertado: o jogador enxerga tudo.
-    const world = new FakeWorld({ ownerCanSee: () => true })
+  // ── Regressão: relatado em jogo real, 2026-08-16 ────────────────────────
+  // O bot ficava parado no campo aberto, só de costas para o jogador. Causa:
+  // `ownerCanSee` usava alcance menor que `hideMaxDistance`, então todo ponto
+  // além do alcance voltava "não visível" por aritmética, sem parede nenhuma.
+  it('não aceita descampado como esconderijo, por mais longe que seja', async () => {
+    const world = new FakeWorld({
+      // Mundo aberto: o jogador enxerga tudo, a qualquer distância.
+      ownerCanSee: () => true,
+      coverAt: () => 0,
+    })
 
-    const result = await session(world, 'bot_esconde').run()
+    const result = await session(world, 'bot_esconde', { hideSearchMs: 3_000 }).run()
 
     expect(result.outcome).toBe('cancelado')
     expect(world.said).toContain('jogo_sem_esconderijo')
     expect(world.said).not.toContain('jogo_pode_procurar')
-    expect(world.visited).toHaveLength(0)
+  })
+
+  it('exige cobertura de verdade, não só estar fora da linha de visão', async () => {
+    // Nada é visível (como num vale), mas só um ponto tem o que tapar.
+    const abrigo = { x: -14, z: 0 }
+    const world = new FakeWorld({
+      ownerCanSee: () => false,
+      coverAt: (p) => (Math.hypot(p.x - abrigo.x, p.z - abrigo.z) < 6 ? 4 : 0),
+    })
+    world.onTick = (w) => {
+      if (w.said.includes('jogo_pode_procurar')) w.ownerPos = { ...w.botPos }
+    }
+
+    await session(world, 'bot_esconde', { hideSearchMs: 20_000 }).run()
+
+    const escolhido = world.visited.at(-1)!
+    expect(world.coverAt(escolhido)).toBeGreaterThanOrEqual(2)
+  })
+
+  it('anda procurando enquanto não acha cobertura', async () => {
+    let tentativas = 0
+    const world = new FakeWorld({
+      ownerCanSee: () => false,
+      // Só passa a existir cobertura depois de algumas voltas.
+      coverAt: () => (tentativas > 2 ? 4 : 0),
+    })
+    world.onTick = (w) => {
+      if (w.said.includes('jogo_pode_procurar')) w.ownerPos = { ...w.botPos }
+    }
+    const original = world.goto.bind(world)
+    world.goto = async (p) => {
+      tentativas++
+      return original(p)
+    }
+
+    await session(world, 'bot_esconde', { hideSearchMs: 20_000 }).run()
+
+    // Mais de uma caminhada: ele foi olhar outro lugar em vez de parar no 1º.
+    expect(tentativas).toBeGreaterThan(1)
+    expect(world.said).toContain('jogo_pode_procurar')
+  })
+
+  it('respeita o tempo de busca configurado', async () => {
+    const world = new FakeWorld({ ownerCanSee: () => false, coverAt: () => 0 })
+    let procurouAte = 0
+    world.onTick = (w) => {
+      if (!procurouAte && w.said.includes('jogo_pode_procurar')) procurouAte = w.clock
+    }
+
+    await session(world, 'bot_esconde', { hideSearchMs: 5_000 }).run()
+
+    // Procurou o tempo pedido e parou — não anda para sempre.
+    expect(procurouAte).toBeGreaterThanOrEqual(5_000)
+    expect(procurouAte).toBeLessThan(15_000)
+  })
+
+  it('sem cobertura em lugar nenhum, aceita o menos ruim em vez de desistir', async () => {
+    // Tudo escondido do jogador, nada com cobertura: ainda dá para brincar.
+    const world = new FakeWorld({ ownerCanSee: () => false, coverAt: () => 0 })
+    world.onTick = (w) => {
+      if (w.said.includes('jogo_pode_procurar')) w.ownerPos = { ...w.botPos }
+    }
+
+    const result = await session(world, 'bot_esconde', { hideSearchMs: 2_000 }).run()
+
+    expect(world.said).toContain('jogo_pode_procurar')
+    expect(result.outcome).toBe('perdeu')
+  })
+
+  it('recusa com fala honesta quando não há esconderijo', async () => {
+    // Lugar apertado: o jogador enxerga tudo.
+    const world = new FakeWorld({ ownerCanSee: () => true })
+
+    const result = await session(world, 'bot_esconde', { hideSearchMs: 3_000 }).run()
+
+    expect(result.outcome).toBe('cancelado')
+    expect(world.said).toContain('jogo_sem_esconderijo')
+    expect(world.said).not.toContain('jogo_pode_procurar')
+    // Ele procurou antes de desistir: andar por aí é parte de procurar.
+    expect(world.visited.length).toBeGreaterThan(0)
   })
 
   it('recusa quando o pathfinder não alcança lugar nenhum', async () => {
@@ -281,6 +372,20 @@ describe('esconde-esconde: o bot procura', () => {
 
     // 4 números × 1 s de espera.
     expect(world.clock).toBeGreaterThanOrEqual(4_000)
+  })
+
+  it('com o padrão, a contagem leva 20 segundos', async () => {
+    const world = new FakeWorld({ ...far, botCanSeeOwner: () => true })
+    let acabouEm = 0
+    world.onTick = (w) => {
+      if (!acabouEm && w.said.includes('jogo_contando_fim')) acabouEm = w.clock
+    }
+
+    await session(world, 'bot_procura').run()
+
+    // Tempo suficiente para a criança se esconder de verdade.
+    expect(acabouEm).toBeGreaterThanOrEqual(20_000)
+    expect(acabouEm).toBeLessThan(24_000)
   })
 
   it('erra exatamente duas vezes de propósito antes de procurar de verdade', async () => {
