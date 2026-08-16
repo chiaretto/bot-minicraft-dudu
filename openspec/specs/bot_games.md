@@ -2,6 +2,7 @@
 
 **Componente:** `bot_games`
 **Origem:** `add-bot-games-hide-and-seek` (2026-08-15)
+**Atualizado por:** `fix-hide-and-seek-cover` (2026-08-16)
 
 > Toda fala de uma rodada sai do repertório local, nunca da IA — mesmo motivo
 > dos avisos de combate. O catálogo está em `local_dialogue.md`.
