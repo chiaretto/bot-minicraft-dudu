@@ -210,6 +210,7 @@ llm:
 | `dudu, pode brigar`                  | religa a defesa                    |
 | `dudu, olha pra mim`                 | vira para você                     |
 | `dudu, vamos brincar`                | pergunta qual das duas brincadeiras |
+| `dudu, abre a porta`                 | abre a porta, o portão ou o alçapão |
 | `dudu, sai do buraco` / `sobe`       | faz escadinha de blocos e sobe     |
 | `dudu, pega madeira` / `pega pedra`  | vai buscar o bloco e traz          |
 | `dudu, faz uma casa`                 | constrói uma casinha ao lado dele  |
@@ -246,6 +247,36 @@ educação, e a IA nunca executa nada diretamente.
 
 Conversa continua sendo conversa: `dudu, você gosta de diamante?` tem resposta e
 nenhuma ação.
+
+---
+
+## Ele abre portas
+
+Fale `dudu, abre a porta` (ou `abre o portão`, `abre aí`). Ele acha a mais
+próxima, vai até ela e abre. **Funciona sem IA ligada.**
+
+E se você entrar em casa e fechar a porta, não precisa nem pedir: porta fechada
+é parede para o pathfinder, então ele percebe que travou e resolve sozinho.
+
+```
+Você: dudu, vem
+      (você entrou em casa e fechou a porta)
+Dudu: Tem uma porta fechada no caminho! Já abro.
+Dudu: Abri a porta!
+      (entra e volta a te seguir)
+```
+
+**Porta de ferro ele não abre** — essa só abre com botão, alavanca ou placa de
+pressão. Ele diz isso em vez de ficar clicando à toa.
+
+Duas sutilezas que ele trata: uma porta ocupa **dois blocos**, e ele só clica na
+metade de baixo (senão abriria e fecharia a mesma porta); e **porta já aberta
+não é reaberta**, porque clicar de novo fecharia.
+
+Ajuste o alcance da busca em `behavior.doorSearchRadius` (padrão 6).
+
+> **Ele não fecha a porta atrás de si.** E não mexe em botão, alavanca nem placa
+> de pressão — que é justamente o que abriria porta de ferro.
 
 ---
 

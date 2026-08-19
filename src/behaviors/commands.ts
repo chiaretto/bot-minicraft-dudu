@@ -92,6 +92,24 @@ const COMMANDS: CommandPattern[] = [
     intent: { type: 'LOOK_AT_OWNER', params: {} },
     patterns: [/^olha pra mim$/, /^olha aqui$/, /^me olha$/],
   },
+  // ── Abrir porta ─────────────────────────────────────────────────────────
+  // Ver: player_commands_delta.md → "Abrir porta".
+  {
+    intent: { type: 'OPEN_DOOR', params: {} },
+    patterns: [
+      /^abre a porta$/,
+      /^abra a porta$/,
+      /^abre porta$/,
+      /^abre o portao$/,
+      /^abra o portao$/,
+      /^abre o alcapao$/,
+      /^pode abrir a porta$/,
+      /^abre ai$/,
+      /^abre pra mim$/,
+      /^abre essa porta$/,
+      /^destranca a porta$/,
+    ],
+  },
   // ── Sair de buraco ──────────────────────────────────────────────────────
   // Vem ANTES de FOLLOW: "sobe aqui" tem cara de chamado, mas quem está no
   // fundo de uma ravina precisa subir antes de conseguir vir.

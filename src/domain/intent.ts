@@ -14,6 +14,7 @@ export const INTENT_TYPES = [
   'COLLECT_BLOCK',
   'BUILD',
   'ESCAPE_HOLE',
+  'OPEN_DOOR',
   'GOTO_COORDS',
   'DROP_ITEM_TO_OWNER',
   'LOOK_AT_OWNER',
@@ -62,6 +63,8 @@ export const intentSchema = z.discriminatedUnion('type', [
   // Sair de buraco fazendo escadinha. Sem parâmetro: a altura sai do desnível
   // até o dono, não de um pedido.
   z.object({ type: z.literal('ESCAPE_HOLE'), params: z.object({}).default({}) }),
+  // Abrir a porta mais próxima. Sem parâmetro: qual porta é o mundo que diz.
+  z.object({ type: z.literal('OPEN_DOOR'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('LOOK_AT_OWNER'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('EQUIP_ITEM'), params: z.object({ item: z.string().min(1) }) }),
   z.object({ type: z.literal('DEFENSE_ON'), params: z.object({}).default({}) }),

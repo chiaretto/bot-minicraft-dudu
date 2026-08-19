@@ -7,6 +7,14 @@ import { bestWeapon } from '../../domain/mobs.js'
 import { friendlyName, resolveBlockCandidates } from '../../domain/materials.js'
 import { buildStructure, BuildAborted, BuildRefused, type BuildWorld } from './build.js'
 import { escapeHole, EscapeAborted, EscapeRefused, type EscapeWorld } from './escape.js'
+import {
+  openNearestDoor,
+  hasBlockingDoor,
+  DoorAborted,
+  DoorRefused,
+  type DoorWorld,
+} from './doors.js'
+import { isOpenable, type DoorInfo } from '../../domain/doors.js'
 import type { Vec3Like } from '../../domain/types.js'
 
 const { goals } = pathfinderPkg
@@ -382,6 +390,88 @@ export async function escape(
   }
 }
 
+/**
+ * Adapta o mundo real para a interface estreita das portas.
+ *
+ * **`movements.canOpenDoors` continua `false` de propósito.** Naquela flag o
+ * `openable` do pathfinder só inclui bloco com "gate" no nome — ela cobre
+ * portão de cerca, não porta — e o próprio autor da lib anotou "Causes issues.
+ * Probably due to none paper servers", que é exatamente o nosso caso (mundo
+ * aberto em LAN, vanilla). Porta é resolvida aqui, clicando.
+ */
+export function doorWorldFrom(deps: ActionDeps): DoorWorld {
+  const { bot } = deps
+  const at = (p: Vec3Like) => bot.blockAt(new Vec3(p.x, p.y, p.z))
+
+  const info = (block: ReturnType<typeof at>): DoorInfo | null => {
+    if (!block || !isOpenable(block.name)) return null
+    const props = block.getProperties() as { open?: unknown; half?: unknown }
+    return {
+      position: block.position,
+      name: block.name,
+      open: props.open === true || props.open === 'true',
+      ...(props.half === 'upper' || props.half === 'lower' ? { half: props.half } : {}),
+    }
+  }
+
+  return {
+    botPosition: () => bot.entity.position,
+    nearbyDoors: (maxDistance) => {
+      const ids = Object.values(bot.registry.blocksByName)
+        .filter((b) => isOpenable(b.name))
+        .map((b) => b.id)
+      const blocos = bot.findBlocks({ matching: ids, maxDistance, count: 16 })
+      return blocos
+        .map((pos) => info(bot.blockAt(pos)))
+        .filter((d): d is DoorInfo => d !== null)
+        .sort(
+          (a, b) =>
+            distanceTo(bot.entity.position, a.position) -
+            distanceTo(bot.entity.position, b.position),
+        )
+    },
+    walkNear: async (pos, range) => {
+      await withGuards(
+        bot.pathfinder.goto(new goals.GoalNear(pos.x, pos.y, pos.z, range)),
+        deps.signal,
+        deps.behavior.actionTimeoutMs,
+      )
+    },
+    activate: async (pos) => {
+      const block = at(pos)
+      if (!block) throw new ActionRefused('a porta sumiu')
+      await bot.lookAt(block.position.offset(0.5, 0.5, 0.5), true)
+      await withGuards(bot.activateBlock(block), deps.signal, deps.behavior.actionTimeoutMs)
+    },
+    doorAt: (pos) => info(at(pos)),
+  }
+}
+
+function distanceTo(a: Vec3Like, b: Vec3Like): number {
+  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+}
+
+/** Abre a porta mais próxima que dê para abrir na mão. */
+export async function openDoor(deps: ActionDeps): Promise<ActionOutcome> {
+  try {
+    const outcome = await openNearestDoor({
+      world: doorWorldFrom(deps),
+      signal: deps.signal,
+      searchRadius: deps.behavior.doorSearchRadius,
+    })
+    return { ok: outcome.ok, message: outcome.message }
+  } catch (err) {
+    if (err instanceof DoorAborted) throw new ActionAborted(err.message)
+    if (err instanceof DoorRefused) throw new ActionRefused(err.message)
+    throw err
+  }
+}
+
+/** Existe porta fechada atrapalhando o caminho? Usado pelo vigia de "preso". */
+export function blockedByDoor(deps: ActionDeps): boolean {
+  return hasBlockingDoor(doorWorldFrom(deps), deps.behavior.doorSearchRadius)
+}
+
 /** Equipa a melhor arma do inventário. Devolve o nome, ou null se desarmado. */
 export async function equipBestWeapon(bot: Bot): Promise<string | null> {
   const weapon = bestWeapon(bot.inventory.items())
@@ -399,6 +489,8 @@ export async function runIntent(deps: ActionDeps, intent: Intent): Promise<Actio
       return build(deps, intent.params.structure, intent.params.material)
     case 'ESCAPE_HOLE':
       return escape(deps)
+    case 'OPEN_DOOR':
+      return openDoor(deps)
     case 'GOTO_COORDS':
       return gotoCoords(deps, intent.params.x, intent.params.y, intent.params.z)
     case 'DROP_ITEM_TO_OWNER':

@@ -34,6 +34,8 @@ import {
   equipBestWeapon,
   runIntent,
   escape,
+  openDoor,
+  blockedByDoor,
   ActionAborted,
   ActionRefused,
   NoProgress,
@@ -502,44 +504,64 @@ export class CompanionBot {
       minDrop: this.config.behavior.escapeMinDrop,
       maxHeight: this.config.behavior.escapeMaxHeight,
     }
+
+    // Porta fechada vem antes de buraco: é causa mais comum, muito mais barata
+    // de resolver, e acontece no mesmo nível — onde a regra do buraco nem vale.
+    const deps = this.actionDeps(bot)
+    if (blockedByDoor(deps)) {
+      void this.unstickAndResumeFollow('porta')
+      return
+    }
+
     if (!needsEscape(pos, owner, config)) {
-      // Parado, mas não é buraco: o vigia não tem o que fazer aqui.
+      // Parado, mas nem porta nem buraco: o vigia não tem o que fazer aqui.
       this.stuckSince = agora
       return
     }
 
-    void this.escapeAndResumeFollow()
+    void this.unstickAndResumeFollow('buraco')
+  }
+
+  /** Dependências das ações de mundo, do jeito que `runWorldAction` monta. */
+  private actionDeps(bot: NonNullable<typeof this.mc.raw>) {
+    return {
+      bot,
+      behavior: this.config.behavior,
+      ownerName: this.config.ownerPlayer,
+      signal: this.state.signal,
+    }
   }
 
   /**
-   * Sobe e volta a seguir.
+   * Destrava e volta a seguir.
    *
-   * A fala vem antes da subida: a criança precisa saber por que o bot sumiu do
+   * A fala vem antes da ação: a criança precisa saber por que o bot sumiu do
    * caminho por um minuto.
    */
-  private async escapeAndResumeFollow(): Promise<void> {
+  private async unstickAndResumeFollow(motivo: 'porta' | 'buraco'): Promise<void> {
     const bot = this.mc.raw
     if (!bot) return
 
     this.escaping = true
     this.stuckSince = null
-    this.say('Peraí, caí num buraco! Vou fazer uma escadinha.', 'command')
+    this.say(
+      motivo === 'porta'
+        ? 'Tem uma porta fechada no caminho! Já abro.'
+        : 'Peraí, caí num buraco! Vou fazer uma escadinha.',
+      'command',
+    )
 
     try {
-      const outcome = await escape({
-        bot,
-        behavior: this.config.behavior,
-        ownerName: this.config.ownerPlayer,
-        signal: this.state.signal,
-      })
+      const deps = this.actionDeps(bot)
+      const outcome = motivo === 'porta' ? await openDoor(deps) : await escape(deps)
       this.say(outcome.message, 'command')
-      this.logger.info({ ok: outcome.ok }, 'saída de buraco')
+      this.logger.info({ motivo, ok: outcome.ok }, 'destravou o caminho')
     } catch (err) {
       if (err instanceof ActionAborted) return
       if (err instanceof ActionRefused) this.say(`Ahh, ${err.message}.`, 'command')
       else {
-        this.logger.error({ err: String(err) }, 'saída de buraco falhou')
-        this.say('Não consegui subir, vem me buscar?', 'command')
+        this.logger.error({ motivo, err: String(err) }, 'não consegui destravar')
+        this.say('Não consegui passar, vem me buscar?', 'command')
       }
     } finally {
       this.escaping = false

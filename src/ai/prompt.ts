@@ -42,6 +42,9 @@ export const ACTION_DESCRIPTIONS: Record<Exclude<IntentType, 'CHAT' | 'UNKNOWN'>
   ESCAPE_HOLE:
     'sair de um buraco fazendo escadinha de blocos. ' +
     'Use quando ele estiver preso lá embaixo e não conseguir chegar no jogador',
+  OPEN_DOOR:
+    'abrir a porta, o portão ou o alçapão mais perto. ' +
+    'Porta de ferro ele não abre: essa só abre com botão ou alavanca',
   GOTO_COORDS: 'ir até um lugar — precisa de "x", "y" e "z"',
   DROP_ITEM_TO_OWNER: 'entregar um item para o jogador — precisa de "item"',
   LOOK_AT_OWNER: 'virar e olhar para o jogador',

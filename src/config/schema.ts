@@ -287,6 +287,8 @@ export const behaviorSchema = z.object({
     ]),
   /** Teto de segurança: obra maior que isto é recusada antes de começar. */
   buildMaxBlocks: z.number().int().positive().default(120),
+  /** Até onde procurar porta quando pedem para abrir, ou quando ele trava. */
+  doorSearchRadius: z.number().int().positive().default(6),
   /** Desnível a partir do qual vale a pena fazer escada em vez de só pular. */
   escapeMinDrop: z.number().int().positive().default(3),
   /** Teto de degraus numa tentativa. Evita torre até o céu. */
