@@ -260,6 +260,10 @@ export class CompanionBot {
         {
           pergunta: question,
           resposta: result.reply,
+          // A ação proposta precisa aparecer no log: é por aqui que se descobre
+          // se a IA está propondo ação demais, de menos ou errada.
+          acao: result.action ? result.action.type : null,
+          params: result.action ? result.action.params : null,
           provider: result.provider,
           latencyMs: result.latencyMs,
         },
@@ -335,6 +339,16 @@ export class CompanionBot {
         result.entryId,
         result.provider,
       )
+
+      // A fala vem antes da ação de propósito: a criança ouve "já vou pegar!"
+      // e SÓ ENTÃO vê o bot sair andando. Agir calado parece bug.
+      // Ver: ai_companion_delta.md → "Resposta da IA carrega a ação".
+      if (result.action) {
+        this.pendingRole = null
+        await this.execute(result.action)
+        return
+      }
+
       // Depois de responder, não antes: a criança falou de outra coisa, o bot
       // atende e só então lembra que tinha perguntado.
       this.reaskRoleOnce()
@@ -346,13 +360,6 @@ export class CompanionBot {
       return
     }
 
-    // Nem comando nem conversa: tenta interpretar como pedido de ação.
-    const intent = await this.router.interpret(message, snapshot)
-    if (intent) {
-      this.pendingRole = null
-      await this.execute(intent)
-      return
-    }
     this.reaskRoleOnce()
   }
 

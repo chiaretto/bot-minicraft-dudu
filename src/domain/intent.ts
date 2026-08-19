@@ -101,6 +101,32 @@ export const INTENT_JSON_SCHEMA = {
 } as const
 
 /**
+ * O que a IA devolve por mensagem: o que falar e, quando for pedido, o que
+ * fazer. `action` nula é o caso normal — a maior parte do que a criança fala é
+ * conversa, não pedido.
+ * Ver: ai_companion_delta.md → "Resposta da IA carrega a ação".
+ */
+export interface ReplyWithAction {
+  reply: string
+  action: Intent | null
+}
+
+/**
+ * JSON Schema da resposta completa, entregue ao provider.
+ *
+ * Envolve `INTENT_JSON_SCHEMA` em vez de repetir a lista de tipos: acrescentar
+ * uma intenção nova não pode exigir mexer em dois lugares.
+ */
+export const REPLY_WITH_ACTION_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    reply: { type: 'string' },
+    action: INTENT_JSON_SCHEMA,
+  },
+  required: ['reply'],
+} as const
+
+/**
  * Ponto único de validação: nada vindo da IA vira ação sem passar por aqui.
  * Nunca lança — entrada inválida vira UNKNOWN.
  */
@@ -123,5 +149,56 @@ export function parseIntentFromText(text: string): Intent {
     return validateIntent(JSON.parse(cleaned))
   } catch {
     return UNKNOWN_INTENT
+  }
+}
+
+/**
+ * Ação que a IA propôs, ou `null` quando não há nada a fazer.
+ *
+ * `CHAT` e `UNKNOWN` são intenções válidas do catálogo, mas não são ação: a
+ * primeira quer dizer "isto era só conversa" e a segunda "não entendi o
+ * pedido". Nenhuma das duas pode virar efeito no mundo.
+ */
+export function actionFrom(raw: unknown): Intent | null {
+  if (raw === null || raw === undefined) return null
+  const intent = validateIntent(raw)
+  return intent.type === 'CHAT' || intent.type === 'UNKNOWN' ? null : intent
+}
+
+/**
+ * Valida a resposta completa da IA.
+ *
+ * Nunca lança e nunca devolve fala nula: uma resposta quebrada vira fala vazia
+ * sem ação, e quem chama decide o que dizer no lugar. Uma ação inválida é
+ * descartada **sem** derrubar a fala — a criança ouve a resposta mesmo quando
+ * o pedido não vira ação.
+ */
+export function validateReplyWithAction(raw: unknown): ReplyWithAction {
+  if (raw === null || typeof raw !== 'object') return { reply: '', action: null }
+  const candidate = raw as Record<string, unknown>
+  return {
+    reply: typeof candidate.reply === 'string' ? candidate.reply : '',
+    action: actionFrom(candidate.action),
+  }
+}
+
+/**
+ * Faz parse do texto do provider como resposta completa.
+ *
+ * Texto que não é JSON não é descartado: vira fala pura, sem ação. Um modelo
+ * local que ignorou o formato ainda respondeu alguma coisa à criança, e calar
+ * seria pior do que ficar sem a ação.
+ */
+export function parseReplyWithActionFromText(text: string): ReplyWithAction {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim()
+
+  try {
+    return validateReplyWithAction(JSON.parse(cleaned))
+  } catch {
+    return { reply: text.trim(), action: null }
   }
 }

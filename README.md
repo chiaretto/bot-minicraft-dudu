@@ -226,10 +226,22 @@ o que tem no inventário, cortesia, afeto, piada, onde vocês estão, e mais.
 
 ### Pedidos livres (nível 3 — só com IA ligada)
 
-`dudu, pega umas madeiras pra mim` → o modelo traduz em uma intenção
-estruturada, que é **validada contra um catálogo fechado** antes de virar ação.
-Pedido fora do catálogo é recusado com educação — a IA nunca executa nada
-diretamente.
+Pedido com palavras que o parser não reconhece vai para a IA — e ela responde
+**e age**, na mesma resposta:
+
+```
+Você: dudu, será que dava pra você juntar umas madeirinhas pra mim?
+Dudu: Já vou pegar!            ← fala primeiro
+                               ← e então sai andando atrás de madeira
+```
+
+A IA recebe no prompt a lista do que o bot sabe fazer, e devolve a fala junto de
+uma ação (ou nenhuma, quando é só conversa). A ação é **validada contra um
+catálogo fechado** antes de virar efeito: pedido fora do catálogo é recusado com
+educação, e a IA nunca executa nada diretamente.
+
+Conversa continua sendo conversa: `dudu, você gosta de diamante?` tem resposta e
+nenhuma ação.
 
 ---
 

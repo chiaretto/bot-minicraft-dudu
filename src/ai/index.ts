@@ -1,7 +1,6 @@
 import type { LlmConfig } from '../config/schema.js'
 import type { Secrets } from '../config/schema.js'
-import type { Intent } from '../domain/intent.js'
-import { UNKNOWN_INTENT } from '../domain/intent.js'
+import type { ReplyWithAction } from '../domain/intent.js'
 import type { ConversationContext, LlmProvider, ProviderName } from './provider.js'
 import { ProviderError } from './provider.js'
 import { ResilientProvider, BusyError, CircuitOpenError, RateLimitError } from './resilient.js'
@@ -11,7 +10,12 @@ import { NoneProvider } from './providers/none.js'
 
 export * from './provider.js'
 export * from './resilient.js'
-export { buildConversePrompt, buildInterpretPrompt, identityFacts } from './prompt.js'
+export {
+  buildConversePrompt,
+  identityFacts,
+  ACTION_DESCRIPTIONS,
+  ACTIONABLE_INTENTS,
+} from './prompt.js'
 
 export interface AiDeps {
   llm: LlmConfig
@@ -70,9 +74,11 @@ export interface AiResult<T> {
 /**
  * Nível 3 da cascata, com fallback opcional entre providers.
  *
- * `converse` e `interpret` NUNCA lançam por falha de IA: devolvem `null` /
- * `UNKNOWN` para o roteador cair no repertório. A camada de cima não precisa
- * saber por que a IA falhou, só que falhou.
+ * `converse` NUNCA lança por falha de IA: devolve `null` para o roteador cair
+ * no repertório. A camada de cima não precisa saber por que a IA falhou, só
+ * que falhou.
+ *
+ * Uma mensagem custa UMA chamada: dela saem a fala e a ação.
  */
 export class AiLayer {
   readonly primary: ResilientProvider
@@ -137,23 +143,13 @@ export class AiLayer {
   async converse(
     ctx: ConversationContext,
     onFallback?: (err: unknown) => void,
-  ): Promise<AiResult<string> | null> {
+  ): Promise<AiResult<ReplyWithAction> | null> {
     if (!this.enabled) return null
     const result = await this.attempt((p) => p.converse(ctx), onFallback)
-    if (result === null || result.value.trim() === '') return null
+    if (result === null) return null
+    // Fala vazia com ação é resposta legítima: o bot age sem falar nada.
+    if (result.value.reply.trim() === '' && result.value.action === null) return null
     return result
-  }
-
-  async interpret(
-    text: string,
-    ctx: ConversationContext,
-    onFallback?: (err: unknown) => void,
-  ): Promise<AiResult<Intent>> {
-    if (!this.enabled) {
-      return { value: UNKNOWN_INTENT, provider: 'none', latencyMs: 0 }
-    }
-    const result = await this.attempt((p) => p.interpret(text, ctx), onFallback)
-    return result ?? { value: UNKNOWN_INTENT, provider: this.primary.name, latencyMs: 0 }
   }
 
   /**

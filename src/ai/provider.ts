@@ -1,10 +1,10 @@
-import type { Intent } from '../domain/intent.js'
+import type { ReplyWithAction } from '../domain/intent.js'
 import type { ConversationTurn, WorldSnapshot } from '../domain/types.js'
 
 export type ProviderName = 'ollama' | 'gemini' | 'none'
 
 export interface ConversationContext {
-  /** Mensagem do jogador. Vazia quando é interpretação pura. */
+  /** Mensagem do jogador. */
   message: string
   owner: string
   botName: string
@@ -24,8 +24,14 @@ export interface ConversationContext {
  */
 export interface LlmProvider {
   readonly name: ProviderName
-  converse(ctx: ConversationContext, signal?: AbortSignal): Promise<string>
-  interpret(text: string, ctx: ConversationContext, signal?: AbortSignal): Promise<Intent>
+  /**
+   * Uma chamada por mensagem: dela saem a fala **e** a ação.
+   *
+   * Não existe método separado de interpretação. O que havia nunca era
+   * alcançado, e por isso a IA respondia sem o bot agir.
+   * Ver: llm_provider_delta.md → "Interface única de provider".
+   */
+  converse(ctx: ConversationContext, signal?: AbortSignal): Promise<ReplyWithAction>
   warmUp(): Promise<void>
 }
 

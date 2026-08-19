@@ -1,9 +1,9 @@
 import { GoogleGenAI } from '@google/genai'
-import type { Intent } from '../../domain/intent.js'
-import { INTENT_JSON_SCHEMA, parseIntentFromText } from '../../domain/intent.js'
+import type { ReplyWithAction } from '../../domain/intent.js'
+import { REPLY_WITH_ACTION_JSON_SCHEMA, parseReplyWithActionFromText } from '../../domain/intent.js'
 import type { ConversationContext, LlmProvider, ProviderName } from '../provider.js'
 import { ProviderError } from '../provider.js'
-import { buildConversePrompt, buildInterpretPrompt, historyMessages } from '../prompt.js'
+import { buildConversePrompt, historyMessages } from '../prompt.js'
 import { cleanReply } from './ollama.js'
 
 export interface GeminiOptions {
@@ -38,7 +38,7 @@ export class GeminiProvider implements LlmProvider {
     return new ProviderError(`falha no Gemini: ${message}`, 'gemini')
   }
 
-  async converse(ctx: ConversationContext, signal?: AbortSignal): Promise<string> {
+  async converse(ctx: ConversationContext, signal?: AbortSignal): Promise<ReplyWithAction> {
     try {
       const history = historyMessages(ctx).map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
@@ -51,30 +51,15 @@ export class GeminiProvider implements LlmProvider {
         config: {
           systemInstruction: buildConversePrompt(ctx),
           temperature: 0.8,
-          maxOutputTokens: 160,
-        },
-      })
-      signal?.throwIfAborted()
-      return cleanReply(response.text ?? '')
-    } catch (err) {
-      throw this.wrap(err)
-    }
-  }
-
-  async interpret(text: string, ctx: ConversationContext, signal?: AbortSignal): Promise<Intent> {
-    try {
-      const response = await this.client.models.generateContent({
-        model: this.options.model,
-        contents: [{ role: 'user', parts: [{ text }] }],
-        config: {
-          systemInstruction: buildInterpretPrompt(ctx),
-          temperature: 0,
+          maxOutputTokens: 320,
+          // Fala e ação na mesma resposta — mesmo contrato do Ollama.
           responseMimeType: 'application/json',
-          responseSchema: INTENT_JSON_SCHEMA as unknown as Record<string, unknown>,
+          responseSchema: REPLY_WITH_ACTION_JSON_SCHEMA as unknown as Record<string, unknown>,
         },
       })
       signal?.throwIfAborted()
-      return parseIntentFromText(response.text ?? '')
+      const parsed = parseReplyWithActionFromText(response.text ?? '')
+      return { reply: cleanReply(parsed.reply), action: parsed.action }
     } catch (err) {
       throw this.wrap(err)
     }

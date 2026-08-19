@@ -1,9 +1,9 @@
 import { Ollama } from 'ollama'
-import type { Intent } from '../../domain/intent.js'
-import { INTENT_JSON_SCHEMA, parseIntentFromText } from '../../domain/intent.js'
+import type { ReplyWithAction } from '../../domain/intent.js'
+import { REPLY_WITH_ACTION_JSON_SCHEMA, parseReplyWithActionFromText } from '../../domain/intent.js'
 import type { ConversationContext, LlmProvider, ProviderName } from '../provider.js'
 import { ProviderError } from '../provider.js'
-import { buildConversePrompt, buildInterpretPrompt, historyMessages } from '../prompt.js'
+import { buildConversePrompt, historyMessages } from '../prompt.js'
 
 export interface OllamaOptions {
   baseUrl: string
@@ -41,46 +41,27 @@ export class OllamaProvider implements LlmProvider {
     return new ProviderError(`falha no Ollama: ${message}`, 'ollama')
   }
 
-  async converse(ctx: ConversationContext, signal?: AbortSignal): Promise<string> {
+  async converse(ctx: ConversationContext, signal?: AbortSignal): Promise<ReplyWithAction> {
     try {
       const response = await this.client.chat({
         model: this.options.model,
         keep_alive: this.options.keepAlive,
+        // Saída estruturada forçada por JSON Schema — mesmo contrato do Gemini.
+        // É o que faz a fala e a ação virem da mesma chamada.
+        format: REPLY_WITH_ACTION_JSON_SCHEMA as unknown as object,
         messages: [
           { role: 'system', content: buildConversePrompt(ctx) },
           ...historyMessages(ctx),
           { role: 'user', content: ctx.message },
         ],
         stream: false,
-        // `num_predict` baixo não é economia: em CPU a latência é proporcional
-        // ao tamanho da resposta, e resposta curta é o que a criança precisa.
-        // Ver CLAUDE.md → "o dono é uma criança de 7 anos".
-        options: { temperature: 0.8, num_predict: 35 },
+        // Teto maior que o da fala pura: o JSON em volta também ocupa tokens, e
+        // cortar no meio perderia a ação junto com o resto do objeto.
+        options: { temperature: 0.8, num_predict: 160 },
       })
       signal?.throwIfAborted()
-      return cleanReply(response.message.content)
-    } catch (err) {
-      throw this.wrap(err)
-    }
-  }
-
-  async interpret(text: string, ctx: ConversationContext, signal?: AbortSignal): Promise<Intent> {
-    try {
-      const response = await this.client.chat({
-        model: this.options.model,
-        keep_alive: this.options.keepAlive,
-        // Saída estruturada forçada por JSON Schema — mesmo contrato do Gemini.
-        format: INTENT_JSON_SCHEMA as unknown as object,
-        messages: [
-          { role: 'system', content: buildInterpretPrompt(ctx) },
-          { role: 'user', content: text },
-        ],
-        stream: false,
-        options: { temperature: 0 },
-      })
-      signal?.throwIfAborted()
-      // A validação contra o catálogo fechado acontece aqui dentro.
-      return parseIntentFromText(response.message.content)
+      const parsed = parseReplyWithActionFromText(response.message.content)
+      return { reply: cleanReply(parsed.reply), action: parsed.action }
     } catch (err) {
       throw this.wrap(err)
     }

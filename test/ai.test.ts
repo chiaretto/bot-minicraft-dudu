@@ -9,9 +9,15 @@ import {
   TimeoutError,
 } from '../src/ai/resilient.js'
 import { ProviderError, type ConversationContext, type LlmProvider } from '../src/ai/provider.js'
-import { buildConversePrompt, buildInterpretPrompt, identityFacts } from '../src/ai/prompt.js'
+import { buildConversePrompt, identityFacts, ACTIONABLE_INTENTS } from '../src/ai/prompt.js'
 import { cleanReply } from '../src/ai/providers/ollama.js'
-import { validateIntent, parseIntentFromText, UNKNOWN_INTENT } from '../src/domain/intent.js'
+import {
+  validateIntent,
+  parseIntentFromText,
+  UNKNOWN_INTENT,
+  validateReplyWithAction,
+  type ReplyWithAction,
+} from '../src/domain/intent.js'
 import { llmSchema } from '../src/config/schema.js'
 
 const llm = llmSchema.parse({})
@@ -32,20 +38,16 @@ class FakeProvider implements LlmProvider {
   constructor(
     readonly name: 'ollama' | 'gemini' | 'none',
     private readonly behavior: {
-      converse?: () => Promise<string>
-      interpret?: () => Promise<unknown>
+      converse?: () => Promise<ReplyWithAction>
       warmUp?: () => Promise<void>
     } = {},
   ) {}
 
-  async converse(): Promise<string> {
+  async converse(): Promise<ReplyWithAction> {
     this.calls++
-    return this.behavior.converse ? this.behavior.converse() : 'resposta feliz'
-  }
-  async interpret() {
-    this.calls++
-    const raw = this.behavior.interpret ? await this.behavior.interpret() : { type: 'CHAT' }
-    return validateIntent(raw)
+    return this.behavior.converse
+      ? this.behavior.converse()
+      : { reply: 'resposta feliz', action: null }
   }
   async warmUp(): Promise<void> {
     if (this.behavior.warmUp) await this.behavior.warmUp()
@@ -145,11 +147,33 @@ describe('prompt', () => {
     expect(prompt).toContain('Seu pai me criou')
   })
 
-  it('prompt de interpretação lista só os tipos permitidos', () => {
-    const prompt = buildInterpretPrompt(ctx)
-    expect(prompt).toContain('COLLECT_BLOCK')
-    expect(prompt).toContain('UNKNOWN')
+  /**
+   * O prompt de conversa é o ÚNICO lugar onde a IA fica sabendo o que o bot
+   * consegue fazer. Intenção nova que não chegue aqui vira capacidade morta —
+   * este teste é o que impede isso de passar em silêncio.
+   */
+  it('o prompt de conversa descreve TODAS as ações do catálogo', () => {
+    const prompt = buildConversePrompt(ctx)
+    for (const type of ACTIONABLE_INTENTS) {
+      expect(prompt, type).toContain(type)
+    }
     expect(prompt).not.toContain('BUILD_HOUSE')
+  })
+
+  it('o prompt ensina a não agir quando é só conversa', () => {
+    const prompt = buildConversePrompt(ctx)
+    expect(prompt).toContain('"action": null')
+    expect(prompt).toContain('você gosta de diamante?')
+    expect(prompt).toContain('constrói uma casa pra mim')
+  })
+
+  it('o prompt manda uma ação por resposta, nunca duas', () => {
+    expect(buildConversePrompt(ctx)).toMatch(/UMA ação por resposta/i)
+  })
+
+  it('o prompt não deixa a IA escolher papel de brincadeira', () => {
+    // Quem escolhe é a criança, pela pergunta do bot.
+    expect(buildConversePrompt(ctx)).toMatch(/NÃO mande "role"/)
   })
 })
 
@@ -182,7 +206,10 @@ describe('limpeza da resposta', () => {
 describe('resiliência: timeout', () => {
   it('aborta quando o provider passa do tempo', async () => {
     const slow = new FakeProvider('ollama', {
-      converse: () => new Promise((resolve) => setTimeout(() => resolve('tarde demais'), 5000)),
+      converse: () =>
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ reply: 'tarde demais', action: null }), 5000),
+        ),
     })
     const resilient = new ResilientProvider(slow, {
       timeoutMs: 30,
@@ -236,7 +263,10 @@ describe('resiliência: circuit breaker', () => {
     let now = 0
     let shouldFail = true
     const provider = new FakeProvider('ollama', {
-      converse: () => (shouldFail ? Promise.reject(new Error('x')) : Promise.resolve('ok')),
+      converse: () =>
+        shouldFail
+          ? Promise.reject(new Error('x'))
+          : Promise.resolve({ reply: 'ok', action: null }),
     })
     const resilient = new ResilientProvider(provider, {
       timeoutMs: 1000,
@@ -250,7 +280,7 @@ describe('resiliência: circuit breaker', () => {
     await expect(resilient.converse(ctx)).rejects.toThrow()
     await expect(resilient.converse(ctx)).rejects.toThrow()
     shouldFail = false
-    await expect(resilient.converse(ctx)).resolves.toBe('ok')
+    expect((await resilient.converse(ctx)).reply).toBe('ok')
     shouldFail = true
     await expect(resilient.converse(ctx)).rejects.toThrow()
     expect(resilient.isCircuitOpen).toBe(false)
@@ -259,9 +289,9 @@ describe('resiliência: circuit breaker', () => {
 
 describe('resiliência: uma inferência por vez', () => {
   it('recusa a segunda chamada concorrente', async () => {
-    let release: (v: string) => void = () => {}
+    let release: (v: ReplyWithAction) => void = () => {}
     const provider = new FakeProvider('ollama', {
-      converse: () => new Promise<string>((resolve) => (release = resolve)),
+      converse: () => new Promise<ReplyWithAction>((resolve) => (release = resolve)),
     })
     const resilient = new ResilientProvider(provider, {
       timeoutMs: 5000,
@@ -275,8 +305,8 @@ describe('resiliência: uma inferência por vez', () => {
     expect(resilient.busy).toBe(true)
     await expect(resilient.converse(ctx)).rejects.toBeInstanceOf(BusyError)
 
-    release('pronto')
-    await expect(first).resolves.toBe('pronto')
+    release({ reply: 'pronto', action: null })
+    expect((await first).reply).toBe('pronto')
     // Só a primeira chegou ao provider: nunca duas gerações em paralelo.
     expect(provider.calls).toBe(1)
   })
@@ -311,11 +341,6 @@ describe('AiLayer: provider none', () => {
     expect(await layer.converse(ctx)).toBeNull()
   })
 
-  it('interpret devolve UNKNOWN', async () => {
-    const result = await layer.interpret('pega madeira', ctx)
-    expect(result.value).toEqual(UNKNOWN_INTENT)
-  })
-
   it('warmUp não faz nada', async () => {
     expect(await layer.warmUp()).toBeNull()
   })
@@ -346,16 +371,9 @@ describe('AiLayer: isolamento de falhas', () => {
     expect(await layer.converse(ctx)).toBeNull()
   })
 
-  it('interpret devolve UNKNOWN em vez de propagar erro', async () => {
-    const layer = new AiLayer({ llm, secrets: {} })
-    vi.spyOn(layer.primary, 'interpret').mockRejectedValue(new Error('caiu'))
-    const result = await layer.interpret('pega madeira', ctx)
-    expect(result.value).toEqual(UNKNOWN_INTENT)
-  })
-
   it('resposta vazia conta como falha', async () => {
     const layer = new AiLayer({ llm, secrets: {} })
-    vi.spyOn(layer.primary, 'converse').mockResolvedValue('   ')
+    vi.spyOn(layer.primary, 'converse').mockResolvedValue({ reply: '   ', action: null })
     expect(await layer.converse(ctx)).toBeNull()
   })
 
@@ -386,13 +404,17 @@ describe('suíte de conformidade: mesmos casos nos dois providers', () => {
         expect(layer().enabled).toBe(true)
       })
 
-      it('intenção fora do catálogo vira UNKNOWN', async () => {
+      it('ação fora do catálogo é descartada, mas a fala sobrevive', async () => {
         const l = layer()
-        vi.spyOn(l.primary, 'interpret').mockResolvedValue(
-          validateIntent({ type: 'BUILD_HOUSE', params: {} }),
+        vi.spyOn(l.primary, 'converse').mockResolvedValue(
+          validateReplyWithAction({
+            reply: 'Essa eu não sei fazer!',
+            action: { type: 'BUILD_HOUSE', params: {} },
+          }),
         )
-        const result = await l.interpret('constrói uma casa', ctx)
-        expect(result.value).toEqual(UNKNOWN_INTENT)
+        const result = await l.converse(ctx)
+        expect(result?.value.action).toBeNull()
+        expect(result?.value.reply).toBe('Essa eu não sei fazer!')
       })
 
       it('falha do provider não propaga', async () => {
