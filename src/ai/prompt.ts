@@ -14,8 +14,8 @@ export function identityFacts(ctx: ConversationContext): string {
     `Seu melhor amigo e dono é ${ctx.owner}.`,
     `Sua origem, que você NUNCA contradiz nem reinventa: "${ctx.originStory}"`,
     'Você sabe: seguir o jogador, ficar de guarda num lugar, parar, pegar blocos,',
-    'entregar item e defender o jogador de monstros.',
-    'Você NÃO sabe: construir casas, craftar, fazer poções.',
+    'entregar item, defender o jogador de monstros e construir casinha e torre.',
+    'Você NÃO sabe: craftar, fazer poções, nem construir o que não está na sua lista.',
     'Você NUNCA ataca outro jogador, em nenhuma circunstância.',
   ].join('\n')
 }
@@ -33,7 +33,12 @@ export const ACTION_DESCRIPTIONS: Record<Exclude<IntentType, 'CHAT' | 'UNKNOWN'>
   FOLLOW: 'ir atrás do jogador e acompanhar ele',
   STAY: 'ficar parado onde está, de guarda',
   STOP: 'parar tudo o que está fazendo',
-  COLLECT_BLOCK: 'ir pegar blocos — precisa de "block" e "count"',
+  COLLECT_BLOCK:
+    'ir pegar blocos — precisa de "block" e "count". ' +
+    '"block" pode ser um grupo: madeira, pedra, terra, areia',
+  BUILD:
+    'construir — "structure" é "casa" ou "torre". ' +
+    '"material" é opcional (madeira, pedra…): sem ele o bot usa o que tiver',
   GOTO_COORDS: 'ir até um lugar — precisa de "x", "y" e "z"',
   DROP_ITEM_TO_OWNER: 'entregar um item para o jogador — precisa de "item"',
   LOOK_AT_OWNER: 'virar e olhar para o jogador',
@@ -111,7 +116,11 @@ export function buildConversePrompt(ctx: ConversationContext): string {
     '',
     '## Exemplos',
     '  "pega umas madeiras pra mim"',
-    '    -> {"reply":"Já vou pegar!","action":{"type":"COLLECT_BLOCK","params":{"block":"oak_log","count":4}}}',
+    '    -> {"reply":"Já vou pegar!","action":{"type":"COLLECT_BLOCK","params":{"block":"madeira","count":4}}}',
+    '  "constrói uma casinha pra mim"',
+    '    -> {"reply":"Deixa comigo, já começo!","action":{"type":"BUILD","params":{"structure":"casa"}}}',
+    '  "faz uma torre de pedra"',
+    '    -> {"reply":"Vou fazer uma bem alta!","action":{"type":"BUILD","params":{"structure":"torre","material":"pedra"}}}',
     '  "vem cá"',
     '    -> {"reply":"Tô indo!","action":{"type":"FOLLOW","params":{}}}',
     '  "fica aqui vigiando"',
@@ -122,7 +131,7 @@ export function buildConversePrompt(ctx: ConversationContext): string {
     '    -> {"reply":"Oba, vamos!","action":{"type":"PLAY_GAME","params":{"game":"esconde_esconde"}}}',
     '  "você gosta de diamante?"',
     '    -> {"reply":"Adoro! Brilha muito!","action":null}',
-    '  "constrói uma casa pra mim"',
+    '  "faz uma poção pra mim"',
     '    -> {"reply":"Essa eu não sei fazer ainda, desculpa!","action":null}',
   ].join('\n')
 }

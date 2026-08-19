@@ -196,5 +196,20 @@ behavior:
     - 'sand'
     - 'cobblestone'
     - 'stone'
+  # Blocos que ele pode USAR para construir. Separada da lista de cima: o que
+  # ele pode cavar não é necessariamente o que faz uma casa decente.
+  buildAllowlist:
+    - 'oak_log'
+    - 'birch_log'
+    - 'spruce_log'
+    - 'cobblestone'
+    - 'stone'
+    - 'dirt'
+    - 'sand'
+  # Teto de segurança: obra maior que isto é recusada antes de começar.
+  # A casa tem ~52 blocos e a torre ~39.
+  buildMaxBlocks: 120
+  # Quando faltar material, ir buscar sozinho em vez de só recusar.
+  buildAutoGather: true
 
 logLevel: 'info'

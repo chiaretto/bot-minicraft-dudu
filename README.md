@@ -210,6 +210,9 @@ llm:
 | `dudu, pode brigar`                  | religa a defesa                    |
 | `dudu, olha pra mim`                 | vira para você                     |
 | `dudu, vamos brincar`                | pergunta qual das duas brincadeiras |
+| `dudu, pega madeira` / `pega pedra`  | vai buscar o bloco e traz          |
+| `dudu, faz uma casa`                 | constrói uma casinha ao lado dele  |
+| `dudu, faz uma torre`                | constrói uma torre                 |
 | `dudu, esconde esconde`              | pergunta quem se esconde           |
 | `dudu, pega pega`                    | pergunta quem corre                |
 | `dudu, se esconde`                   | esconde-esconde: ele se esconde    |
@@ -242,6 +245,49 @@ educação, e a IA nunca executa nada diretamente.
 
 Conversa continua sendo conversa: `dudu, você gosta de diamante?` tem resposta e
 nenhuma ação.
+
+---
+
+## Pegar bloco e construir
+
+### Pegar
+
+`dudu, pega madeira` (ou `pega pedra`, `pega terra`, `pega areia`). Ele procura
+num raio de 32 blocos, vai até lá, cava e avisa quanto trouxe. **Funciona sem IA
+ligada** — é comando de nível 1.
+
+O pedido vale pelo **grupo**: "madeira" é qualquer tronco. Numa floresta de
+bétula, procurar só carvalho devolveria "não achei" num lugar cheio de árvore.
+
+Só blocos da `collectAllowlist` podem ser cavados — é o que impede uma
+alucinação da IA de virar a casa do jogador demolida. Minério fica de fora:
+`pega diamante` continua sendo uma recusa honesta.
+
+### Construir
+
+| Você diz | Ele levanta |
+| --- | --- |
+| `dudu, faz uma casa` | 5x5, paredes de 2, porta, 3 janelas, telhado (52 blocos) |
+| `dudu, faz uma torre` | 3x3, paredes de 4, porta, topo fechado (39 blocos) |
+
+Pequenas de propósito: obra grande demora demais para uma criança assistir, e
+cada bloco a mais é uma chance a mais de dar errado.
+
+**Como ele escolhe o material:** o que tiver em maior quantidade na mochila. Se
+faltar, ele vai buscar sozinho antes de começar (`buildAutoGather`). Se ainda
+faltar, ele recusa **antes de levantar meia parede** e diz quantos blocos
+faltam. Dá para pedir o material: `faz uma torre de pedra`.
+
+**Ele nunca destrói nada para construir.** Posição que já tem bloco é pulada.
+
+`dudu, para` interrompe a obra no meio — o que já subiu fica de pé.
+
+Ajuste em `behavior`: `buildAllowlist` (o que pode virar parede),
+`buildMaxBlocks` (teto de segurança) e `buildAutoGather`.
+
+> **Terreno acidentado sai torto.** Ele não terraplana: constrói a partir do
+> nível onde está e pula o que já existe. Num barranco, parte da casa pode
+> ficar enterrada. Chame ele para um lugar plano antes de pedir.
 
 ---
 

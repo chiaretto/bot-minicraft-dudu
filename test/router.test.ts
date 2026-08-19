@@ -241,9 +241,11 @@ describe('ação junto com a fala', () => {
   it('sem IA, nada vira ação — o repertório responde sozinho', async () => {
     const { router } = build({ llmProvider: 'none' })
 
-    // Pedido que o repertório cobre: ele responde honestamente que não sabe.
+    // Pedido que o parser cobre: vira ação de verdade, sem passar pela IA.
     const coberto = await router.route('pega madeira pra mim', snapshot)
-    expect(coberto.source).toBe('repertoire')
+    expect(coberto.source).toBe('command')
+    expect(coberto.intent?.type).toBe('COLLECT_BLOCK')
+    // `action` é o campo da IA — o comando do nível 1 não usa esse caminho.
     expect(coberto.action).toBeNull()
 
     // Pedido que ninguém cobre: cai no `nao_entendi`, e mesmo assim sem ação.

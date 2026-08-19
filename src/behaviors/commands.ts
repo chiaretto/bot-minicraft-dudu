@@ -92,6 +92,72 @@ const COMMANDS: CommandPattern[] = [
     intent: { type: 'LOOK_AT_OWNER', params: {} },
     patterns: [/^olha pra mim$/, /^olha aqui$/, /^me olha$/],
   },
+  // ── Pegar bloco e construir ─────────────────────────────────────────────
+  // Nível 1 de propósito: pedir madeira é tão comum quanto pedir para seguir,
+  // e assim funciona com `llm.provider: 'none'` e sem esperar o modelo.
+  // O bloco vai pelo NOME DO GRUPO — a busca cobre o grupo inteiro, senão numa
+  // floresta de bétula "pega madeira" devolveria "não achei".
+  // Ver: player_commands_delta.md → "Pegar bloco de verdade".
+  {
+    intent: { type: 'COLLECT_BLOCK', params: { block: 'madeira', count: 8 } },
+    patterns: [
+      /^pega madeira$/,
+      /^pegue madeira$/,
+      /^pega umas madeiras?$/,
+      /^pega um pouco de madeira$/,
+      /^me da madeira$/,
+      /^preciso de madeira$/,
+      /^pega tronco$/,
+      /^pega pau$/,
+    ],
+  },
+  {
+    intent: { type: 'COLLECT_BLOCK', params: { block: 'pedra', count: 8 } },
+    patterns: [
+      /^pega pedra$/,
+      /^pegue pedra$/,
+      /^pega umas pedras$/,
+      /^pega um pouco de pedra$/,
+      /^me da pedra$/,
+      /^preciso de pedra$/,
+    ],
+  },
+  {
+    intent: { type: 'COLLECT_BLOCK', params: { block: 'terra', count: 8 } },
+    patterns: [/^pega terra$/, /^pegue terra$/, /^me da terra$/, /^pega umas terras$/],
+  },
+  {
+    intent: { type: 'COLLECT_BLOCK', params: { block: 'areia', count: 8 } },
+    patterns: [/^pega areia$/, /^pegue areia$/, /^me da areia$/],
+  },
+  {
+    intent: { type: 'BUILD', params: { structure: 'casa' } },
+    patterns: [
+      /^constroi uma casa$/,
+      /^constroi uma casinha$/,
+      /^constroi uma casa pra mim$/,
+      /^construa uma casa$/,
+      /^faz uma casa$/,
+      /^faz uma casinha$/,
+      /^faca uma casa$/,
+      /^me faz uma casa$/,
+      /^quero uma casa$/,
+      /^monta uma casa$/,
+      /^casinha$/,
+    ],
+  },
+  {
+    intent: { type: 'BUILD', params: { structure: 'torre' } },
+    patterns: [
+      /^constroi uma torre$/,
+      /^construa uma torre$/,
+      /^faz uma torre$/,
+      /^faca uma torre$/,
+      /^me faz uma torre$/,
+      /^quero uma torre$/,
+      /^monta uma torre$/,
+    ],
+  },
   // ── Brincadeiras ────────────────────────────────────────────────────────
   // Vêm antes do convite genérico: "eu vou me esconder" também casaria com
   // "vou me esconder" de um convite qualquer, e o papel ficaria trocado.

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { GAME_ROLES } from './games.js'
+import { STRUCTURE_NAMES } from './blueprints.js'
 
 /**
  * Catálogo FECHADO de intenções. A IA só pode propor o que está aqui.
@@ -11,6 +12,7 @@ export const INTENT_TYPES = [
   'STAY',
   'STOP',
   'COLLECT_BLOCK',
+  'BUILD',
   'GOTO_COORDS',
   'DROP_ITEM_TO_OWNER',
   'LOOK_AT_OWNER',
@@ -34,6 +36,15 @@ export const intentSchema = z.discriminatedUnion('type', [
     params: z.object({
       block: z.string().min(1),
       count: z.number().int().positive().max(64).default(1),
+    }),
+  }),
+  // Construção simples. `structure` é o catálogo fechado de plantas; o material
+  // é opcional — sem ele o bot constrói com o que tiver na mochila.
+  z.object({
+    type: z.literal('BUILD'),
+    params: z.object({
+      structure: z.enum(STRUCTURE_NAMES),
+      material: z.string().min(1).optional(),
     }),
   }),
   z.object({
@@ -94,6 +105,8 @@ export const INTENT_JSON_SCHEMA = {
         text: { type: 'string' },
         game: { type: 'string' },
         role: { type: 'string', enum: [...GAME_ROLES] },
+        structure: { type: 'string', enum: [...STRUCTURE_NAMES] },
+        material: { type: 'string' },
       },
     },
   },

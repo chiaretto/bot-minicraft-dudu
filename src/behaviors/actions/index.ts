@@ -1,8 +1,12 @@
 import type { Bot } from 'mineflayer'
 import pathfinderPkg from 'mineflayer-pathfinder'
+import { Vec3 } from 'vec3'
 import type { BehaviorConfig } from '../../config/schema.js'
 import type { Intent } from '../../domain/intent.js'
 import { bestWeapon } from '../../domain/mobs.js'
+import { friendlyName, resolveBlockCandidates } from '../../domain/materials.js'
+import { buildStructure, BuildAborted, BuildRefused, type BuildWorld } from './build.js'
+import type { Vec3Like } from '../../domain/types.js'
 
 const { goals } = pathfinderPkg
 
@@ -99,18 +103,25 @@ export async function collectBlock(
   count: number,
   onProgress?: (collected: number) => void,
 ): Promise<ActionOutcome> {
-  if (!deps.behavior.collectAllowlist.includes(blockName)) {
-    throw new ActionRefused(`não posso mexer em ${blockName}`)
+  // "madeira" vale por qualquer tronco, e quem pede bétula aceita carvalho
+  // antes de ouvir "não achei" numa floresta cheia de árvore.
+  const permitidos = resolveBlockCandidates(blockName).filter((c) =>
+    deps.behavior.collectAllowlist.includes(c),
+  )
+  if (permitidos.length === 0) {
+    throw new ActionRefused(`não posso mexer em ${friendlyName(blockName)}`)
   }
 
-  const blockType = deps.bot.registry.blocksByName[blockName]
-  if (!blockType) throw new ActionRefused(`não conheço o bloco ${blockName}`)
+  const ids = permitidos
+    .map((name) => deps.bot.registry.blocksByName[name]?.id)
+    .filter((id): id is number => id !== undefined)
+  if (ids.length === 0) throw new ActionRefused(`não conheço o bloco ${blockName}`)
 
   let collected = 0
   for (let i = 0; i < count; i++) {
     checkAborted(deps.signal)
 
-    const target = deps.bot.findBlock({ matching: blockType.id, maxDistance: 32 })
+    const target = deps.bot.findBlock({ matching: ids, maxDistance: 32 })
     if (!target) break
 
     await withGuards(
@@ -127,8 +138,9 @@ export async function collectBlock(
     onProgress?.(collected)
   }
 
-  if (collected === 0) return { ok: false, message: `Não achei nenhum ${blockName} por aqui.` }
-  return { ok: true, message: `Peguei ${collected} ${blockName} pra você!` }
+  const nome = friendlyName(blockName)
+  if (collected === 0) return { ok: false, message: `Não achei nenhum ${nome} por aqui.` }
+  return { ok: true, message: `Peguei ${collected} de ${nome} pra você!` }
 }
 
 /** Leva um item até o dono e larga perto dele. */
@@ -174,6 +186,99 @@ export async function equipItem(deps: ActionDeps, itemName: string): Promise<Act
   return { ok: true, message: `Equipei ${itemName}!` }
 }
 
+/**
+ * Adapta o mundo real para a interface estreita que a obra usa.
+ *
+ * Único lugar onde a construção encosta em `mineflayer`. Ver `gameWorld()` em
+ * `app/bot.ts`: mesmo padrão, mesmo motivo.
+ */
+export function buildWorldFrom(deps: ActionDeps): BuildWorld {
+  const { bot } = deps
+  const at = (p: Vec3Like) => bot.blockAt(new Vec3(p.x, p.y, p.z))
+
+  return {
+    botPosition: () => bot.entity.position,
+    ownerPosition: () => bot.players[deps.ownerName]?.entity?.position ?? null,
+    isSolid: (pos) => {
+      const block = at(pos)
+      // Ar, água e grama alta não seguram nada — para a obra, não existem.
+      return block !== null && block.boundingBox === 'block'
+    },
+    inventoryCounts: () => {
+      const counts: Record<string, number> = {}
+      for (const item of bot.inventory.items()) {
+        counts[item.name] = (counts[item.name] ?? 0) + item.count
+      }
+      return counts
+    },
+    equipBlock: async (name) => {
+      const held = bot.heldItem
+      if (held?.name === name) return
+      const item = bot.inventory.items().find((i) => i.name === name)
+      if (!item) throw new ActionRefused(`acabou meu ${friendlyName(name)}`)
+      await bot.equip(item, 'hand')
+    },
+    walkNear: async (pos, range) => {
+      await withGuards(
+        bot.pathfinder.goto(new goals.GoalNear(pos.x, pos.y, pos.z, range)),
+        deps.signal,
+        deps.behavior.actionTimeoutMs,
+      )
+    },
+    placeBlock: async (reference, face) => {
+      const block = at(reference)
+      if (!block) throw new ActionRefused('o apoio sumiu')
+      await withGuards(
+        bot.placeBlock(block, new Vec3(face.x, face.y, face.z)),
+        deps.signal,
+        deps.behavior.actionTimeoutMs,
+      )
+    },
+  }
+}
+
+/**
+ * Constrói uma estrutura simples.
+ *
+ * Quando falta material e `buildAutoGather` está ligado, ele mesmo vai buscar
+ * — a alternativa seria a criança pedir uma casa e ouvir "não tenho bloco"
+ * toda vez.
+ */
+export async function build(
+  deps: ActionDeps,
+  structure: string,
+  material?: string,
+  onProgress?: (placed: number, total: number) => void,
+): Promise<ActionOutcome> {
+  try {
+    const outcome = await buildStructure(
+      {
+        world: buildWorldFrom(deps),
+        signal: deps.signal,
+        maxBlocks: deps.behavior.buildMaxBlocks,
+        allowlist: deps.behavior.buildAllowlist,
+        ...(deps.behavior.buildAutoGather
+          ? {
+              gather: async (block: string, count: number) => {
+                const result = await collectBlock(deps, block, count)
+                return result.ok ? count : 0
+              },
+            }
+          : {}),
+        ...(onProgress ? { onProgress } : {}),
+      },
+      structure,
+      material,
+    )
+    return { ok: outcome.ok, message: outcome.message }
+  } catch (err) {
+    // Traduz para os erros que o `app/` já sabe tratar.
+    if (err instanceof BuildAborted) throw new ActionAborted(err.message)
+    if (err instanceof BuildRefused) throw new ActionRefused(err.message)
+    throw err
+  }
+}
+
 /** Equipa a melhor arma do inventário. Devolve o nome, ou null se desarmado. */
 export async function equipBestWeapon(bot: Bot): Promise<string | null> {
   const weapon = bestWeapon(bot.inventory.items())
@@ -187,6 +292,8 @@ export async function runIntent(deps: ActionDeps, intent: Intent): Promise<Actio
   switch (intent.type) {
     case 'COLLECT_BLOCK':
       return collectBlock(deps, intent.params.block, intent.params.count)
+    case 'BUILD':
+      return build(deps, intent.params.structure, intent.params.material)
     case 'GOTO_COORDS':
       return gotoCoords(deps, intent.params.x, intent.params.y, intent.params.z)
     case 'DROP_ITEM_TO_OWNER':

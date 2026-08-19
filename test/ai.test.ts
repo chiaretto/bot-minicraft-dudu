@@ -164,7 +164,10 @@ describe('prompt', () => {
     const prompt = buildConversePrompt(ctx)
     expect(prompt).toContain('"action": null')
     expect(prompt).toContain('você gosta de diamante?')
-    expect(prompt).toContain('constrói uma casa pra mim')
+    // Exemplo de pedido que o bot de fato NÃO sabe. Construir casa saiu daqui
+    // quando ele aprendeu a construir — promessa desatualizada no prompt é tão
+    // ruim quanto no repertório.
+    expect(prompt).toContain('faz uma poção pra mim')
   })
 
   it('o prompt manda uma ação por resposta, nunca duas', () => {

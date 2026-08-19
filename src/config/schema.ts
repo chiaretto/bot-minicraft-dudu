@@ -264,6 +264,31 @@ export const behaviorSchema = z.object({
       'cobblestone',
       'stone',
     ]),
+  /**
+   * Blocos que o bot pode USAR como material de obra.
+   *
+   * Separada da allowlist de coleta de propósito: o que ele pode cavar não é
+   * necessariamente o que faz uma casa decente, e um dia uma pode mudar sem a
+   * outra.
+   */
+  buildAllowlist: z
+    .array(z.string())
+    .default([
+      'oak_log',
+      'birch_log',
+      'spruce_log',
+      'jungle_log',
+      'acacia_log',
+      'dark_oak_log',
+      'cobblestone',
+      'stone',
+      'dirt',
+      'sand',
+    ]),
+  /** Teto de segurança: obra maior que isto é recusada antes de começar. */
+  buildMaxBlocks: z.number().int().positive().default(120),
+  /** Buscar material sozinho quando faltar, em vez de só recusar. */
+  buildAutoGather: z.boolean().default(true),
 })
 
 export const configSchema = z.object({
