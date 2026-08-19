@@ -339,6 +339,11 @@ Só blocos da `collectAllowlist` podem ser cavados — é o que impede uma
 alucinação da IA de virar a casa do jogador demolida. Minério fica de fora:
 `pega diamante` continua sendo uma recusa honesta.
 
+> **Pedra precisa de picareta.** Quebrada com a mão ela some sem dropar nada.
+> Se o bot não tiver picareta, ele diz isso em vez de cavar à toa — e o número
+> que ele fala é sempre o que entrou de verdade na mochila. Madeira, terra e
+> areia ele pega na mão.
+
 ### Construir
 
 | Você diz | Ele levanta |

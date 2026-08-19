@@ -32,6 +32,13 @@ export interface EscapeWorld {
   blockNameAt(pos: Vec3Like): string | null
   inventoryCounts(): Record<string, number>
   equipBlock(name: string): Promise<void>
+  /**
+   * O bot consegue LEVAR o bloco daquela posição com o que tem agora?
+   *
+   * Cavar não é o mesmo que conseguir: pedra sem picareta some, e o bot fica
+   * cavando à toa dentro do buraco.
+   */
+  canHarvest(pos: Vec3Like): boolean
   /** Cava o bloco e recolhe o que cair. */
   digBlock(pos: Vec3Like): Promise<void>
   /** Pula e coloca um bloco embaixo dos próprios pés. */
@@ -77,22 +84,32 @@ function degrauDisponivel(
  * Só na horizontal: cavar o chão aprofundaria o buraco. Devolve o material
  * conseguido, ou `null` quando não deu para arranjar nada.
  */
-async function arranjarMaterial(deps: EscapeDeps, precisa: number): Promise<string | null> {
+async function arranjarMaterial(
+  deps: EscapeDeps,
+  precisa: number,
+): Promise<{ material: string | null; viuParedeDura: boolean }> {
   const { world } = deps
   let cavados = 0
+  let viuParedeDura = false
 
   while (cavados < deps.maxDigs) {
     checkAborted(deps.signal)
 
     const jaTem = degrauDisponivel(world.inventoryCounts(), deps.allowlist)
-    if (jaTem !== null && (world.inventoryCounts()[jaTem] ?? 0) >= precisa) return jaTem
+    if (jaTem !== null && (world.inventoryCounts()[jaTem] ?? 0) >= precisa) {
+      return { material: jaTem, viuParedeDura }
+    }
 
-    const candidatos = diggableNeighbors((p) => world.isSolid(p), world.botPosition()).filter(
+    const vizinhos = diggableNeighbors((p) => world.isSolid(p), world.botPosition()).filter(
       (pos) => {
         const nome = world.blockNameAt(pos)
         return nome !== null && deps.allowlist.includes(nome)
       },
     )
+
+    // Cavar o que ele não consegue levar só abre buraco e gasta o tempo dele.
+    const candidatos = vizinhos.filter((pos) => world.canHarvest(pos))
+    if (candidatos.length < vizinhos.length) viuParedeDura = true
     if (candidatos.length === 0) break
 
     try {
@@ -104,7 +121,7 @@ async function arranjarMaterial(deps: EscapeDeps, precisa: number): Promise<stri
     }
   }
 
-  return degrauDisponivel(world.inventoryCounts(), deps.allowlist)
+  return { material: degrauDisponivel(world.inventoryCounts(), deps.allowlist), viuParedeDura }
 }
 
 /**
@@ -127,9 +144,15 @@ export async function escapeHole(deps: EscapeDeps): Promise<EscapeOutcome> {
   const total = pillarHeight(inicio, dono, deps.config)
   if (total <= 0) throw new EscapeRefused('não tô num buraco')
 
-  const material = await arranjarMaterial(deps, total)
+  const { material, viuParedeDura } = await arranjarMaterial(deps, total)
   if (material === null) {
-    throw new EscapeRefused('não tenho bloco pra fazer degrau e não achei o que cavar aqui')
+    // Motivos diferentes, falas diferentes: "me dá bloco" e "preciso de
+    // picareta" pedem coisas opostas da criança.
+    throw new EscapeRefused(
+      viuParedeDura
+        ? 'preciso de uma picareta pra cavar essa pedra. Me joga uns blocos?'
+        : 'não tenho bloco pra fazer degrau e não achei o que cavar aqui. Me joga uns?',
+    )
   }
 
   let subiu = 0

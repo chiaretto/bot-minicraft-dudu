@@ -4,7 +4,7 @@ import { Vec3 } from 'vec3'
 import type { BehaviorConfig } from '../../config/schema.js'
 import type { Intent } from '../../domain/intent.js'
 import { bestWeapon } from '../../domain/mobs.js'
-import { friendlyName, resolveBlockCandidates } from '../../domain/materials.js'
+import { canHarvestWith, friendlyName, resolveBlockCandidates } from '../../domain/materials.js'
 import { buildStructure, BuildAborted, BuildRefused, type BuildWorld } from './build.js'
 import { escapeHole, EscapeAborted, EscapeRefused, type EscapeWorld } from './escape.js'
 import {
@@ -121,12 +121,22 @@ export async function collectBlock(
     throw new ActionRefused(`não posso mexer em ${friendlyName(blockName)}`)
   }
 
-  const ids = permitidos
+  const nome = friendlyName(blockName)
+
+  // Só procura o que ele consegue LEVAR. Quebrar pedra sem picareta some com o
+  // bloco: o bot gasta o tempo, abre o buraco e não leva nada.
+  const colhiveis = permitidos.filter((name) => canHarvestNow(deps.bot, name))
+  if (colhiveis.length === 0) {
+    throw new ActionRefused(`preciso de uma picareta pra pegar ${nome}`)
+  }
+
+  const ids = colhiveis
     .map((name) => deps.bot.registry.blocksByName[name]?.id)
     .filter((id): id is number => id !== undefined)
   if (ids.length === 0) throw new ActionRefused(`não conheço o bloco ${blockName}`)
 
-  let collected = 0
+  const antes = countInInventory(deps.bot, colhiveis)
+
   for (let i = 0; i < count; i++) {
     checkAborted(deps.signal)
 
@@ -141,15 +151,60 @@ export async function collectBlock(
       deps.behavior.actionTimeoutMs,
     )
     checkAborted(deps.signal)
-    await withGuards(deps.bot.dig(target), deps.signal, deps.behavior.actionTimeoutMs)
 
-    collected++
-    onProgress?.(collected)
+    await equipBestToolFor(deps.bot, target)
+    await withGuards(deps.bot.dig(target), deps.signal, deps.behavior.actionTimeoutMs)
+    await pickUpDrop(deps, target.position)
+
+    onProgress?.(countInInventory(deps.bot, colhiveis) - antes)
   }
 
-  const nome = friendlyName(blockName)
-  if (collected === 0) return { ok: false, message: `Não achei nenhum ${nome} por aqui.` }
+  // O que vale é o que ENTROU na mochila, não quantos blocos ele quebrou.
+  const collected = countInInventory(deps.bot, colhiveis) - antes
+  if (collected <= 0) return { ok: false, message: `Não consegui pegar ${nome} por aqui.` }
   return { ok: true, message: `Peguei ${collected} de ${nome} pra você!` }
+}
+
+/** Quanto o bot tem, somando todos os nomes dados. */
+function countInInventory(bot: Bot, names: readonly string[]): number {
+  const alvo = new Set(names)
+  return bot.inventory
+    .items()
+    .filter((i) => alvo.has(i.name))
+    .reduce((soma, i) => soma + i.count, 0)
+}
+
+/** O bot consegue LEVAR este bloco com o que tem agora? */
+export function canHarvestNow(bot: Bot, blockName: string): boolean {
+  const data = bot.registry.blocksByName[blockName]
+  if (!data) return false
+  const idsEmMaos = bot.inventory.items().map((i) => i.type)
+  return canHarvestWith(data.harvestTools as Record<string, unknown> | undefined, idsEmMaos)
+}
+
+/** Põe na mão a melhor ferramenta para aquele bloco, se houver alguma. */
+async function equipBestToolFor(bot: Bot, block: Parameters<Bot['dig']>[0]): Promise<void> {
+  const tool = bot.pathfinder.bestHarvestTool(block)
+  if (tool && bot.heldItem?.type !== tool.type) await bot.equip(tool, 'hand')
+}
+
+/**
+ * Anda em cima de onde o bloco caiu, para recolher o drop.
+ *
+ * Cavar a 2 blocos de distância derruba o item fora do alcance de coleta (~1
+ * bloco): sem este passo o bot quebra tudo e volta de mãos vazias. Falhar aqui
+ * não derruba a coleta — só significa que aquele item ficou no chão.
+ */
+async function pickUpDrop(deps: ActionDeps, position: Vec3Like): Promise<void> {
+  try {
+    await withGuards(
+      deps.bot.pathfinder.goto(new goals.GoalNear(position.x, position.y, position.z, 0)),
+      deps.signal,
+      Math.min(deps.behavior.actionTimeoutMs, 5_000),
+    )
+  } catch (err) {
+    if (err instanceof ActionAborted) throw err
+  }
 }
 
 /** Leva um item até o dono e larga perto dele. */
@@ -259,13 +314,20 @@ export async function build(
   material?: string,
   onProgress?: (placed: number, total: number) => void,
 ): Promise<ActionOutcome> {
+  // Só oferece material que ele já tem OU que consegue colher de verdade.
+  // Pedra sem picareta entrava na lista, ele saía para buscar e voltava vazio.
+  const naMochila = new Set(deps.bot.inventory.items().map((i) => i.name))
+  const viaveis = deps.behavior.buildAllowlist.filter(
+    (nome) => naMochila.has(nome) || canHarvestNow(deps.bot, nome),
+  )
+
   try {
     const outcome = await buildStructure(
       {
         world: buildWorldFrom(deps),
         signal: deps.signal,
         maxBlocks: deps.behavior.buildMaxBlocks,
-        allowlist: deps.behavior.buildAllowlist,
+        allowlist: viaveis.length > 0 ? viaveis : deps.behavior.buildAllowlist,
         ...(deps.behavior.buildAutoGather
           ? {
               gather: async (block: string, count: number) => {
@@ -307,6 +369,10 @@ export function escapeWorldFrom(deps: ActionDeps): EscapeWorld {
       return block !== null && block.boundingBox === 'block'
     },
     blockNameAt: (pos) => at(pos)?.name ?? null,
+    canHarvest: (pos) => {
+      const block = at(pos)
+      return block !== null && canHarvestNow(bot, block.name)
+    },
     inventoryCounts: () => {
       const counts: Record<string, number> = {}
       for (const item of bot.inventory.items()) {

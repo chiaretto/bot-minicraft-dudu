@@ -296,3 +296,52 @@ describe('progresso', () => {
     expect(onProgress).toHaveBeenCalledTimes(outcome.placed)
   })
 })
+
+/**
+ * O defeito relatado em jogo (2026-08-19), log linha 101.
+ *
+ * "Construa uma casa" respondia "não tenho bloco nenhum pra construir" mesmo
+ * com `buildAutoGather` ligado: a escolha do material acontecia ANTES da busca
+ * e, com a mochila vazia, devolvia null e recusava sem tentar.
+ */
+describe('mochila vazia com busca ligada (o bug de 2026-08-19)', () => {
+  it('vai buscar em vez de recusar de cara', async () => {
+    const world = new FakeWorld({})
+    const gather = vi.fn(async (block: string, count: number) => {
+      world.inventoryCounts()[block] = (world.inventoryCounts()[block] ?? 0) + count
+      return count
+    })
+
+    const outcome = await buildStructure(deps(world, { gather }), 'casa')
+
+    expect(gather, 'nem tentou buscar material').toHaveBeenCalled()
+    expect(outcome.ok).toBe(true)
+    expect(outcome.placed).toBe(outcome.total)
+  })
+
+  it('busca o primeiro material da allowlist quando não tem nada', async () => {
+    const world = new FakeWorld({})
+    const gather = vi.fn(async (block: string, count: number) => {
+      world.inventoryCounts()[block] = (world.inventoryCounts()[block] ?? 0) + count
+      return count
+    })
+
+    await buildStructure(deps(world, { gather, allowlist: ['cobblestone', 'dirt'] }), 'casa')
+
+    expect(gather.mock.calls[0]![0]).toBe('cobblestone')
+  })
+
+  /** Sem saber buscar, a recusa continua sendo a resposta certa. */
+  it('sem busca, mochila vazia continua recusando', async () => {
+    const world = new FakeWorld({})
+    await expect(buildStructure(deps(world), 'casa')).rejects.toThrow(/não tenho bloco/)
+  })
+
+  it('material pedido pelo jogador não é trocado por outro', async () => {
+    const world = new FakeWorld({})
+    const gather = vi.fn(async () => 0)
+    await expect(buildStructure(deps(world, { gather }), 'casa', 'tnt')).rejects.toThrow(
+      /não posso construir/,
+    )
+  })
+})

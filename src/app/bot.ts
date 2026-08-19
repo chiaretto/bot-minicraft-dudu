@@ -49,6 +49,9 @@ const { goals } = pathfinderPkg
 
 const THREAT_TICK_MS = 250
 
+/** Espera antes de tentar destravar de novo, depois de uma tentativa falha. */
+const UNSTICK_RETRY_MS = 60_000
+
 /** Folga do `GoalNear` ao caminhar durante o jogo. */
 const GAME_GOAL_RANGE = 1
 
@@ -99,6 +102,14 @@ export class CompanionBot {
   private stuckSince: number | null = null
   /** Evita reentrar na subida enquanto uma já está em andamento. */
   private escaping = false
+  /**
+   * Até quando não vale a pena tentar destravar de novo.
+   *
+   * Sem isto o vigia repete a mesma falha a cada ciclo: em 2026-08-19 o bot
+   * falou "Vou fazer uma escadinha" / "não tenho bloco" SEIS vezes seguidas,
+   * enchendo o chat da criança com a mesma frustração.
+   */
+  private unstickBlockedUntil = 0
 
   constructor(
     private readonly config: Config,
@@ -499,6 +510,9 @@ export class CompanionBot {
     if (this.stuckSince === null) this.stuckSince = agora
     if (agora - this.stuckSince < this.config.behavior.escapeStuckMs) return
 
+    // Já tentou e não deu: espera antes de tentar (e falar) de novo.
+    if (agora < this.unstickBlockedUntil) return
+
     const owner = bot.players[this.config.ownerPlayer]?.entity?.position ?? null
     const config = {
       minDrop: this.config.behavior.escapeMinDrop,
@@ -520,6 +534,16 @@ export class CompanionBot {
     }
 
     void this.unstickAndResumeFollow('buraco')
+  }
+
+  /**
+   * Segura o vigia depois de uma tentativa que não deu certo.
+   *
+   * A criança já ouviu o problema uma vez; repetir a cada ciclo não acrescenta
+   * nada e afoga o chat. Um comando novo dela zera a espera.
+   */
+  private holdUnstick(): void {
+    this.unstickBlockedUntil = Date.now() + UNSTICK_RETRY_MS
   }
 
   /** Dependências das ações de mundo, do jeito que `runWorldAction` monta. */
@@ -556,8 +580,10 @@ export class CompanionBot {
       const outcome = motivo === 'porta' ? await openDoor(deps) : await escape(deps)
       this.say(outcome.message, 'command')
       this.logger.info({ motivo, ok: outcome.ok }, 'destravou o caminho')
+      if (!outcome.ok) this.holdUnstick()
     } catch (err) {
       if (err instanceof ActionAborted) return
+      this.holdUnstick()
       if (err instanceof ActionRefused) this.say(`Ahh, ${err.message}.`, 'command')
       else {
         this.logger.error({ motivo, err: String(err) }, 'não consegui destravar')
@@ -574,6 +600,9 @@ export class CompanionBot {
   }
 
   private startFollow(): void {
+    // Chamado novo zera a espera: a criança pode ter jogado blocos pro bot, ou
+    // aberto a porta ela mesma.
+    this.unstickBlockedUntil = 0
     if (!this.snapshot().ownerVisible) {
       this.say('Não tô te vendo! Cadê você?', 'command')
       return

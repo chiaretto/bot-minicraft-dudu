@@ -87,7 +87,7 @@ entries:
       # 2026-08-19: pegar bloco e construir entraram aqui.
       - "Sei pegar bloco pra você! Fala 'pega madeira' ou 'pega pedra'."
       - "Sei construir! Fala 'faz uma casa' ou 'faz uma torre' que eu levanto."
-      - 'Pego madeira e pedra, faço casinha e torre, te sigo e te defendo!'
+      - 'Pego madeira e terra, faço casinha e torre, te sigo e te defendo!'
       # 2026-08-19: sair de buraco entrou aqui.
       - 'Se eu cair num buraco eu faço escadinha e subo! Não me perco de você.'
       # 2026-08-19: abrir porta entrou aqui.
@@ -654,10 +654,10 @@ entries:
        'me da um', 'me arruma', 'pega diamante', 'pegue diamante',
        'pega ferro', 'pega ouro', 'pega esmeralda', 'busca pra mim']
     responses:
-      - 'Essa eu não acho, {owner}. Mas sei pegar madeira, pedra, terra e areia!'
+      - 'Essa eu não acho, {owner}. Mas sei pegar madeira, terra e areia na mão!'
       - 'Minério eu não sei achar ainda. Fala "pega madeira" que eu vou correndo!'
       - 'Essa eu não consigo. Se você for lá, eu vou junto te dar cobertura!'
-      - 'Cavar fundo eu ainda não sei. Mas peço: "pega pedra"? Essa eu trago!'
+      - 'Pra pedra eu preciso de picareta. Madeira e terra eu pego na mão!'
       - 'Não sei pegar não, desculpa. Mas eu te acompanho até lá!'
 
   # ────────────── 30. O QUE O DONO ESTÁ SEGURANDO ────────────────────

@@ -11,6 +11,7 @@ import {
   resolveBlockCandidates,
   isMaterialGroup,
   friendlyName,
+  canHarvestWith,
 } from '../src/domain/materials.js'
 
 const key = (b: BlueprintBlock) => `${b.x},${b.y},${b.z}`
@@ -174,5 +175,37 @@ describe('materiais como a criança fala', () => {
     expect(friendlyName('birch_log')).toBe('madeira')
     expect(friendlyName('cobblestone')).toBe('pedra')
     expect(friendlyName('diamond_ore')).toBe('diamond_ore')
+  })
+})
+
+/**
+ * A regra que faltava em 2026-08-19: cavar não é o mesmo que conseguir.
+ * Pedra quebrada sem picareta some, e o bot volta de mãos vazias.
+ */
+describe('consigo levar este bloco?', () => {
+  const PICARETA_MADEIRA = 878
+  const PICARETA_PEDRA = 883
+  const toolsDaPedra = { [PICARETA_MADEIRA]: true, [PICARETA_PEDRA]: true }
+
+  it('bloco sem ferramenta exigida cai na mão', () => {
+    expect(canHarvestWith(undefined, [])).toBe(true)
+    expect(canHarvestWith(null, [])).toBe(true)
+  })
+
+  it('pedra sem picareta NÃO rende nada', () => {
+    expect(canHarvestWith(toolsDaPedra, [])).toBe(false)
+  })
+
+  it('pedra com picareta rende', () => {
+    expect(canHarvestWith(toolsDaPedra, [PICARETA_MADEIRA])).toBe(true)
+  })
+
+  it('ferramenta errada não serve', () => {
+    const enxada = 999
+    expect(canHarvestWith(toolsDaPedra, [enxada])).toBe(false)
+  })
+
+  it('basta ter uma das ferramentas aceitas', () => {
+    expect(canHarvestWith(toolsDaPedra, [123, PICARETA_PEDRA, 456])).toBe(true)
   })
 })

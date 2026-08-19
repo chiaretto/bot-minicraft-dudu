@@ -112,6 +112,8 @@ class FakeWorld implements EscapeWorld {
     private owner: Vec3Like | null = { x: 0, y: 64, z: 0 },
     startY = 44,
     private paredes = true,
+    /** Parede que ele NÃO consegue colher — pedra sem picareta. */
+    private paredeDura = false,
   ) {
     this.y = startY
   }
@@ -127,7 +129,11 @@ class FakeWorld implements EscapeWorld {
     return this.paredes && (pos.x !== 0 || pos.z !== 0)
   }
   blockNameAt(pos: Vec3Like): string | null {
-    return this.isSolid(pos) ? 'dirt' : null
+    if (!this.isSolid(pos)) return null
+    return this.paredeDura ? 'stone' : 'dirt'
+  }
+  canHarvest(pos: Vec3Like): boolean {
+    return this.isSolid(pos) && !this.paredeDura
   }
   inventoryCounts(): Record<string, number> {
     return this.inventory
@@ -137,7 +143,8 @@ class FakeWorld implements EscapeWorld {
   }
   async digBlock(pos: Vec3Like): Promise<void> {
     this.dug.push(pos)
-    this.inventory['dirt'] = (this.inventory['dirt'] ?? 0) + 1
+    // Só rende item o que ele consegue colher.
+    if (!this.paredeDura) this.inventory['dirt'] = (this.inventory['dirt'] ?? 0) + 1
   }
   async pillarUp(): Promise<void> {
     if (this.failPillar > 0) {
@@ -346,5 +353,38 @@ describe('configuração da subida', () => {
     const behavior = behaviorSchema.parse({})
     const permitidos = behavior.buildAllowlist.filter((n) => behavior.collectAllowlist.includes(n))
     expect(permitidos.length).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * O defeito relatado em jogo (2026-08-19).
+ *
+ * O log mostrou: "Peguei 52 de pedra pra você!" e, minutos depois, dentro do
+ * buraco, "não tenho bloco pra fazer degrau" — seis vezes seguidas. Os 52
+ * blocos nunca existiram: pedra quebrada sem picareta some, e a coleta contava
+ * blocos QUEBRADOS em vez de itens obtidos.
+ */
+describe('parede que ele não consegue colher (o bug de 2026-08-19)', () => {
+  it('não fica cavando pedra à toa quando não tem picareta', async () => {
+    const world = new FakeWorld({}, { x: 0, y: 64, z: 0 }, 44, true, true)
+    await expect(escapeHole(deps(world))).rejects.toBeInstanceOf(EscapeRefused)
+    expect(world.dug, 'cavou pedra que não conseguiria levar').toHaveLength(0)
+  })
+
+  it('pede picareta, não blocos — são pedidos diferentes', async () => {
+    const world = new FakeWorld({}, { x: 0, y: 64, z: 0 }, 44, true, true)
+    await expect(escapeHole(deps(world))).rejects.toThrow(/picareta/i)
+  })
+
+  it('parede mole continua rendendo degrau normalmente', async () => {
+    const world = new FakeWorld({}, { x: 0, y: 64, z: 0 }, 44, true, false)
+    const outcome = await escapeHole(deps(world))
+    expect(world.dug.length).toBeGreaterThan(0)
+    expect(outcome.ok).toBe(true)
+  })
+
+  it('sem parede nenhuma, a fala é a de "me joga uns blocos"', async () => {
+    const world = new FakeWorld({}, { x: 0, y: 64, z: 0 }, 44, false)
+    await expect(escapeHole(deps(world))).rejects.toThrow(/me joga uns/i)
   })
 })

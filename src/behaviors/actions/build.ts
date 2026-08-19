@@ -166,7 +166,15 @@ export async function buildStructure(
     throw new BuildRefused('essa obra é grande demais pra mim')
   }
 
-  const escolhido = chooseMaterial(deps.world.inventoryCounts(), deps.allowlist, material)
+  let escolhido = chooseMaterial(deps.world.inventoryCounts(), deps.allowlist, material)
+
+  // Mochila vazia mas ele sabe buscar: escolhe o que VAI buscar, em vez de
+  // recusar antes de tentar. Era o defeito de 2026-08-19 — com `buildAutoGather`
+  // ligado, "constrói uma casa" morria em "não tenho bloco nenhum".
+  if (escolhido === null && deps.gather && !material) {
+    escolhido = deps.allowlist[0] ?? null
+  }
+
   if (escolhido === null) {
     throw new BuildRefused(
       material ? `não posso construir com ${material}` : 'não tenho bloco nenhum pra construir',
