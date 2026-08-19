@@ -6,6 +6,7 @@ import type { Intent } from '../../domain/intent.js'
 import { bestWeapon } from '../../domain/mobs.js'
 import { friendlyName, resolveBlockCandidates } from '../../domain/materials.js'
 import { buildStructure, BuildAborted, BuildRefused, type BuildWorld } from './build.js'
+import { escapeHole, EscapeAborted, EscapeRefused, type EscapeWorld } from './escape.js'
 import type { Vec3Like } from '../../domain/types.js'
 
 const { goals } = pathfinderPkg
@@ -279,6 +280,108 @@ export async function build(
   }
 }
 
+/**
+ * Adapta o mundo real para a interface estreita da subida.
+ *
+ * `pillarUp` é a única parte deste projeto que depende de TEMPO de física: o
+ * bloco só entra embaixo dos pés no ápice do pulo. Por isso ele espera o bot
+ * subir de verdade em vez de dormir um tanto fixo.
+ */
+export function escapeWorldFrom(deps: ActionDeps): EscapeWorld {
+  const { bot } = deps
+  const at = (p: Vec3Like) => bot.blockAt(new Vec3(p.x, p.y, p.z))
+
+  return {
+    botPosition: () => bot.entity.position,
+    ownerPosition: () => bot.players[deps.ownerName]?.entity?.position ?? null,
+    isSolid: (pos) => {
+      const block = at(pos)
+      return block !== null && block.boundingBox === 'block'
+    },
+    blockNameAt: (pos) => at(pos)?.name ?? null,
+    inventoryCounts: () => {
+      const counts: Record<string, number> = {}
+      for (const item of bot.inventory.items()) {
+        counts[item.name] = (counts[item.name] ?? 0) + item.count
+      }
+      return counts
+    },
+    equipBlock: async (name) => {
+      if (bot.heldItem?.name === name) return
+      const item = bot.inventory.items().find((i) => i.name === name)
+      if (!item) throw new ActionRefused(`acabou meu ${friendlyName(name)}`)
+      await bot.equip(item, 'hand')
+    },
+    digBlock: async (pos) => {
+      const block = at(pos)
+      if (!block) return
+      await withGuards(bot.dig(block), deps.signal, deps.behavior.actionTimeoutMs)
+    },
+    pillarUp: async () => {
+      const antes = Math.floor(bot.entity.position.y)
+
+      // Olhar para baixo antes de pular: o bloco vai embaixo dos pés.
+      await bot.lookAt(bot.entity.position.offset(0, -1, 0), true)
+      bot.setControlState('jump', true)
+      try {
+        await waitForApex(bot, antes)
+        const apoio = bot.blockAt(bot.entity.position.offset(0, -1, 0))
+        if (!apoio) throw new ActionRefused('sumiu o chão embaixo de mim')
+        await bot.placeBlock(apoio, new Vec3(0, 1, 0))
+      } finally {
+        bot.setControlState('jump', false)
+      }
+    },
+  }
+}
+
+/**
+ * Espera o bot subir o bastante para caber um bloco embaixo dele.
+ *
+ * Sem isso o bloco é colocado antes de sair do chão e o pulo não rende nada.
+ */
+async function waitForApex(bot: Bot, chaoInicial: number): Promise<void> {
+  const limite = Date.now() + 1_000
+  while (Date.now() < limite) {
+    if (bot.entity.position.y - chaoInicial >= 1.05) return
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
+
+/**
+ * Sai de buraco fazendo escadinha.
+ *
+ * Cava só o que a coleta permite E que serve de degrau: a interseção das duas
+ * allowlists. É o que impede o bot de cavar a casa do jogador para subir.
+ */
+export async function escape(
+  deps: ActionDeps,
+  onProgress?: (subiu: number, total: number) => void,
+): Promise<ActionOutcome> {
+  const permitidos = deps.behavior.buildAllowlist.filter((nome) =>
+    deps.behavior.collectAllowlist.includes(nome),
+  )
+
+  try {
+    const outcome = await escapeHole({
+      world: escapeWorldFrom(deps),
+      signal: deps.signal,
+      config: {
+        minDrop: deps.behavior.escapeMinDrop,
+        maxHeight: deps.behavior.escapeMaxHeight,
+      },
+      allowlist: permitidos,
+      maxDigs: deps.behavior.escapeMaxDigs,
+      ...(onProgress ? { onProgress } : {}),
+    })
+    return { ok: outcome.ok, message: outcome.message }
+  } catch (err) {
+    if (err instanceof EscapeAborted) throw new ActionAborted(err.message)
+    if (err instanceof EscapeRefused) throw new ActionRefused(err.message)
+    throw err
+  }
+}
+
 /** Equipa a melhor arma do inventário. Devolve o nome, ou null se desarmado. */
 export async function equipBestWeapon(bot: Bot): Promise<string | null> {
   const weapon = bestWeapon(bot.inventory.items())
@@ -294,6 +397,8 @@ export async function runIntent(deps: ActionDeps, intent: Intent): Promise<Actio
       return collectBlock(deps, intent.params.block, intent.params.count)
     case 'BUILD':
       return build(deps, intent.params.structure, intent.params.material)
+    case 'ESCAPE_HOLE':
+      return escape(deps)
     case 'GOTO_COORDS':
       return gotoCoords(deps, intent.params.x, intent.params.y, intent.params.z)
     case 'DROP_ITEM_TO_OWNER':

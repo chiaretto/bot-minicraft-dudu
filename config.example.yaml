@@ -211,5 +211,15 @@ behavior:
   buildMaxBlocks: 120
   # Quando faltar material, ir buscar sozinho em vez de só recusar.
   buildAutoGather: true
+  # Sair de buraco: se ele cair numa caverna ou ravina e você chamar, ele faz
+  # uma escadinha de blocos para subir em vez de ficar parado lá embaixo.
+  # Desnível a partir do qual vale a pena empilhar (abaixo disso o pulo resolve).
+  escapeMinDrop: 3
+  # Teto de degraus por tentativa. Evita torre até o céu se você estiver voando.
+  escapeMaxHeight: 24
+  # Teto de blocos cavados para arranjar degrau quando a mochila está vazia.
+  escapeMaxDigs: 12
+  # Quanto tempo parado seguindo você antes de suspeitar que está preso.
+  escapeStuckMs: 6000
 
 logLevel: 'info'

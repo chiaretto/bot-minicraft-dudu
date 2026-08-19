@@ -33,10 +33,12 @@ import pathfinderPkg from 'mineflayer-pathfinder'
 import {
   equipBestWeapon,
   runIntent,
+  escape,
   ActionAborted,
   ActionRefused,
   NoProgress,
 } from '../behaviors/actions/index.js'
+import { needsEscape } from '../domain/escape.js'
 import { bestWeapon } from '../domain/mobs.js'
 import type { Intent } from '../domain/intent.js'
 import type { Vec3Like, WorldSnapshot } from '../domain/types.js'
@@ -90,6 +92,11 @@ export class CompanionBot {
    * Ver: bot_games_delta.md → "Escolha de papel pendente".
    */
   private pendingRole: { game: GameName; expiresAt: number; reasked: boolean } | null = null
+  /** Vigia de "preso": posição e desde quando ele não sai do lugar seguindo. */
+  private lastFollowPos: Vec3Like | null = null
+  private stuckSince: number | null = null
+  /** Evita reentrar na subida enquanto uma já está em andamento. */
+  private escaping = false
 
   constructor(
     private readonly config: Config,
@@ -450,6 +457,100 @@ export class CompanionBot {
     }
   }
 
+  /**
+   * Vigia de "preso num buraco".
+   *
+   * Seguir o dono é fogo-e-esquece: `GoalFollow` não avisa quando não existe
+   * caminho. Sem isto, a criança chama e o bot simplesmente fica parado no
+   * fundo da ravina, calado.
+   *
+   * Geometria local não distingue "poço largo" de "campo aberto" — o sinal
+   * confiável é: mandaram seguir, ele não sai do lugar, e o dono está bem
+   * acima. Ver: player_commands_delta.md → "Sair de buraco".
+   */
+  private tickStuck(): void {
+    if (this.escaping || this.game !== null || this.state.state !== 'FOLLOW') {
+      this.stuckSince = null
+      this.lastFollowPos = null
+      return
+    }
+
+    const bot = this.mc.raw
+    if (!bot) return
+
+    const pos = bot.entity.position
+    const agora = Date.now()
+
+    if (this.lastFollowPos !== null && distance(pos, this.lastFollowPos) >= 0.5) {
+      // Andou: não está preso.
+      this.lastFollowPos = { x: pos.x, y: pos.y, z: pos.z }
+      this.stuckSince = agora
+      return
+    }
+
+    if (this.lastFollowPos === null) {
+      this.lastFollowPos = { x: pos.x, y: pos.y, z: pos.z }
+      this.stuckSince = agora
+      return
+    }
+
+    if (this.stuckSince === null) this.stuckSince = agora
+    if (agora - this.stuckSince < this.config.behavior.escapeStuckMs) return
+
+    const owner = bot.players[this.config.ownerPlayer]?.entity?.position ?? null
+    const config = {
+      minDrop: this.config.behavior.escapeMinDrop,
+      maxHeight: this.config.behavior.escapeMaxHeight,
+    }
+    if (!needsEscape(pos, owner, config)) {
+      // Parado, mas não é buraco: o vigia não tem o que fazer aqui.
+      this.stuckSince = agora
+      return
+    }
+
+    void this.escapeAndResumeFollow()
+  }
+
+  /**
+   * Sobe e volta a seguir.
+   *
+   * A fala vem antes da subida: a criança precisa saber por que o bot sumiu do
+   * caminho por um minuto.
+   */
+  private async escapeAndResumeFollow(): Promise<void> {
+    const bot = this.mc.raw
+    if (!bot) return
+
+    this.escaping = true
+    this.stuckSince = null
+    this.say('Peraí, caí num buraco! Vou fazer uma escadinha.', 'command')
+
+    try {
+      const outcome = await escape({
+        bot,
+        behavior: this.config.behavior,
+        ownerName: this.config.ownerPlayer,
+        signal: this.state.signal,
+      })
+      this.say(outcome.message, 'command')
+      this.logger.info({ ok: outcome.ok }, 'saída de buraco')
+    } catch (err) {
+      if (err instanceof ActionAborted) return
+      if (err instanceof ActionRefused) this.say(`Ahh, ${err.message}.`, 'command')
+      else {
+        this.logger.error({ err: String(err) }, 'saída de buraco falhou')
+        this.say('Não consegui subir, vem me buscar?', 'command')
+      }
+    } finally {
+      this.escaping = false
+      this.lastFollowPos = null
+      // Volta a seguir: o objetivo antigo pode ter sido descartado no caminho.
+      if (this.state.state === 'FOLLOW') {
+        this.mc.followOwner(this.config.behavior.followDistance)
+      }
+    }
+  }
+
   private startFollow(): void {
     if (!this.snapshot().ownerVisible) {
       this.say('Não tô te vendo! Cadê você?', 'command')
@@ -746,7 +847,10 @@ export class CompanionBot {
 
   private startThreatWatcher(): void {
     this.stopThreatWatcher()
-    this.threatTimer = setInterval(() => this.tickDefense(), THREAT_TICK_MS)
+    this.threatTimer = setInterval(() => {
+      this.tickDefense()
+      this.tickStuck()
+    }, THREAT_TICK_MS)
   }
 
   private stopThreatWatcher(): void {

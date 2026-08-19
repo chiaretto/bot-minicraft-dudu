@@ -92,6 +92,26 @@ const COMMANDS: CommandPattern[] = [
     intent: { type: 'LOOK_AT_OWNER', params: {} },
     patterns: [/^olha pra mim$/, /^olha aqui$/, /^me olha$/],
   },
+  // ── Sair de buraco ──────────────────────────────────────────────────────
+  // Vem ANTES de FOLLOW: "sobe aqui" tem cara de chamado, mas quem está no
+  // fundo de uma ravina precisa subir antes de conseguir vir.
+  // Ver: player_commands_delta.md → "Sair de buraco".
+  {
+    intent: { type: 'ESCAPE_HOLE', params: {} },
+    patterns: [
+      /^sai do buraco$/,
+      /^sai dai do buraco$/,
+      /^sobe$/,
+      /^sobe aqui$/,
+      /^sobe pra ca$/,
+      /^faz uma escada$/,
+      /^faz uma escadinha$/,
+      /^faz escada pra subir$/,
+      /^voce ta preso$/,
+      /^ta preso ai$/,
+      /^sai desse buraco$/,
+    ],
+  },
   // ── Pegar bloco e construir ─────────────────────────────────────────────
   // Nível 1 de propósito: pedir madeira é tão comum quanto pedir para seguir,
   // e assim funciona com `llm.provider: 'none'` e sem esperar o modelo.

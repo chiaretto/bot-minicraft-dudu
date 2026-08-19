@@ -39,6 +39,9 @@ export const ACTION_DESCRIPTIONS: Record<Exclude<IntentType, 'CHAT' | 'UNKNOWN'>
   BUILD:
     'construir — "structure" é "casa" ou "torre". ' +
     '"material" é opcional (madeira, pedra…): sem ele o bot usa o que tiver',
+  ESCAPE_HOLE:
+    'sair de um buraco fazendo escadinha de blocos. ' +
+    'Use quando ele estiver preso lá embaixo e não conseguir chegar no jogador',
   GOTO_COORDS: 'ir até um lugar — precisa de "x", "y" e "z"',
   DROP_ITEM_TO_OWNER: 'entregar um item para o jogador — precisa de "item"',
   LOOK_AT_OWNER: 'virar e olhar para o jogador',

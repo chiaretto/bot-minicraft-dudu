@@ -72,7 +72,8 @@ entries:
        'voce sabe andar', 'voce anda', 'voce consegue andar', 'voce sabe me seguir',
        'voce se move', 'voce sabe brincar', 'voce sabe jogar', 'que brincadeira voce sabe',
        'voce brinca de que', 'quais jogos voce sabe',
-       'voce sabe construir', 'voce constroi', 'voce sabe fazer casa', 'voce pega bloco']
+       'voce sabe construir', 'voce constroi', 'voce sabe fazer casa', 'voce pega bloco',
+       'voce sabe subir', 'voce sai de buraco', 'e se voce cair']
     responses:
       - 'Eu sei te seguir, ficar de guarda, te defender dos monstros e brincar de esconde-esconde e pega-pega!'
       - "Posso ir com você (fala 'vem'), ficar parado ('fica aqui') e parar tudo ('para')."
@@ -86,6 +87,8 @@ entries:
       - "Sei pegar bloco pra você! Fala 'pega madeira' ou 'pega pedra'."
       - "Sei construir! Fala 'faz uma casa' ou 'faz uma torre' que eu levanto."
       - 'Pego madeira e pedra, faço casinha e torre, te sigo e te defendo!'
+      # 2026-08-19: sair de buraco entrou aqui.
+      - 'Se eu cair num buraco eu faço escadinha e subo! Não me perco de você.'
 
   # ────────────────────── 6. ESTADO / COMO ESTÁ ──────────────────────
   - id: estado_bot

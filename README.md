@@ -210,6 +210,7 @@ llm:
 | `dudu, pode brigar`                  | religa a defesa                    |
 | `dudu, olha pra mim`                 | vira para você                     |
 | `dudu, vamos brincar`                | pergunta qual das duas brincadeiras |
+| `dudu, sai do buraco` / `sobe`       | faz escadinha de blocos e sobe     |
 | `dudu, pega madeira` / `pega pedra`  | vai buscar o bloco e traz          |
 | `dudu, faz uma casa`                 | constrói uma casinha ao lado dele  |
 | `dudu, faz uma torre`                | constrói uma torre                 |
@@ -245,6 +246,50 @@ educação, e a IA nunca executa nada diretamente.
 
 Conversa continua sendo conversa: `dudu, você gosta de diamante?` tem resposta e
 nenhuma ação.
+
+---
+
+## Ele não fica preso em buraco
+
+O bot caía numa caverna ou ravina, você mandava `dudu, vem` — e **nada
+acontecia**. O `GoalFollow` do pathfinder não avisa quando não existe caminho:
+ele simplesmente não anda. O bot ficava parado e mudo lá embaixo.
+
+Agora, seguindo você, ele vigia a si mesmo. Se ficar **6 segundos sem sair do
+lugar** e você estiver **3 ou mais blocos acima**, ele conclui que caiu:
+
+```
+Você: dudu, vem
+      (6 segundos parado, você 14 blocos acima)
+Dudu: Peraí, caí num buraco! Vou fazer uma escadinha.
+Dudu: Saí do buraco! Tô indo aí!
+```
+
+Ele empilha blocos embaixo dos próprios pés até chegar ao seu nível e **volta a
+te seguir sozinho** — sem precisar repetir o comando. Dá para pedir na mão
+também: `dudu, sai do buraco`, `sobe`, `faz uma escadinha`.
+
+**Sem bloco na mochila, ele cava as paredes** para arranjar degrau. Nunca o
+chão, que só afundaria mais. E só cava o que pode cavar **e** usar como degrau —
+a interseção de `collectAllowlist` e `buildAllowlist`, o que impede ele de
+demolir a sua casa para subir.
+
+Três coisas que ele **não** faz, de propósito:
+
+- **Não sobe sem te ver.** Uma torre no meio do nada não leva a lugar nenhum.
+- **Não sobe até o céu.** `escapeMaxHeight` (24) limita — se você estiver voando
+  de criativo, ele sobe um pouco e avisa que ainda está fundo.
+- **Não faz isso durante brincadeira.** Um bot empilhando blocos no
+  esconde-esconde estragaria o jogo.
+
+`dudu, para` interrompe a subida; os degraus já colocados ficam.
+
+Ajuste em `behavior`: `escapeMinDrop`, `escapeMaxHeight`, `escapeMaxDigs` e
+`escapeStuckMs`.
+
+> **Ele não sai de sala fechada.** Se você estiver no mesmo nível e houver uma
+> parede no caminho, não é altura que falta — é abrir caminho, e escavar túnel
+> ele não faz.
 
 ---
 
