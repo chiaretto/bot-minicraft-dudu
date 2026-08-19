@@ -1,4 +1,5 @@
 import type { Intent } from '../domain/intent.js'
+import { botRoleForChoice, type GameName, type GameRole, type RoleChoice } from '../domain/games.js'
 import { prepare } from '../dialogue/normalize.js'
 
 interface CommandPattern {
@@ -123,6 +124,15 @@ const COMMANDS: CommandPattern[] = [
       /^some daqui que eu te acho$/,
       /^eu vou te achar$/,
       /^eu vou te procurar$/,
+    ],
+  },
+  // Convite pelo NOME do jogo: não diz quem faz o quê, então não escolhe papel.
+  // Quem digita "esconde esconde" quer brincar, não quer necessariamente ser o
+  // que procura — antes, o padrão do código decidia por ela.
+  // Ver: bot_games_delta.md → "Papel ausente é pergunta, não padrão".
+  {
+    intent: { type: 'PLAY_GAME', params: { game: 'esconde_esconde' } },
+    patterns: [
       /^vamos brincar de esconde esconde$/,
       /^vamos brincar de esconde$/,
       /^vamos jogar esconde esconde$/,
@@ -166,8 +176,14 @@ const COMMANDS: CommandPattern[] = [
       /^vem correndo atras de mim$/,
       /^voce pega$/,
       /^voce me pega$/,
-      // Nome do jogo, com as variantes regionais que a criança pode usar.
-      // Todas são o MESMO jogo: pique-pega não é outra brincadeira.
+    ],
+  },
+  // Nome do jogo, com as variantes regionais que a criança pode usar. Todas são
+  // o MESMO jogo: pique-pega não é outra brincadeira. Nenhuma delas diz quem
+  // corre, então nenhuma escolhe papel.
+  {
+    intent: { type: 'PLAY_GAME', params: { game: 'pega_pega' } },
+    patterns: [
       /^pega pega$/,
       /^pique pega$/,
       /^pira pega$/,
@@ -244,6 +260,86 @@ export function isGiveUp(text: string, botName: string): boolean {
   return stripped !== normalized && stripped.length > 0
     ? GIVE_UP_PATTERNS.some((p) => p.test(stripped))
     : false
+}
+
+/**
+ * Respostas à pergunta de papel, por jogo.
+ *
+ * **Regra que segura tudo isto de pé:** cada lista só usa o verbo que a
+ * pergunta citou — `esconder` no esconde-esconde, `correr`/`fugir` no
+ * pega-pega — mais os pronomes soltos. Aceitar o outro verbo inverteria o
+ * sentido: `voce pega` respondendo "quem corre?" pareceria dizer "o bot corre",
+ * quando na verdade quer dizer o contrário. Essas frases já são comando com
+ * papel explícito e são resolvidas pelo parser normal, com o papel certo.
+ * Ver: bot_games_delta.md → "Papel ausente é pergunta, não padrão".
+ */
+const ROLE_ANSWERS: Record<GameName, Record<RoleChoice, RegExp[]>> = {
+  esconde_esconde: {
+    jogador: [
+      /^eu$/,
+      /^sou eu$/,
+      /^eu quero$/,
+      /^eu me escondo$/,
+      /^eu escondo$/,
+      /^eu que me escondo$/,
+      /^eu vou me esconder$/,
+    ],
+    bot: [
+      /^voce$/,
+      /^tu$/,
+      /^e voce$/,
+      /^voce se esconde$/,
+      /^voce esconde$/,
+      /^voce que se esconde$/,
+      /^voce vai se esconder$/,
+    ],
+  },
+  pega_pega: {
+    jogador: [
+      /^eu$/,
+      /^sou eu$/,
+      /^eu quero$/,
+      /^eu corro$/,
+      /^eu fujo$/,
+      /^eu que corro$/,
+      /^eu vou correr$/,
+    ],
+    bot: [
+      /^voce$/,
+      /^tu$/,
+      /^e voce$/,
+      /^voce corre$/,
+      /^voce foge$/,
+      /^voce que corre$/,
+      /^voce vai correr$/,
+    ],
+  },
+}
+
+/**
+ * Lê a resposta da pergunta de papel e devolve o papel DO BOT, ou `null` quando
+ * a mensagem não responde nada.
+ *
+ * Recebe o jogo porque a mesma palavra vale ao contrário nos dois: `eu` no
+ * esconde-esconde é `bot_procura`, e no pega-pega é `bot_pega`.
+ *
+ * Só faz sentido com uma pergunta pendente — fora dela, `eu` é conversa. Quem
+ * chama verifica isso antes, igual ao `isGiveUp`.
+ */
+export function parseRoleAnswer(text: string, botName: string, game: GameName): GameRole | null {
+  const normalized = prepare(text, botName)
+  if (!normalized) return null
+
+  const stripped = stripFillers(normalized)
+  const candidates = stripped && stripped !== normalized ? [normalized, stripped] : [normalized]
+
+  for (const choice of ['jogador', 'bot'] as const) {
+    const patterns = ROLE_ANSWERS[game][choice]
+    if (candidates.some((c) => patterns.some((p) => p.test(c)))) {
+      return botRoleForChoice(game, choice)
+    }
+  }
+  return null
 }
 
 export interface ParsedCommand {

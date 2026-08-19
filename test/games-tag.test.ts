@@ -493,11 +493,11 @@ describe('registro: pega-pega', () => {
 
   it('reconhece o pega-pega', () => {
     expect(resolveGame('pega_pega')).toBe('pega_pega')
-    expect(createSession({ game: 'pega_pega' }, deps)).not.toBeNull()
+    expect(createSession({ game: 'pega_pega', role: 'bot_pega' }, deps)).not.toBeNull()
   })
 
-  it('o papel padrão é o bot pegar', () => {
-    expect(resolveRole('pega_pega')).toBe('bot_pega')
+  it('não existe papel padrão: os dois papéis do jogo são aceitos como pedidos', () => {
+    expect(resolveRole('pega_pega', 'bot_pega')).toBe('bot_pega')
     expect(resolveRole('pega_pega', 'bot_foge')).toBe('bot_foge')
   })
 
@@ -509,6 +509,6 @@ describe('registro: pega-pega', () => {
   })
 
   it('a sessão criada nasce com fase de fim até rodar', () => {
-    expect(createSession({ game: 'pega_pega' }, deps)?.currentPhase).toBe('fim')
+    expect(createSession({ game: 'pega_pega', role: 'bot_pega' }, deps)?.currentPhase).toBe('fim')
   })
 })

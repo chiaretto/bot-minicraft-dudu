@@ -210,10 +210,12 @@ llm:
 | `dudu, pode brigar`                  | religa a defesa                    |
 | `dudu, olha pra mim`                 | vira para você                     |
 | `dudu, vamos brincar`                | pergunta qual das duas brincadeiras |
-| `dudu, esconde esconde` / `se esconde` | brinca de esconde-esconde (ele esconde) |
-| `dudu, eu vou me esconder` / `conta até 10` | brinca de esconde-esconde (ele procura) |
-| `dudu, pega pega` / `me pega`        | brinca de pega-pega (ele corre atrás) |
-| `dudu, eu vou te pegar` / `você corre` | brinca de pega-pega (ele foge)     |
+| `dudu, esconde esconde`              | pergunta quem se esconde           |
+| `dudu, pega pega`                    | pergunta quem corre                |
+| `dudu, se esconde`                   | esconde-esconde: ele se esconde    |
+| `dudu, eu vou me esconder` / `conta até 10` | esconde-esconde: ele procura |
+| `dudu, me pega` / `corre atrás de mim` | pega-pega: ele corre atrás       |
+| `dudu, eu vou te pegar` / `você corre` | pega-pega: ele foge              |
 
 O vocativo é opcional: `oi dudu`, `dudu, oi` e `oi` funcionam igual.
 
@@ -238,15 +240,38 @@ sem precisar de IA nenhuma ligada.
 
 Fale `dudu, vamos brincar` sem dizer qual e ele **pergunta** qual você quer — com
 duas brincadeiras, escolher por você seria decidir no seu lugar. Responder
-`esconde esconde` ou `pega pega` já começa a rodada.
+`esconde esconde` ou `pega pega` leva à pergunta de papel, logo abaixo.
 
 ---
+
+## Quem faz o quê: ele pergunta
+
+As duas brincadeiras têm dois papéis. Convite que **não diz** quem faz o quê
+não escolhe por você — ele pergunta antes de começar:
+
+```
+Você: dudu, pega pega
+Dudu: Quem corre: eu ou você?
+Você: eu
+Dudu: Então eu pego! Vou contar até 5...
+```
+
+| Você responde | Esconde-esconde | Pega-pega |
+| --- | --- | --- |
+| `eu` | você se esconde, ele procura | você corre, ele pega |
+| `você` | ele se esconde, você procura | ele corre, você pega |
+
+Frase que **já diz** o papel começa direto, sem pergunta: `me pega`,
+`eu vou me esconder`, `se esconde`, `você corre`.
+
+A pergunta espera 45 segundos (`games.roleQuestionTimeoutMs`). Passado o prazo,
+um `eu` solto volta a ser conversa normal.
 
 ## Esconde-esconde
 
 ### Quando ele se esconde
 
-Fale `dudu, esconde esconde` (ou `se esconde`). Ele pede que você feche o olho e
+Fale `dudu, se esconde` — ou `esconde esconde` e responda `você`. Ele pede que você feche o olho e
 conte até 10, e então **anda procurando um esconderijo de verdade** por até 20
 segundos: um ponto que você não esteja enxergando **e** que tenha alguma coisa
 sólida em volta — uma parede, uma árvore, um barranco. Só quando chega lá é que
@@ -264,7 +289,7 @@ planície), aumente `hideSearchMs` ou brinque perto de construções e árvores.
 
 ### Quando ele procura
 
-Fale `dudu, eu vou me esconder` (ou `conta até 10`). Ele **conta de 1 a 20** no
+Fale `dudu, eu vou me esconder` — ou `esconde esconde` e responda `eu`. Ele **conta de 1 a 20** no
 chat, um número por segundo — a contagem leva 20 segundos, o mesmo tempo que ele
 leva procurando esconderijo, para você ter a mesma folga que ele. Depois sai
 procurando, e **vai errar duas vezes de propósito** antes de procurar de verdade.
@@ -295,7 +320,7 @@ Também chamado de pique-pega ou pira-pega — todas as variantes do nome funcio
 
 ### Quando ele pega
 
-Fale `dudu, pega pega` (ou `me pega`, `corre atrás de mim`). Ele **conta até 5**
+Fale `dudu, me pega` — ou `pega pega` e responda `eu`. Ele **conta até 5**
 no chat, parado, e só então sai correndo atrás de você — a contagem é sua
 vantagem de saída. Se encostar em você (2 blocos), ganhou.
 
@@ -305,7 +330,7 @@ mover.
 
 ### Quando ele foge
 
-Fale `dudu, eu vou te pegar` (ou `você corre`). Ele sai correndo **na hora**, sem
+Fale `dudu, eu vou te pegar` — ou `pega pega` e responda `você`. Ele sai correndo **na hora**, sem
 contar — quem conta é quem pega. Encoste nele e ele admite que foi pego.
 
 Depois de **60 segundos fugindo sem ser pego**, ele para de propósito, avisa que

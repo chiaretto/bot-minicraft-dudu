@@ -13,11 +13,12 @@ import { classifyThreats, planDefense, canStrike } from '../behaviors/defense/th
 import {
   createSession,
   GameAborted,
+  resolveGame,
   type GameSession,
   type GameWorld,
 } from '../behaviors/games/index.js'
-import type { GameRole } from '../domain/games.js'
-import { isGiveUp } from '../behaviors/commands.js'
+import type { GameName, GameRole } from '../domain/games.js'
+import { isGiveUp, parseRoleAnswer } from '../behaviors/commands.js'
 import {
   blockSourceFrom,
   coverAround,
@@ -50,6 +51,12 @@ const GAME_GOAL_RANGE = 1
 /** Teto por caminhada dentro de uma rodada, para a busca não passar do tempo. */
 const GAME_WALK_TIMEOUT_MS = 8_000
 
+/** Entrada do repertório que faz a pergunta de papel de cada jogo. */
+const ROLE_QUESTION_ENTRY: Record<GameName, string> = {
+  esconde_esconde: 'jogo_quem_esconde',
+  pega_pega: 'jogo_quem_corre',
+}
+
 /**
  * Composition root: monta as dependências e liga os laços.
  *
@@ -73,6 +80,16 @@ export class CompanionBot {
   private game: GameSession | null = null
   /** Dimensão em que a rodada começou: trocar de dimensão encerra o jogo. */
   private gameDimension: string | null = null
+  /**
+   * Pergunta de papel esperando resposta.
+   *
+   * NÃO é estado da máquina de estados: enquanto espera, o bot segue em `IDLE`
+   * (ou no que estava), livre para seguir, parar, conversar e se defender. Um
+   * estado só para segurar uma pergunta daria prioridade a algo que não faz
+   * nada. Guarda o jogo porque `eu` significa papéis opostos nos dois.
+   * Ver: bot_games_delta.md → "Escolha de papel pendente".
+   */
+  private pendingRole: { game: GameName; expiresAt: number; reasked: boolean } | null = null
 
   constructor(
     private readonly config: Config,
@@ -293,9 +310,23 @@ export class CompanionBot {
       return
     }
 
+    // Resposta da pergunta de papel. Vem antes da cascata pelo mesmo motivo do
+    // `isGiveUp`: `eu` só significa "eu me escondo" enquanto a pergunta está de
+    // pé. Sem pendência viva, desce como conversa normal.
+    const answered = this.takeRoleAnswer(message)
+    if (answered) {
+      await this.startGame(answered.game, answered.role)
+      return
+    }
+
     const snapshot = this.snapshot()
     const result = await this.router.route(message, snapshot)
     this.logLlm(message, result)
+
+    // Comando reconhecido descarta a pergunta: quem manda `me segue` mudou de
+    // ideia sobre brincar, e uma pendência sobrevivente faria um `eu` solto lá
+    // na frente iniciar uma rodada que ninguém pediu.
+    if (result.intent) this.pendingRole = null
 
     if (result.reply) {
       this.say(
@@ -304,6 +335,9 @@ export class CompanionBot {
         result.entryId,
         result.provider,
       )
+      // Depois de responder, não antes: a criança falou de outra coisa, o bot
+      // atende e só então lembra que tinha perguntado.
+      this.reaskRoleOnce()
       return
     }
 
@@ -314,7 +348,62 @@ export class CompanionBot {
 
     // Nem comando nem conversa: tenta interpretar como pedido de ação.
     const intent = await this.router.interpret(message, snapshot)
-    if (intent) await this.execute(intent)
+    if (intent) {
+      this.pendingRole = null
+      await this.execute(intent)
+      return
+    }
+    this.reaskRoleOnce()
+  }
+
+  // ────────────────────── PERGUNTA DE PAPEL ────────────────────────────
+
+  /**
+   * Lê a mensagem como resposta da pergunta de papel e consome a pendência.
+   *
+   * Devolve `null` quando não há pergunta de pé, quando o prazo estourou, ou
+   * quando a mensagem não responde nada — nesses casos ela segue na cascata
+   * como qualquer outra.
+   */
+  private takeRoleAnswer(message: string): { game: GameName; role: GameRole } | null {
+    const pending = this.pendingRole
+    if (pending === null) return null
+
+    if (Date.now() >= pending.expiresAt) {
+      // Expira em silêncio: a criança saiu de perto, e o bot falando sozinho
+      // no chat minutos depois não ajudaria ninguém.
+      this.pendingRole = null
+      return null
+    }
+
+    const role = parseRoleAnswer(message, this.config.persona.name, pending.game)
+    if (role === null) return null
+
+    this.pendingRole = null
+    return { game: pending.game, role }
+  }
+
+  /** Lembra a pergunta uma única vez. Insistir vira cobrança, não convite. */
+  private reaskRoleOnce(): void {
+    const pending = this.pendingRole
+    if (pending === null || pending.reasked) return
+    if (Date.now() >= pending.expiresAt) {
+      this.pendingRole = null
+      return
+    }
+
+    pending.reasked = true
+    this.sayGame(ROLE_QUESTION_ENTRY[pending.game])
+  }
+
+  /** Pergunta quem faz o quê e passa a esperar a resposta. */
+  private askRole(game: GameName): void {
+    this.pendingRole = {
+      game,
+      expiresAt: Date.now() + this.config.games.roleQuestionTimeoutMs,
+      reasked: false,
+    }
+    this.sayGame(ROLE_QUESTION_ENTRY[game])
   }
 
   // ──────────────────────────── INTENÇÕES ──────────────────────────────
@@ -442,12 +531,28 @@ export class CompanionBot {
       return
     }
 
+    const known = resolveGame(game)
+    if (known === null) {
+      this.sayGame('jogo_desconhecido')
+      return
+    }
+
+    // Convite que não diz quem faz o quê não escolhe pela criança: pergunta.
+    // Nada de sessão nem de estado `GAME` enquanto não houver resposta.
+    // Ver: bot_games_delta.md → "Papel ausente é pergunta, não padrão".
+    if (!role) {
+      this.askRole(known)
+      return
+    }
+
+    this.pendingRole = null
+
     // O estado precisa existir antes da sessão: é dele que sai o `AbortSignal`
     // que `dudu, para` e a defesa usam para cancelar a rodada de verdade.
     this.state.command('GAME', { actionLabel: game })
 
     const session = createSession(
-      { game, ...(role ? { role } : {}) },
+      { game, role },
       {
         world: this.gameWorld(),
         hideAndSeek: this.config.games.hideAndSeek,

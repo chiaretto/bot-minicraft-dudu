@@ -206,6 +206,11 @@ export const tagSchema = z
 
 export const gamesSchema = z.object({
   enabled: z.boolean().default(true),
+  /**
+   * Quanto tempo a pergunta "quem se esconde?" fica valendo. Passado o prazo,
+   * um `eu` solto volta a ser conversa em vez de iniciar rodada.
+   */
+  roleQuestionTimeoutMs: z.number().int().positive().default(45_000),
   hideAndSeek: hideAndSeekSchema.default({}),
   tag: tagSchema.default({}),
 })

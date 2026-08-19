@@ -66,6 +66,10 @@ defense:
 # Brincadeiras com regra, começo e fim. Hoje: esconde-esconde.
 games:
   enabled: true
+  # Convite que não diz quem faz o quê ("pega pega") vira pergunta: "quem corre:
+  # eu ou você?". Este é o tempo que a pergunta fica esperando resposta. Passado
+  # ele, um "eu" solto volta a ser conversa normal.
+  roleQuestionTimeoutMs: 45000
   hideAndSeek:
     # Quão longe o bot vai se esconder. Aumente as duas se a criança estiver
     # achando fácil demais; diminua se ela cansar de procurar.

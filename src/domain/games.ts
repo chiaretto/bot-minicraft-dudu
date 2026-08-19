@@ -20,15 +20,29 @@ export const ROLES_BY_GAME: Record<GameName, readonly GameRole[]> = {
 }
 
 /**
- * Papel padrão de cada jogo, quando o convite não diz quem faz o quê.
+ * Quem vai fazer a parte que a pergunta citou: o jogador ou o bot.
  *
- * No esconde-esconde, "vamos brincar" de uma criança de 7 anos quer dizer
- * "some daí que eu te acho". No pega-pega quer dizer "corre atrás de mim" — nos
- * dois casos ela quer a parte ativa para si, e o bot fica com a outra ponta.
+ * A pergunta é sempre sobre UMA ação — "quem se esconde?", "quem corre?" — e a
+ * resposta diz só de quem ela é. Quem fica com a outra ponta é consequência.
  */
-export const DEFAULT_ROLE_BY_GAME: Record<GameName, GameRole> = {
-  esconde_esconde: 'bot_esconde',
-  pega_pega: 'bot_pega',
+export type RoleChoice = 'jogador' | 'bot'
+
+/**
+ * Resposta da criança → papel DO BOT, por jogo.
+ *
+ * A mesma palavra vale ao contrário nos dois jogos, e é fácil inverter isso sem
+ * perceber: `eu` no esconde-esconde é "eu me escondo" (o bot procura); no
+ * pega-pega é "eu corro" (o bot pega). Por isso a escolha pendente guarda o
+ * jogo, e nada aqui é decidido sem ele.
+ * Ver: bot_games_delta.md → "Papel ausente é pergunta, não padrão".
+ */
+export const BOT_ROLE_BY_CHOICE: Record<GameName, Record<RoleChoice, GameRole>> = {
+  esconde_esconde: { jogador: 'bot_procura', bot: 'bot_esconde' },
+  pega_pega: { jogador: 'bot_pega', bot: 'bot_foge' },
+}
+
+export function botRoleForChoice(game: GameName, choice: RoleChoice): GameRole {
+  return BOT_ROLE_BY_CHOICE[game][choice]
 }
 
 export function isGameName(value: string): value is GameName {

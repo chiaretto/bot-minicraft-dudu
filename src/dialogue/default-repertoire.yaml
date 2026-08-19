@@ -464,6 +464,28 @@ entries:
       - 'Vamos sim! Fala qual: esconde-esconde ou pega-pega?'
       - 'Aêê! Prefere esconde-esconde ou pega-pega hoje?'
 
+  # Pergunta de papel: convite que não diz quem faz o quê não escolhe pela
+  # criança. Antes, quem digitava o nome do jogo levava sempre o mesmo papel,
+  # sem saber que existia outro. Toda variação precisa nomear AS DUAS opções.
+  # Ver 2026-08-19.
+  - id: jogo_quem_esconde
+    trigger: fallback
+    responses:
+      - 'Quem se esconde: eu ou você?'
+      - 'Boa! E quem vai se esconder, eu ou você?'
+      - 'Fala pra mim: você se esconde ou eu me escondo?'
+      - 'Oba! Quem some primeiro, eu ou você?'
+      - 'Vamos sim! Quem se esconde dessa vez: eu ou você?'
+
+  - id: jogo_quem_corre
+    trigger: fallback
+    responses:
+      - 'Quem corre: eu ou você?'
+      - 'Boa! E quem vai correr, eu ou você?'
+      - 'Fala pra mim: você corre ou eu corro?'
+      - 'Aêê! Quem sai correndo, eu ou você?'
+      - 'Bora! Quem corre dessa vez: eu ou você?'
+
   # Jogos desligados na configuração (`games.enabled: false`).
   # Entrada separada de `jogo_desconhecido` de propósito: aquela OFERECE o
   # esconde-esconde, e oferecer o que está desligado é prometer o que o bot não
