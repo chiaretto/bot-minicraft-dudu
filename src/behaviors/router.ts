@@ -11,6 +11,11 @@ export interface RouteResult {
   reply: string | null
   /** Intenção a executar, quando a mensagem era um comando. */
   intent: Intent | null
+  /**
+   * Ação proposta pela IA junto com a fala, já validada.
+   * Ver: ai_companion_delta.md → "Resposta da IA carrega a ação".
+   */
+  action: Intent | null
   source: TurnSource
   entryId?: string
   provider?: string
@@ -65,13 +70,19 @@ export class MessageRouter {
     // ── Nível 1: comando determinístico ──────────────────────────────────
     const command = parseCommand(text, this.deps.persona.name)
     if (command) {
-      return { reply: null, intent: command.intent, source: 'command' }
+      return { reply: null, intent: command.intent, action: null, source: 'command' }
     }
 
     // ── Nível 2: repertório local ────────────────────────────────────────
     const local = this.deps.repertoire.respond(text, snapshot)
     if (local) {
-      return { reply: local.text, intent: null, source: 'repertoire', entryId: local.entryId }
+      return {
+        reply: local.text,
+        intent: null,
+        action: null,
+        source: 'repertoire',
+        entryId: local.entryId,
+      }
     }
 
     // ── Nível 3: IA ──────────────────────────────────────────────────────
@@ -92,8 +103,9 @@ export class MessageRouter {
       const result = await this.deps.ai.converse(ctx)
       if (result === null) return this.fallbackReply(snapshot)
       return {
-        reply: result.value,
+        reply: result.value.reply,
         intent: null,
+        action: result.value.action,
         source: 'llm',
         provider: result.provider,
         latencyMs: result.latencyMs,
@@ -103,22 +115,13 @@ export class MessageRouter {
     }
   }
 
-  /**
-   * Interpretação de pedido livre. Separada de `route` porque só faz sentido
-   * quando a mensagem parece pedido de ação, e custa uma chamada a mais.
-   */
-  async interpret(text: string, snapshot: WorldSnapshot | null): Promise<Intent | null> {
-    if (!this.deps.ai.enabled) return null
-    const result = await this.deps.ai.interpret(text, this.context(text, snapshot))
-    return result.value.type === 'UNKNOWN' ? null : result.value
-  }
-
   /** Última linha de defesa: nem comando, nem repertório, nem IA resolveram. */
   private fallbackReply(snapshot: WorldSnapshot | null): RouteResult {
     const entry = this.deps.repertoire.say('nao_entendi', snapshot)
     return {
       reply: entry?.text ?? null,
       intent: null,
+      action: null,
       source: 'repertoire',
       ...(entry ? { entryId: entry.entryId } : {}),
     }

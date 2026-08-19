@@ -1,5 +1,4 @@
-import type { Intent } from '../domain/intent.js'
-import { UNKNOWN_INTENT } from '../domain/intent.js'
+import type { ReplyWithAction } from '../domain/intent.js'
 import type { ConversationContext, LlmProvider, ProviderName } from './provider.js'
 
 export class CircuitOpenError extends Error {
@@ -133,19 +132,8 @@ export class ResilientProvider implements LlmProvider {
     }
   }
 
-  async converse(ctx: ConversationContext): Promise<string> {
+  async converse(ctx: ConversationContext): Promise<ReplyWithAction> {
     return this.guard((signal) => this.inner.converse(ctx, signal))
-  }
-
-  async interpret(text: string, ctx: ConversationContext): Promise<Intent> {
-    try {
-      return await this.guard((signal) => this.inner.interpret(text, ctx, signal))
-    } catch (err) {
-      // Interpretação nunca propaga erro: sem intenção válida, é UNKNOWN.
-      if (err instanceof BusyError || err instanceof RateLimitError) throw err
-      if (err instanceof CircuitOpenError) throw err
-      return UNKNOWN_INTENT
-    }
   }
 
   async warmUp(): Promise<void> {

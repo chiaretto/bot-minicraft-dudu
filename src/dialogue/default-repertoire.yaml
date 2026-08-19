@@ -71,7 +71,10 @@ entries:
        'voce consegue fazer o que', 'quais sao seus poderes', 'o que voce pode fazer', 'ajuda',
        'voce sabe andar', 'voce anda', 'voce consegue andar', 'voce sabe me seguir',
        'voce se move', 'voce sabe brincar', 'voce sabe jogar', 'que brincadeira voce sabe',
-       'voce brinca de que', 'quais jogos voce sabe']
+       'voce brinca de que', 'quais jogos voce sabe',
+       'voce sabe construir', 'voce constroi', 'voce sabe fazer casa', 'voce pega bloco',
+       'voce sabe subir', 'voce sai de buraco', 'e se voce cair',
+       'voce abre porta', 'voce sabe abrir porta']
     responses:
       - 'Eu sei te seguir, ficar de guarda, te defender dos monstros e brincar de esconde-esconde e pega-pega!'
       - "Posso ir com você (fala 'vem'), ficar parado ('fica aqui') e parar tudo ('para')."
@@ -81,6 +84,14 @@ entries:
       # 2026-08-16: o pega-pega entrou aqui junto com o esconde-esconde.
       - "Sei brincar de esconde-esconde e de pega-pega! Fala 'esconde esconde' ou 'pega pega'."
       - "No pega-pega eu conto até 5 e corro atrás de você! Fala 'me pega' que eu já vou."
+      # 2026-08-19: pegar bloco e construir entraram aqui.
+      - "Sei pegar bloco pra você! Fala 'pega madeira' ou 'pega pedra'."
+      - "Sei construir! Fala 'faz uma casa' ou 'faz uma torre' que eu levanto."
+      - 'Pego madeira e terra, faço casinha e torre, te sigo e te defendo!'
+      # 2026-08-19: sair de buraco entrou aqui.
+      - 'Se eu cair num buraco eu faço escadinha e subo! Não me perco de você.'
+      # 2026-08-19: abrir porta entrou aqui.
+      - "Sei abrir porta e portão! Fala 'abre a porta' que eu abro."
 
   # ────────────────────── 6. ESTADO / COMO ESTÁ ──────────────────────
   - id: estado_bot
@@ -232,12 +243,14 @@ entries:
   # ────────────────── 19. RECUSA / FORA DE ESCOPO ────────────────────
   - id: recusa_escopo
     specificity: 4
-    patterns: ['constroi uma casa', 'faz uma casa', 'mata aquele jogador', 'faz uma pocao', 'crafta', 'fabrica', 'minera tudo']
+    # 2026-08-19: 'constroi uma casa' e 'faz uma casa' SAÍRAM daqui — o bot
+    # aprendeu a construir, e viraram comando em commands.ts.
+    patterns: ['mata aquele jogador', 'faz uma pocao', 'crafta', 'fabrica', 'minera tudo', 'constroi um castelo', 'faz um castelo']
     responses:
-      - 'Ahh, isso eu ainda não sei fazer. Mas sei te seguir e te defender!'
+      - 'Ahh, isso eu ainda não sei fazer. Mas sei fazer casinha e torre!'
       - 'Essa eu não consigo não. Quer que eu pegue algum bloco pra você?'
       - 'Ainda não aprendi isso! Seu pai talvez me ensine depois.'
-      - 'Não sei fazer isso ainda. Mas peça pra eu te seguir ou ficar de guarda!'
+      - 'Não sei fazer isso ainda. Fala "faz uma casa" que essa eu sei!'
       - { when: { targetIsPlayer: true }, text: 'Eu nunca vou atacar outro jogador, {owner}. Isso eu não faço.' }
 
   # ────────────────────── 20. NÃO ENTENDI ────────────────────────────
@@ -464,6 +477,28 @@ entries:
       - 'Vamos sim! Fala qual: esconde-esconde ou pega-pega?'
       - 'Aêê! Prefere esconde-esconde ou pega-pega hoje?'
 
+  # Pergunta de papel: convite que não diz quem faz o quê não escolhe pela
+  # criança. Antes, quem digitava o nome do jogo levava sempre o mesmo papel,
+  # sem saber que existia outro. Toda variação precisa nomear AS DUAS opções.
+  # Ver 2026-08-19.
+  - id: jogo_quem_esconde
+    trigger: fallback
+    responses:
+      - 'Quem se esconde: eu ou você?'
+      - 'Boa! E quem vai se esconder, eu ou você?'
+      - 'Fala pra mim: você se esconde ou eu me escondo?'
+      - 'Oba! Quem some primeiro, eu ou você?'
+      - 'Vamos sim! Quem se esconde dessa vez: eu ou você?'
+
+  - id: jogo_quem_corre
+    trigger: fallback
+    responses:
+      - 'Quem corre: eu ou você?'
+      - 'Boa! E quem vai correr, eu ou você?'
+      - 'Fala pra mim: você corre ou eu corro?'
+      - 'Aêê! Quem sai correndo, eu ou você?'
+      - 'Bora! Quem corre dessa vez: eu ou você?'
+
   # Jogos desligados na configuração (`games.enabled: false`).
   # Entrada separada de `jogo_desconhecido` de propósito: aquela OFERECE o
   # esconde-esconde, e oferecer o que está desligado é prometer o que o bot não
@@ -612,15 +647,17 @@ entries:
   # quem transforme "pega madeira" em ação — só comando de regex funciona.
   - id: pedido_coleta
     specificity: 4
+    # 2026-08-19: 'pega madeira' e 'pega pedra' SAÍRAM daqui — viraram comando
+    # de verdade. Ficou só o que ele realmente não traz: minério.
     patterns:
       ['pega pra mim', 'pegue pra mim', 'pega um', 'pegue um', 'pega o bloco', 'pegue o bloco',
-       'me da um', 'me arruma', 'pega diamante', 'pegue diamante', 'pega madeira',
-       'pega pedra', 'pega ferro', 'pega ouro', 'busca pra mim']
+       'me da um', 'me arruma', 'pega diamante', 'pegue diamante',
+       'pega ferro', 'pega ouro', 'pega esmeralda', 'busca pra mim']
     responses:
-      - 'Buscar coisa eu ainda não aprendi, {owner}. Mas sei te seguir e te proteger!'
-      - 'Essa eu não consigo ainda. Se você for lá, eu vou junto te dar cobertura!'
-      - 'Pegar item eu ainda não sei. Fala "me segue" que a gente vai pegar juntos!'
-      - 'Ainda não! Seu pai ainda tá me ensinando isso. Quer que eu vá com você?'
+      - 'Essa eu não acho, {owner}. Mas sei pegar madeira, terra e areia na mão!'
+      - 'Minério eu não sei achar ainda. Fala "pega madeira" que eu vou correndo!'
+      - 'Essa eu não consigo. Se você for lá, eu vou junto te dar cobertura!'
+      - 'Pra pedra eu preciso de picareta. Madeira e terra eu pego na mão!'
       - 'Não sei pegar não, desculpa. Mas eu te acompanho até lá!'
 
   # ────────────── 30. O QUE O DONO ESTÁ SEGURANDO ────────────────────

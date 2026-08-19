@@ -99,6 +99,8 @@ describe('parser de comandos', () => {
       expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.game, text).toBe(
         'esconde_esconde',
       )
+      // O nome do jogo não diz quem faz o quê: sem papel, o bot pergunta.
+      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.role, text).toBeUndefined()
     }
   })
 
@@ -125,10 +127,8 @@ describe('parser de comandos', () => {
       expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.game, text).toBe(
         'pega_pega',
       )
-      // Sem dizer quem faz o quê, quem corre atrás é o bot.
-      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.role, text).toBe(
-        'bot_pega',
-      )
+      // O nome do jogo não diz quem faz o quê: sem papel, o bot pergunta.
+      expect(parsed?.intent.type === 'PLAY_GAME' && parsed.intent.params.role, text).toBeUndefined()
     }
   })
 

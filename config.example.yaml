@@ -66,6 +66,10 @@ defense:
 # Brincadeiras com regra, começo e fim. Hoje: esconde-esconde.
 games:
   enabled: true
+  # Convite que não diz quem faz o quê ("pega pega") vira pergunta: "quem corre:
+  # eu ou você?". Este é o tempo que a pergunta fica esperando resposta. Passado
+  # ele, um "eu" solto volta a ser conversa normal.
+  roleQuestionTimeoutMs: 45000
   hideAndSeek:
     # Quão longe o bot vai se esconder. Aumente as duas se a criança estiver
     # achando fácil demais; diminua se ela cansar de procurar.
@@ -192,5 +196,32 @@ behavior:
     - 'sand'
     - 'cobblestone'
     - 'stone'
+  # Blocos que ele pode USAR para construir. Separada da lista de cima: o que
+  # ele pode cavar não é necessariamente o que faz uma casa decente.
+  buildAllowlist:
+    - 'oak_log'
+    - 'birch_log'
+    - 'spruce_log'
+    - 'cobblestone'
+    - 'stone'
+    - 'dirt'
+    - 'sand'
+  # Teto de segurança: obra maior que isto é recusada antes de começar.
+  # A casa tem ~52 blocos e a torre ~39.
+  buildMaxBlocks: 120
+  # Quando faltar material, ir buscar sozinho em vez de só recusar.
+  buildAutoGather: true
+  # Até onde ele procura porta quando você pede, ou quando trava no caminho.
+  doorSearchRadius: 6
+  # Sair de buraco: se ele cair numa caverna ou ravina e você chamar, ele faz
+  # uma escadinha de blocos para subir em vez de ficar parado lá embaixo.
+  # Desnível a partir do qual vale a pena empilhar (abaixo disso o pulo resolve).
+  escapeMinDrop: 3
+  # Teto de degraus por tentativa. Evita torre até o céu se você estiver voando.
+  escapeMaxHeight: 24
+  # Teto de blocos cavados para arranjar degrau quando a mochila está vazia.
+  escapeMaxDigs: 12
+  # Quanto tempo parado seguindo você antes de suspeitar que está preso.
+  escapeStuckMs: 6000
 
 logLevel: 'info'

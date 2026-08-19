@@ -107,7 +107,7 @@ describe('cascata: nível 3 (IA) só recebe o que sobrou', () => {
   it('pergunta aberta desce para a IA', async () => {
     const { router, ai } = build()
     vi.spyOn(ai, 'converse').mockResolvedValue({
-      value: 'Acho que sim! O universo é grandão.',
+      value: { reply: 'Acho que sim! O universo é grandão.', action: null },
       provider: 'ollama',
       latencyMs: 900,
     })
@@ -161,7 +161,15 @@ describe('fala de espera', () => {
     vi.spyOn(ai, 'converse').mockImplementation(
       () =>
         new Promise((resolve) =>
-          setTimeout(() => resolve({ value: 'demorei', provider: 'ollama', latencyMs: 100 }), 80),
+          setTimeout(
+            () =>
+              resolve({
+                value: { reply: 'demorei', action: null },
+                provider: 'ollama',
+                latencyMs: 100,
+              }),
+            80,
+          ),
         ),
     )
 
@@ -175,7 +183,7 @@ describe('fala de espera', () => {
   it('não dispara quando a IA responde rápido', async () => {
     const { router, ai, fillers } = build()
     vi.spyOn(ai, 'converse').mockResolvedValue({
-      value: 'rapidinho',
+      value: { reply: 'rapidinho', action: null },
       provider: 'ollama',
       latencyMs: 5,
     })
@@ -191,32 +199,58 @@ describe('fala de espera', () => {
   })
 })
 
-describe('interpretação de pedido livre', () => {
-  it('devolve a intenção validada', async () => {
+describe('ação junto com a fala', () => {
+  it('a IA propõe ação e ela chega no resultado, junto da fala', async () => {
     const { router, ai } = build()
-    vi.spyOn(ai, 'interpret').mockResolvedValue({
-      value: { type: 'COLLECT_BLOCK', params: { block: 'oak_log', count: 4 } },
+    vi.spyOn(ai, 'converse').mockResolvedValue({
+      value: {
+        reply: 'Já vou pegar!',
+        action: { type: 'COLLECT_BLOCK', params: { block: 'oak_log', count: 4 } },
+      },
       provider: 'ollama',
       latencyMs: 500,
     })
 
-    const intent = await router.interpret('pega umas madeiras pra mim', snapshot)
-    expect(intent?.type).toBe('COLLECT_BLOCK')
+    const result = await router.route('será que dava pra juntar umas madeirinhas?', snapshot)
+
+    expect(result.source).toBe('llm')
+    expect(result.reply).toBe('Já vou pegar!')
+    expect(result.action?.type).toBe('COLLECT_BLOCK')
   })
 
-  it('UNKNOWN vira null — nenhuma ação de mundo acontece', async () => {
+  it('conversa pura não traz ação', async () => {
     const { router, ai } = build()
-    vi.spyOn(ai, 'interpret').mockResolvedValue({
-      value: { type: 'UNKNOWN', params: {} },
+    vi.spyOn(ai, 'converse').mockResolvedValue({
+      value: { reply: 'Adoro! Brilha muito!', action: null },
       provider: 'ollama',
       latencyMs: 500,
     })
 
-    expect(await router.interpret('constrói uma casa', snapshot)).toBeNull()
+    const result = await router.route('você gosta de diamante?', snapshot)
+
+    expect(result.reply).toBe('Adoro! Brilha muito!')
+    expect(result.action).toBeNull()
   })
 
-  it('sem IA não interpreta nada', async () => {
+  it('níveis 1 e 2 nunca trazem ação de IA', async () => {
+    const { router } = build()
+    expect((await router.route('dudu, me segue', snapshot)).action).toBeNull()
+    expect((await router.route('dudu, oi', snapshot)).action).toBeNull()
+  })
+
+  it('sem IA, nada vira ação — o repertório responde sozinho', async () => {
     const { router } = build({ llmProvider: 'none' })
-    expect(await router.interpret('pega madeira', snapshot)).toBeNull()
+
+    // Pedido que o parser cobre: vira ação de verdade, sem passar pela IA.
+    const coberto = await router.route('pega madeira pra mim', snapshot)
+    expect(coberto.source).toBe('command')
+    expect(coberto.intent?.type).toBe('COLLECT_BLOCK')
+    // `action` é o campo da IA — o comando do nível 1 não usa esse caminho.
+    expect(coberto.action).toBeNull()
+
+    // Pedido que ninguém cobre: cai no `nao_entendi`, e mesmo assim sem ação.
+    const solto = await router.route('será que dava pra juntar umas madeirinhas?', snapshot)
+    expect(solto.entryId).toBe('nao_entendi')
+    expect(solto.action).toBeNull()
   })
 })

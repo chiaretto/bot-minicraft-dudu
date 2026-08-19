@@ -1,4 +1,5 @@
 import type { Intent } from '../domain/intent.js'
+import { botRoleForChoice, type GameName, type GameRole, type RoleChoice } from '../domain/games.js'
 import { prepare } from '../dialogue/normalize.js'
 
 interface CommandPattern {
@@ -91,6 +92,110 @@ const COMMANDS: CommandPattern[] = [
     intent: { type: 'LOOK_AT_OWNER', params: {} },
     patterns: [/^olha pra mim$/, /^olha aqui$/, /^me olha$/],
   },
+  // ── Abrir porta ─────────────────────────────────────────────────────────
+  // Ver: player_commands_delta.md → "Abrir porta".
+  {
+    intent: { type: 'OPEN_DOOR', params: {} },
+    patterns: [
+      /^abre a porta$/,
+      /^abra a porta$/,
+      /^abre porta$/,
+      /^abre o portao$/,
+      /^abra o portao$/,
+      /^abre o alcapao$/,
+      /^pode abrir a porta$/,
+      /^abre ai$/,
+      /^abre pra mim$/,
+      /^abre essa porta$/,
+      /^destranca a porta$/,
+    ],
+  },
+  // ── Sair de buraco ──────────────────────────────────────────────────────
+  // Vem ANTES de FOLLOW: "sobe aqui" tem cara de chamado, mas quem está no
+  // fundo de uma ravina precisa subir antes de conseguir vir.
+  // Ver: player_commands_delta.md → "Sair de buraco".
+  {
+    intent: { type: 'ESCAPE_HOLE', params: {} },
+    patterns: [
+      /^sai do buraco$/,
+      /^sai dai do buraco$/,
+      /^sobe$/,
+      /^sobe aqui$/,
+      /^sobe pra ca$/,
+      /^faz uma escada$/,
+      /^faz uma escadinha$/,
+      /^faz escada pra subir$/,
+      /^voce ta preso$/,
+      /^ta preso ai$/,
+      /^sai desse buraco$/,
+    ],
+  },
+  // ── Pegar bloco e construir ─────────────────────────────────────────────
+  // Nível 1 de propósito: pedir madeira é tão comum quanto pedir para seguir,
+  // e assim funciona com `llm.provider: 'none'` e sem esperar o modelo.
+  // O bloco vai pelo NOME DO GRUPO — a busca cobre o grupo inteiro, senão numa
+  // floresta de bétula "pega madeira" devolveria "não achei".
+  // Ver: player_commands_delta.md → "Pegar bloco de verdade".
+  {
+    intent: { type: 'COLLECT_BLOCK', params: { block: 'madeira', count: 8 } },
+    patterns: [
+      /^pega madeira$/,
+      /^pegue madeira$/,
+      /^pega umas madeiras?$/,
+      /^pega um pouco de madeira$/,
+      /^me da madeira$/,
+      /^preciso de madeira$/,
+      /^pega tronco$/,
+      /^pega pau$/,
+    ],
+  },
+  {
+    intent: { type: 'COLLECT_BLOCK', params: { block: 'pedra', count: 8 } },
+    patterns: [
+      /^pega pedra$/,
+      /^pegue pedra$/,
+      /^pega umas pedras$/,
+      /^pega um pouco de pedra$/,
+      /^me da pedra$/,
+      /^preciso de pedra$/,
+    ],
+  },
+  {
+    intent: { type: 'COLLECT_BLOCK', params: { block: 'terra', count: 8 } },
+    patterns: [/^pega terra$/, /^pegue terra$/, /^me da terra$/, /^pega umas terras$/],
+  },
+  {
+    intent: { type: 'COLLECT_BLOCK', params: { block: 'areia', count: 8 } },
+    patterns: [/^pega areia$/, /^pegue areia$/, /^me da areia$/],
+  },
+  {
+    intent: { type: 'BUILD', params: { structure: 'casa' } },
+    patterns: [
+      /^constroi uma casa$/,
+      /^constroi uma casinha$/,
+      /^constroi uma casa pra mim$/,
+      /^construa uma casa$/,
+      /^faz uma casa$/,
+      /^faz uma casinha$/,
+      /^faca uma casa$/,
+      /^me faz uma casa$/,
+      /^quero uma casa$/,
+      /^monta uma casa$/,
+      /^casinha$/,
+    ],
+  },
+  {
+    intent: { type: 'BUILD', params: { structure: 'torre' } },
+    patterns: [
+      /^constroi uma torre$/,
+      /^construa uma torre$/,
+      /^faz uma torre$/,
+      /^faca uma torre$/,
+      /^me faz uma torre$/,
+      /^quero uma torre$/,
+      /^monta uma torre$/,
+    ],
+  },
   // ── Brincadeiras ────────────────────────────────────────────────────────
   // Vêm antes do convite genérico: "eu vou me esconder" também casaria com
   // "vou me esconder" de um convite qualquer, e o papel ficaria trocado.
@@ -123,6 +228,15 @@ const COMMANDS: CommandPattern[] = [
       /^some daqui que eu te acho$/,
       /^eu vou te achar$/,
       /^eu vou te procurar$/,
+    ],
+  },
+  // Convite pelo NOME do jogo: não diz quem faz o quê, então não escolhe papel.
+  // Quem digita "esconde esconde" quer brincar, não quer necessariamente ser o
+  // que procura — antes, o padrão do código decidia por ela.
+  // Ver: bot_games_delta.md → "Papel ausente é pergunta, não padrão".
+  {
+    intent: { type: 'PLAY_GAME', params: { game: 'esconde_esconde' } },
+    patterns: [
       /^vamos brincar de esconde esconde$/,
       /^vamos brincar de esconde$/,
       /^vamos jogar esconde esconde$/,
@@ -166,8 +280,14 @@ const COMMANDS: CommandPattern[] = [
       /^vem correndo atras de mim$/,
       /^voce pega$/,
       /^voce me pega$/,
-      // Nome do jogo, com as variantes regionais que a criança pode usar.
-      // Todas são o MESMO jogo: pique-pega não é outra brincadeira.
+    ],
+  },
+  // Nome do jogo, com as variantes regionais que a criança pode usar. Todas são
+  // o MESMO jogo: pique-pega não é outra brincadeira. Nenhuma delas diz quem
+  // corre, então nenhuma escolhe papel.
+  {
+    intent: { type: 'PLAY_GAME', params: { game: 'pega_pega' } },
+    patterns: [
       /^pega pega$/,
       /^pique pega$/,
       /^pira pega$/,
@@ -244,6 +364,86 @@ export function isGiveUp(text: string, botName: string): boolean {
   return stripped !== normalized && stripped.length > 0
     ? GIVE_UP_PATTERNS.some((p) => p.test(stripped))
     : false
+}
+
+/**
+ * Respostas à pergunta de papel, por jogo.
+ *
+ * **Regra que segura tudo isto de pé:** cada lista só usa o verbo que a
+ * pergunta citou — `esconder` no esconde-esconde, `correr`/`fugir` no
+ * pega-pega — mais os pronomes soltos. Aceitar o outro verbo inverteria o
+ * sentido: `voce pega` respondendo "quem corre?" pareceria dizer "o bot corre",
+ * quando na verdade quer dizer o contrário. Essas frases já são comando com
+ * papel explícito e são resolvidas pelo parser normal, com o papel certo.
+ * Ver: bot_games_delta.md → "Papel ausente é pergunta, não padrão".
+ */
+const ROLE_ANSWERS: Record<GameName, Record<RoleChoice, RegExp[]>> = {
+  esconde_esconde: {
+    jogador: [
+      /^eu$/,
+      /^sou eu$/,
+      /^eu quero$/,
+      /^eu me escondo$/,
+      /^eu escondo$/,
+      /^eu que me escondo$/,
+      /^eu vou me esconder$/,
+    ],
+    bot: [
+      /^voce$/,
+      /^tu$/,
+      /^e voce$/,
+      /^voce se esconde$/,
+      /^voce esconde$/,
+      /^voce que se esconde$/,
+      /^voce vai se esconder$/,
+    ],
+  },
+  pega_pega: {
+    jogador: [
+      /^eu$/,
+      /^sou eu$/,
+      /^eu quero$/,
+      /^eu corro$/,
+      /^eu fujo$/,
+      /^eu que corro$/,
+      /^eu vou correr$/,
+    ],
+    bot: [
+      /^voce$/,
+      /^tu$/,
+      /^e voce$/,
+      /^voce corre$/,
+      /^voce foge$/,
+      /^voce que corre$/,
+      /^voce vai correr$/,
+    ],
+  },
+}
+
+/**
+ * Lê a resposta da pergunta de papel e devolve o papel DO BOT, ou `null` quando
+ * a mensagem não responde nada.
+ *
+ * Recebe o jogo porque a mesma palavra vale ao contrário nos dois: `eu` no
+ * esconde-esconde é `bot_procura`, e no pega-pega é `bot_pega`.
+ *
+ * Só faz sentido com uma pergunta pendente — fora dela, `eu` é conversa. Quem
+ * chama verifica isso antes, igual ao `isGiveUp`.
+ */
+export function parseRoleAnswer(text: string, botName: string, game: GameName): GameRole | null {
+  const normalized = prepare(text, botName)
+  if (!normalized) return null
+
+  const stripped = stripFillers(normalized)
+  const candidates = stripped && stripped !== normalized ? [normalized, stripped] : [normalized]
+
+  for (const choice of ['jogador', 'bot'] as const) {
+    const patterns = ROLE_ANSWERS[game][choice]
+    if (candidates.some((c) => patterns.some((p) => p.test(c)))) {
+      return botRoleForChoice(game, choice)
+    }
+  }
+  return null
 }
 
 export interface ParsedCommand {

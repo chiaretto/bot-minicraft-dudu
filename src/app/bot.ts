@@ -13,11 +13,12 @@ import { classifyThreats, planDefense, canStrike } from '../behaviors/defense/th
 import {
   createSession,
   GameAborted,
+  resolveGame,
   type GameSession,
   type GameWorld,
 } from '../behaviors/games/index.js'
-import type { GameRole } from '../domain/games.js'
-import { isGiveUp } from '../behaviors/commands.js'
+import type { GameName, GameRole } from '../domain/games.js'
+import { isGiveUp, parseRoleAnswer } from '../behaviors/commands.js'
 import {
   blockSourceFrom,
   coverAround,
@@ -32,10 +33,14 @@ import pathfinderPkg from 'mineflayer-pathfinder'
 import {
   equipBestWeapon,
   runIntent,
+  escape,
+  openDoor,
+  blockedByDoor,
   ActionAborted,
   ActionRefused,
   NoProgress,
 } from '../behaviors/actions/index.js'
+import { needsEscape } from '../domain/escape.js'
 import { bestWeapon } from '../domain/mobs.js'
 import type { Intent } from '../domain/intent.js'
 import type { Vec3Like, WorldSnapshot } from '../domain/types.js'
@@ -44,11 +49,20 @@ const { goals } = pathfinderPkg
 
 const THREAT_TICK_MS = 250
 
+/** Espera antes de tentar destravar de novo, depois de uma tentativa falha. */
+const UNSTICK_RETRY_MS = 60_000
+
 /** Folga do `GoalNear` ao caminhar durante o jogo. */
 const GAME_GOAL_RANGE = 1
 
 /** Teto por caminhada dentro de uma rodada, para a busca não passar do tempo. */
 const GAME_WALK_TIMEOUT_MS = 8_000
+
+/** Entrada do repertório que faz a pergunta de papel de cada jogo. */
+const ROLE_QUESTION_ENTRY: Record<GameName, string> = {
+  esconde_esconde: 'jogo_quem_esconde',
+  pega_pega: 'jogo_quem_corre',
+}
 
 /**
  * Composition root: monta as dependências e liga os laços.
@@ -73,6 +87,29 @@ export class CompanionBot {
   private game: GameSession | null = null
   /** Dimensão em que a rodada começou: trocar de dimensão encerra o jogo. */
   private gameDimension: string | null = null
+  /**
+   * Pergunta de papel esperando resposta.
+   *
+   * NÃO é estado da máquina de estados: enquanto espera, o bot segue em `IDLE`
+   * (ou no que estava), livre para seguir, parar, conversar e se defender. Um
+   * estado só para segurar uma pergunta daria prioridade a algo que não faz
+   * nada. Guarda o jogo porque `eu` significa papéis opostos nos dois.
+   * Ver: bot_games_delta.md → "Escolha de papel pendente".
+   */
+  private pendingRole: { game: GameName; expiresAt: number; reasked: boolean } | null = null
+  /** Vigia de "preso": posição e desde quando ele não sai do lugar seguindo. */
+  private lastFollowPos: Vec3Like | null = null
+  private stuckSince: number | null = null
+  /** Evita reentrar na subida enquanto uma já está em andamento. */
+  private escaping = false
+  /**
+   * Até quando não vale a pena tentar destravar de novo.
+   *
+   * Sem isto o vigia repete a mesma falha a cada ciclo: em 2026-08-19 o bot
+   * falou "Vou fazer uma escadinha" / "não tenho bloco" SEIS vezes seguidas,
+   * enchendo o chat da criança com a mesma frustração.
+   */
+  private unstickBlockedUntil = 0
 
   constructor(
     private readonly config: Config,
@@ -243,6 +280,10 @@ export class CompanionBot {
         {
           pergunta: question,
           resposta: result.reply,
+          // A ação proposta precisa aparecer no log: é por aqui que se descobre
+          // se a IA está propondo ação demais, de menos ou errada.
+          acao: result.action ? result.action.type : null,
+          params: result.action ? result.action.params : null,
           provider: result.provider,
           latencyMs: result.latencyMs,
         },
@@ -293,9 +334,23 @@ export class CompanionBot {
       return
     }
 
+    // Resposta da pergunta de papel. Vem antes da cascata pelo mesmo motivo do
+    // `isGiveUp`: `eu` só significa "eu me escondo" enquanto a pergunta está de
+    // pé. Sem pendência viva, desce como conversa normal.
+    const answered = this.takeRoleAnswer(message)
+    if (answered) {
+      await this.startGame(answered.game, answered.role)
+      return
+    }
+
     const snapshot = this.snapshot()
     const result = await this.router.route(message, snapshot)
     this.logLlm(message, result)
+
+    // Comando reconhecido descarta a pergunta: quem manda `me segue` mudou de
+    // ideia sobre brincar, e uma pendência sobrevivente faria um `eu` solto lá
+    // na frente iniciar uma rodada que ninguém pediu.
+    if (result.intent) this.pendingRole = null
 
     if (result.reply) {
       this.say(
@@ -304,6 +359,19 @@ export class CompanionBot {
         result.entryId,
         result.provider,
       )
+
+      // A fala vem antes da ação de propósito: a criança ouve "já vou pegar!"
+      // e SÓ ENTÃO vê o bot sair andando. Agir calado parece bug.
+      // Ver: ai_companion_delta.md → "Resposta da IA carrega a ação".
+      if (result.action) {
+        this.pendingRole = null
+        await this.execute(result.action)
+        return
+      }
+
+      // Depois de responder, não antes: a criança falou de outra coisa, o bot
+      // atende e só então lembra que tinha perguntado.
+      this.reaskRoleOnce()
       return
     }
 
@@ -312,9 +380,57 @@ export class CompanionBot {
       return
     }
 
-    // Nem comando nem conversa: tenta interpretar como pedido de ação.
-    const intent = await this.router.interpret(message, snapshot)
-    if (intent) await this.execute(intent)
+    this.reaskRoleOnce()
+  }
+
+  // ────────────────────── PERGUNTA DE PAPEL ────────────────────────────
+
+  /**
+   * Lê a mensagem como resposta da pergunta de papel e consome a pendência.
+   *
+   * Devolve `null` quando não há pergunta de pé, quando o prazo estourou, ou
+   * quando a mensagem não responde nada — nesses casos ela segue na cascata
+   * como qualquer outra.
+   */
+  private takeRoleAnswer(message: string): { game: GameName; role: GameRole } | null {
+    const pending = this.pendingRole
+    if (pending === null) return null
+
+    if (Date.now() >= pending.expiresAt) {
+      // Expira em silêncio: a criança saiu de perto, e o bot falando sozinho
+      // no chat minutos depois não ajudaria ninguém.
+      this.pendingRole = null
+      return null
+    }
+
+    const role = parseRoleAnswer(message, this.config.persona.name, pending.game)
+    if (role === null) return null
+
+    this.pendingRole = null
+    return { game: pending.game, role }
+  }
+
+  /** Lembra a pergunta uma única vez. Insistir vira cobrança, não convite. */
+  private reaskRoleOnce(): void {
+    const pending = this.pendingRole
+    if (pending === null || pending.reasked) return
+    if (Date.now() >= pending.expiresAt) {
+      this.pendingRole = null
+      return
+    }
+
+    pending.reasked = true
+    this.sayGame(ROLE_QUESTION_ENTRY[pending.game])
+  }
+
+  /** Pergunta quem faz o quê e passa a esperar a resposta. */
+  private askRole(game: GameName): void {
+    this.pendingRole = {
+      game,
+      expiresAt: Date.now() + this.config.games.roleQuestionTimeoutMs,
+      reasked: false,
+    }
+    this.sayGame(ROLE_QUESTION_ENTRY[game])
   }
 
   // ──────────────────────────── INTENÇÕES ──────────────────────────────
@@ -354,7 +470,139 @@ export class CompanionBot {
     }
   }
 
+  /**
+   * Vigia de "preso num buraco".
+   *
+   * Seguir o dono é fogo-e-esquece: `GoalFollow` não avisa quando não existe
+   * caminho. Sem isto, a criança chama e o bot simplesmente fica parado no
+   * fundo da ravina, calado.
+   *
+   * Geometria local não distingue "poço largo" de "campo aberto" — o sinal
+   * confiável é: mandaram seguir, ele não sai do lugar, e o dono está bem
+   * acima. Ver: player_commands_delta.md → "Sair de buraco".
+   */
+  private tickStuck(): void {
+    if (this.escaping || this.game !== null || this.state.state !== 'FOLLOW') {
+      this.stuckSince = null
+      this.lastFollowPos = null
+      return
+    }
+
+    const bot = this.mc.raw
+    if (!bot) return
+
+    const pos = bot.entity.position
+    const agora = Date.now()
+
+    if (this.lastFollowPos !== null && distance(pos, this.lastFollowPos) >= 0.5) {
+      // Andou: não está preso.
+      this.lastFollowPos = { x: pos.x, y: pos.y, z: pos.z }
+      this.stuckSince = agora
+      return
+    }
+
+    if (this.lastFollowPos === null) {
+      this.lastFollowPos = { x: pos.x, y: pos.y, z: pos.z }
+      this.stuckSince = agora
+      return
+    }
+
+    if (this.stuckSince === null) this.stuckSince = agora
+    if (agora - this.stuckSince < this.config.behavior.escapeStuckMs) return
+
+    // Já tentou e não deu: espera antes de tentar (e falar) de novo.
+    if (agora < this.unstickBlockedUntil) return
+
+    const owner = bot.players[this.config.ownerPlayer]?.entity?.position ?? null
+    const config = {
+      minDrop: this.config.behavior.escapeMinDrop,
+      maxHeight: this.config.behavior.escapeMaxHeight,
+    }
+
+    // Porta fechada vem antes de buraco: é causa mais comum, muito mais barata
+    // de resolver, e acontece no mesmo nível — onde a regra do buraco nem vale.
+    const deps = this.actionDeps(bot)
+    if (blockedByDoor(deps)) {
+      void this.unstickAndResumeFollow('porta')
+      return
+    }
+
+    if (!needsEscape(pos, owner, config)) {
+      // Parado, mas nem porta nem buraco: o vigia não tem o que fazer aqui.
+      this.stuckSince = agora
+      return
+    }
+
+    void this.unstickAndResumeFollow('buraco')
+  }
+
+  /**
+   * Segura o vigia depois de uma tentativa que não deu certo.
+   *
+   * A criança já ouviu o problema uma vez; repetir a cada ciclo não acrescenta
+   * nada e afoga o chat. Um comando novo dela zera a espera.
+   */
+  private holdUnstick(): void {
+    this.unstickBlockedUntil = Date.now() + UNSTICK_RETRY_MS
+  }
+
+  /** Dependências das ações de mundo, do jeito que `runWorldAction` monta. */
+  private actionDeps(bot: NonNullable<typeof this.mc.raw>) {
+    return {
+      bot,
+      behavior: this.config.behavior,
+      ownerName: this.config.ownerPlayer,
+      signal: this.state.signal,
+    }
+  }
+
+  /**
+   * Destrava e volta a seguir.
+   *
+   * A fala vem antes da ação: a criança precisa saber por que o bot sumiu do
+   * caminho por um minuto.
+   */
+  private async unstickAndResumeFollow(motivo: 'porta' | 'buraco'): Promise<void> {
+    const bot = this.mc.raw
+    if (!bot) return
+
+    this.escaping = true
+    this.stuckSince = null
+    this.say(
+      motivo === 'porta'
+        ? 'Tem uma porta fechada no caminho! Já abro.'
+        : 'Peraí, caí num buraco! Vou fazer uma escadinha.',
+      'command',
+    )
+
+    try {
+      const deps = this.actionDeps(bot)
+      const outcome = motivo === 'porta' ? await openDoor(deps) : await escape(deps)
+      this.say(outcome.message, 'command')
+      this.logger.info({ motivo, ok: outcome.ok }, 'destravou o caminho')
+      if (!outcome.ok) this.holdUnstick()
+    } catch (err) {
+      if (err instanceof ActionAborted) return
+      this.holdUnstick()
+      if (err instanceof ActionRefused) this.say(`Ahh, ${err.message}.`, 'command')
+      else {
+        this.logger.error({ motivo, err: String(err) }, 'não consegui destravar')
+        this.say('Não consegui passar, vem me buscar?', 'command')
+      }
+    } finally {
+      this.escaping = false
+      this.lastFollowPos = null
+      // Volta a seguir: o objetivo antigo pode ter sido descartado no caminho.
+      if (this.state.state === 'FOLLOW') {
+        this.mc.followOwner(this.config.behavior.followDistance)
+      }
+    }
+  }
+
   private startFollow(): void {
+    // Chamado novo zera a espera: a criança pode ter jogado blocos pro bot, ou
+    // aberto a porta ela mesma.
+    this.unstickBlockedUntil = 0
     if (!this.snapshot().ownerVisible) {
       this.say('Não tô te vendo! Cadê você?', 'command')
       return
@@ -442,12 +690,28 @@ export class CompanionBot {
       return
     }
 
+    const known = resolveGame(game)
+    if (known === null) {
+      this.sayGame('jogo_desconhecido')
+      return
+    }
+
+    // Convite que não diz quem faz o quê não escolhe pela criança: pergunta.
+    // Nada de sessão nem de estado `GAME` enquanto não houver resposta.
+    // Ver: bot_games_delta.md → "Papel ausente é pergunta, não padrão".
+    if (!role) {
+      this.askRole(known)
+      return
+    }
+
+    this.pendingRole = null
+
     // O estado precisa existir antes da sessão: é dele que sai o `AbortSignal`
     // que `dudu, para` e a defesa usam para cancelar a rodada de verdade.
     this.state.command('GAME', { actionLabel: game })
 
     const session = createSession(
-      { game, ...(role ? { role } : {}) },
+      { game, role },
       {
         world: this.gameWorld(),
         hideAndSeek: this.config.games.hideAndSeek,
@@ -634,7 +898,10 @@ export class CompanionBot {
 
   private startThreatWatcher(): void {
     this.stopThreatWatcher()
-    this.threatTimer = setInterval(() => this.tickDefense(), THREAT_TICK_MS)
+    this.threatTimer = setInterval(() => {
+      this.tickDefense()
+      this.tickStuck()
+    }, THREAT_TICK_MS)
   }
 
   private stopThreatWatcher(): void {

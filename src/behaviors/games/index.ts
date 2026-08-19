@@ -1,11 +1,5 @@
 import type { HideAndSeekConfig, TagConfig } from '../../config/schema.js'
-import {
-  DEFAULT_ROLE_BY_GAME,
-  isGameName,
-  isRoleValidForGame,
-  type GameName,
-  type GameRole,
-} from '../../domain/games.js'
+import { isGameName, isRoleValidForGame, type GameName, type GameRole } from '../../domain/games.js'
 import { HideAndSeekSession } from './hide-and-seek.js'
 import { TagSession } from './tag.js'
 import type { GameWorld } from './world.js'
@@ -27,7 +21,8 @@ export type { TagDeps } from './tag.js'
 
 export interface GameStartRequest {
   game: string
-  role?: GameRole
+  /** Obrigatório: pedido sem papel vira pergunta antes de chegar aqui. */
+  role: GameRole
 }
 
 export interface GameSessionDeps {
@@ -52,12 +47,12 @@ export function resolveGame(name: string): GameName | null {
 /**
  * Papel efetivo do pedido, ou `null` quando o papel não é daquele jogo.
  *
- * `null` não é o mesmo que "sem papel": pedir `bot_esconde` no pega-pega é um
- * pedido torto, e virar rodada de qualquer jeito daria uma brincadeira que
- * ninguém sabe jogar.
+ * Não existe mais papel padrão: pedido sem papel é pergunta ao jogador, e quem
+ * pergunta é o `app/`. Aqui todo pedido já chega decidido. Pedir `bot_esconde`
+ * no pega-pega continua sendo pedido torto — virar rodada de qualquer jeito
+ * daria uma brincadeira que ninguém sabe jogar.
  */
-export function resolveRole(game: GameName, role?: GameRole): GameRole | null {
-  if (!role) return DEFAULT_ROLE_BY_GAME[game]
+export function resolveRole(game: GameName, role: GameRole): GameRole | null {
   return isRoleValidForGame(game, role) ? role : null
 }
 

@@ -1,8 +1,21 @@
 import type { Bot } from 'mineflayer'
 import pathfinderPkg from 'mineflayer-pathfinder'
+import { Vec3 } from 'vec3'
 import type { BehaviorConfig } from '../../config/schema.js'
 import type { Intent } from '../../domain/intent.js'
 import { bestWeapon } from '../../domain/mobs.js'
+import { canHarvestWith, friendlyName, resolveBlockCandidates } from '../../domain/materials.js'
+import { buildStructure, BuildAborted, BuildRefused, type BuildWorld } from './build.js'
+import { escapeHole, EscapeAborted, EscapeRefused, type EscapeWorld } from './escape.js'
+import {
+  openNearestDoor,
+  hasBlockingDoor,
+  DoorAborted,
+  DoorRefused,
+  type DoorWorld,
+} from './doors.js'
+import { isOpenable, type DoorInfo } from '../../domain/doors.js'
+import type { Vec3Like } from '../../domain/types.js'
 
 const { goals } = pathfinderPkg
 
@@ -99,18 +112,35 @@ export async function collectBlock(
   count: number,
   onProgress?: (collected: number) => void,
 ): Promise<ActionOutcome> {
-  if (!deps.behavior.collectAllowlist.includes(blockName)) {
-    throw new ActionRefused(`não posso mexer em ${blockName}`)
+  // "madeira" vale por qualquer tronco, e quem pede bétula aceita carvalho
+  // antes de ouvir "não achei" numa floresta cheia de árvore.
+  const permitidos = resolveBlockCandidates(blockName).filter((c) =>
+    deps.behavior.collectAllowlist.includes(c),
+  )
+  if (permitidos.length === 0) {
+    throw new ActionRefused(`não posso mexer em ${friendlyName(blockName)}`)
   }
 
-  const blockType = deps.bot.registry.blocksByName[blockName]
-  if (!blockType) throw new ActionRefused(`não conheço o bloco ${blockName}`)
+  const nome = friendlyName(blockName)
 
-  let collected = 0
+  // Só procura o que ele consegue LEVAR. Quebrar pedra sem picareta some com o
+  // bloco: o bot gasta o tempo, abre o buraco e não leva nada.
+  const colhiveis = permitidos.filter((name) => canHarvestNow(deps.bot, name))
+  if (colhiveis.length === 0) {
+    throw new ActionRefused(`preciso de uma picareta pra pegar ${nome}`)
+  }
+
+  const ids = colhiveis
+    .map((name) => deps.bot.registry.blocksByName[name]?.id)
+    .filter((id): id is number => id !== undefined)
+  if (ids.length === 0) throw new ActionRefused(`não conheço o bloco ${blockName}`)
+
+  const antes = countInInventory(deps.bot, colhiveis)
+
   for (let i = 0; i < count; i++) {
     checkAborted(deps.signal)
 
-    const target = deps.bot.findBlock({ matching: blockType.id, maxDistance: 32 })
+    const target = deps.bot.findBlock({ matching: ids, maxDistance: 32 })
     if (!target) break
 
     await withGuards(
@@ -121,14 +151,60 @@ export async function collectBlock(
       deps.behavior.actionTimeoutMs,
     )
     checkAborted(deps.signal)
-    await withGuards(deps.bot.dig(target), deps.signal, deps.behavior.actionTimeoutMs)
 
-    collected++
-    onProgress?.(collected)
+    await equipBestToolFor(deps.bot, target)
+    await withGuards(deps.bot.dig(target), deps.signal, deps.behavior.actionTimeoutMs)
+    await pickUpDrop(deps, target.position)
+
+    onProgress?.(countInInventory(deps.bot, colhiveis) - antes)
   }
 
-  if (collected === 0) return { ok: false, message: `Não achei nenhum ${blockName} por aqui.` }
-  return { ok: true, message: `Peguei ${collected} ${blockName} pra você!` }
+  // O que vale é o que ENTROU na mochila, não quantos blocos ele quebrou.
+  const collected = countInInventory(deps.bot, colhiveis) - antes
+  if (collected <= 0) return { ok: false, message: `Não consegui pegar ${nome} por aqui.` }
+  return { ok: true, message: `Peguei ${collected} de ${nome} pra você!` }
+}
+
+/** Quanto o bot tem, somando todos os nomes dados. */
+function countInInventory(bot: Bot, names: readonly string[]): number {
+  const alvo = new Set(names)
+  return bot.inventory
+    .items()
+    .filter((i) => alvo.has(i.name))
+    .reduce((soma, i) => soma + i.count, 0)
+}
+
+/** O bot consegue LEVAR este bloco com o que tem agora? */
+export function canHarvestNow(bot: Bot, blockName: string): boolean {
+  const data = bot.registry.blocksByName[blockName]
+  if (!data) return false
+  const idsEmMaos = bot.inventory.items().map((i) => i.type)
+  return canHarvestWith(data.harvestTools as Record<string, unknown> | undefined, idsEmMaos)
+}
+
+/** Põe na mão a melhor ferramenta para aquele bloco, se houver alguma. */
+async function equipBestToolFor(bot: Bot, block: Parameters<Bot['dig']>[0]): Promise<void> {
+  const tool = bot.pathfinder.bestHarvestTool(block)
+  if (tool && bot.heldItem?.type !== tool.type) await bot.equip(tool, 'hand')
+}
+
+/**
+ * Anda em cima de onde o bloco caiu, para recolher o drop.
+ *
+ * Cavar a 2 blocos de distância derruba o item fora do alcance de coleta (~1
+ * bloco): sem este passo o bot quebra tudo e volta de mãos vazias. Falhar aqui
+ * não derruba a coleta — só significa que aquele item ficou no chão.
+ */
+async function pickUpDrop(deps: ActionDeps, position: Vec3Like): Promise<void> {
+  try {
+    await withGuards(
+      deps.bot.pathfinder.goto(new goals.GoalNear(position.x, position.y, position.z, 0)),
+      deps.signal,
+      Math.min(deps.behavior.actionTimeoutMs, 5_000),
+    )
+  } catch (err) {
+    if (err instanceof ActionAborted) throw err
+  }
 }
 
 /** Leva um item até o dono e larga perto dele. */
@@ -174,6 +250,294 @@ export async function equipItem(deps: ActionDeps, itemName: string): Promise<Act
   return { ok: true, message: `Equipei ${itemName}!` }
 }
 
+/**
+ * Adapta o mundo real para a interface estreita que a obra usa.
+ *
+ * Único lugar onde a construção encosta em `mineflayer`. Ver `gameWorld()` em
+ * `app/bot.ts`: mesmo padrão, mesmo motivo.
+ */
+export function buildWorldFrom(deps: ActionDeps): BuildWorld {
+  const { bot } = deps
+  const at = (p: Vec3Like) => bot.blockAt(new Vec3(p.x, p.y, p.z))
+
+  return {
+    botPosition: () => bot.entity.position,
+    ownerPosition: () => bot.players[deps.ownerName]?.entity?.position ?? null,
+    isSolid: (pos) => {
+      const block = at(pos)
+      // Ar, água e grama alta não seguram nada — para a obra, não existem.
+      return block !== null && block.boundingBox === 'block'
+    },
+    inventoryCounts: () => {
+      const counts: Record<string, number> = {}
+      for (const item of bot.inventory.items()) {
+        counts[item.name] = (counts[item.name] ?? 0) + item.count
+      }
+      return counts
+    },
+    equipBlock: async (name) => {
+      const held = bot.heldItem
+      if (held?.name === name) return
+      const item = bot.inventory.items().find((i) => i.name === name)
+      if (!item) throw new ActionRefused(`acabou meu ${friendlyName(name)}`)
+      await bot.equip(item, 'hand')
+    },
+    walkNear: async (pos, range) => {
+      await withGuards(
+        bot.pathfinder.goto(new goals.GoalNear(pos.x, pos.y, pos.z, range)),
+        deps.signal,
+        deps.behavior.actionTimeoutMs,
+      )
+    },
+    placeBlock: async (reference, face) => {
+      const block = at(reference)
+      if (!block) throw new ActionRefused('o apoio sumiu')
+      await withGuards(
+        bot.placeBlock(block, new Vec3(face.x, face.y, face.z)),
+        deps.signal,
+        deps.behavior.actionTimeoutMs,
+      )
+    },
+  }
+}
+
+/**
+ * Constrói uma estrutura simples.
+ *
+ * Quando falta material e `buildAutoGather` está ligado, ele mesmo vai buscar
+ * — a alternativa seria a criança pedir uma casa e ouvir "não tenho bloco"
+ * toda vez.
+ */
+export async function build(
+  deps: ActionDeps,
+  structure: string,
+  material?: string,
+  onProgress?: (placed: number, total: number) => void,
+): Promise<ActionOutcome> {
+  // Só oferece material que ele já tem OU que consegue colher de verdade.
+  // Pedra sem picareta entrava na lista, ele saía para buscar e voltava vazio.
+  const naMochila = new Set(deps.bot.inventory.items().map((i) => i.name))
+  const viaveis = deps.behavior.buildAllowlist.filter(
+    (nome) => naMochila.has(nome) || canHarvestNow(deps.bot, nome),
+  )
+
+  try {
+    const outcome = await buildStructure(
+      {
+        world: buildWorldFrom(deps),
+        signal: deps.signal,
+        maxBlocks: deps.behavior.buildMaxBlocks,
+        allowlist: viaveis.length > 0 ? viaveis : deps.behavior.buildAllowlist,
+        ...(deps.behavior.buildAutoGather
+          ? {
+              gather: async (block: string, count: number) => {
+                const result = await collectBlock(deps, block, count)
+                return result.ok ? count : 0
+              },
+            }
+          : {}),
+        ...(onProgress ? { onProgress } : {}),
+      },
+      structure,
+      material,
+    )
+    return { ok: outcome.ok, message: outcome.message }
+  } catch (err) {
+    // Traduz para os erros que o `app/` já sabe tratar.
+    if (err instanceof BuildAborted) throw new ActionAborted(err.message)
+    if (err instanceof BuildRefused) throw new ActionRefused(err.message)
+    throw err
+  }
+}
+
+/**
+ * Adapta o mundo real para a interface estreita da subida.
+ *
+ * `pillarUp` é a única parte deste projeto que depende de TEMPO de física: o
+ * bloco só entra embaixo dos pés no ápice do pulo. Por isso ele espera o bot
+ * subir de verdade em vez de dormir um tanto fixo.
+ */
+export function escapeWorldFrom(deps: ActionDeps): EscapeWorld {
+  const { bot } = deps
+  const at = (p: Vec3Like) => bot.blockAt(new Vec3(p.x, p.y, p.z))
+
+  return {
+    botPosition: () => bot.entity.position,
+    ownerPosition: () => bot.players[deps.ownerName]?.entity?.position ?? null,
+    isSolid: (pos) => {
+      const block = at(pos)
+      return block !== null && block.boundingBox === 'block'
+    },
+    blockNameAt: (pos) => at(pos)?.name ?? null,
+    canHarvest: (pos) => {
+      const block = at(pos)
+      return block !== null && canHarvestNow(bot, block.name)
+    },
+    inventoryCounts: () => {
+      const counts: Record<string, number> = {}
+      for (const item of bot.inventory.items()) {
+        counts[item.name] = (counts[item.name] ?? 0) + item.count
+      }
+      return counts
+    },
+    equipBlock: async (name) => {
+      if (bot.heldItem?.name === name) return
+      const item = bot.inventory.items().find((i) => i.name === name)
+      if (!item) throw new ActionRefused(`acabou meu ${friendlyName(name)}`)
+      await bot.equip(item, 'hand')
+    },
+    digBlock: async (pos) => {
+      const block = at(pos)
+      if (!block) return
+      await withGuards(bot.dig(block), deps.signal, deps.behavior.actionTimeoutMs)
+    },
+    pillarUp: async () => {
+      const antes = Math.floor(bot.entity.position.y)
+
+      // Olhar para baixo antes de pular: o bloco vai embaixo dos pés.
+      await bot.lookAt(bot.entity.position.offset(0, -1, 0), true)
+      bot.setControlState('jump', true)
+      try {
+        await waitForApex(bot, antes)
+        const apoio = bot.blockAt(bot.entity.position.offset(0, -1, 0))
+        if (!apoio) throw new ActionRefused('sumiu o chão embaixo de mim')
+        await bot.placeBlock(apoio, new Vec3(0, 1, 0))
+      } finally {
+        bot.setControlState('jump', false)
+      }
+    },
+  }
+}
+
+/**
+ * Espera o bot subir o bastante para caber um bloco embaixo dele.
+ *
+ * Sem isso o bloco é colocado antes de sair do chão e o pulo não rende nada.
+ */
+async function waitForApex(bot: Bot, chaoInicial: number): Promise<void> {
+  const limite = Date.now() + 1_000
+  while (Date.now() < limite) {
+    if (bot.entity.position.y - chaoInicial >= 1.05) return
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
+
+/**
+ * Sai de buraco fazendo escadinha.
+ *
+ * Cava só o que a coleta permite E que serve de degrau: a interseção das duas
+ * allowlists. É o que impede o bot de cavar a casa do jogador para subir.
+ */
+export async function escape(
+  deps: ActionDeps,
+  onProgress?: (subiu: number, total: number) => void,
+): Promise<ActionOutcome> {
+  const permitidos = deps.behavior.buildAllowlist.filter((nome) =>
+    deps.behavior.collectAllowlist.includes(nome),
+  )
+
+  try {
+    const outcome = await escapeHole({
+      world: escapeWorldFrom(deps),
+      signal: deps.signal,
+      config: {
+        minDrop: deps.behavior.escapeMinDrop,
+        maxHeight: deps.behavior.escapeMaxHeight,
+      },
+      allowlist: permitidos,
+      maxDigs: deps.behavior.escapeMaxDigs,
+      ...(onProgress ? { onProgress } : {}),
+    })
+    return { ok: outcome.ok, message: outcome.message }
+  } catch (err) {
+    if (err instanceof EscapeAborted) throw new ActionAborted(err.message)
+    if (err instanceof EscapeRefused) throw new ActionRefused(err.message)
+    throw err
+  }
+}
+
+/**
+ * Adapta o mundo real para a interface estreita das portas.
+ *
+ * **`movements.canOpenDoors` continua `false` de propósito.** Naquela flag o
+ * `openable` do pathfinder só inclui bloco com "gate" no nome — ela cobre
+ * portão de cerca, não porta — e o próprio autor da lib anotou "Causes issues.
+ * Probably due to none paper servers", que é exatamente o nosso caso (mundo
+ * aberto em LAN, vanilla). Porta é resolvida aqui, clicando.
+ */
+export function doorWorldFrom(deps: ActionDeps): DoorWorld {
+  const { bot } = deps
+  const at = (p: Vec3Like) => bot.blockAt(new Vec3(p.x, p.y, p.z))
+
+  const info = (block: ReturnType<typeof at>): DoorInfo | null => {
+    if (!block || !isOpenable(block.name)) return null
+    const props = block.getProperties() as { open?: unknown; half?: unknown }
+    return {
+      position: block.position,
+      name: block.name,
+      open: props.open === true || props.open === 'true',
+      ...(props.half === 'upper' || props.half === 'lower' ? { half: props.half } : {}),
+    }
+  }
+
+  return {
+    botPosition: () => bot.entity.position,
+    nearbyDoors: (maxDistance) => {
+      const ids = Object.values(bot.registry.blocksByName)
+        .filter((b) => isOpenable(b.name))
+        .map((b) => b.id)
+      const blocos = bot.findBlocks({ matching: ids, maxDistance, count: 16 })
+      return blocos
+        .map((pos) => info(bot.blockAt(pos)))
+        .filter((d): d is DoorInfo => d !== null)
+        .sort(
+          (a, b) =>
+            distanceTo(bot.entity.position, a.position) -
+            distanceTo(bot.entity.position, b.position),
+        )
+    },
+    walkNear: async (pos, range) => {
+      await withGuards(
+        bot.pathfinder.goto(new goals.GoalNear(pos.x, pos.y, pos.z, range)),
+        deps.signal,
+        deps.behavior.actionTimeoutMs,
+      )
+    },
+    activate: async (pos) => {
+      const block = at(pos)
+      if (!block) throw new ActionRefused('a porta sumiu')
+      await bot.lookAt(block.position.offset(0.5, 0.5, 0.5), true)
+      await withGuards(bot.activateBlock(block), deps.signal, deps.behavior.actionTimeoutMs)
+    },
+    doorAt: (pos) => info(at(pos)),
+  }
+}
+
+function distanceTo(a: Vec3Like, b: Vec3Like): number {
+  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+}
+
+/** Abre a porta mais próxima que dê para abrir na mão. */
+export async function openDoor(deps: ActionDeps): Promise<ActionOutcome> {
+  try {
+    const outcome = await openNearestDoor({
+      world: doorWorldFrom(deps),
+      signal: deps.signal,
+      searchRadius: deps.behavior.doorSearchRadius,
+    })
+    return { ok: outcome.ok, message: outcome.message }
+  } catch (err) {
+    if (err instanceof DoorAborted) throw new ActionAborted(err.message)
+    if (err instanceof DoorRefused) throw new ActionRefused(err.message)
+    throw err
+  }
+}
+
+/** Existe porta fechada atrapalhando o caminho? Usado pelo vigia de "preso". */
+export function blockedByDoor(deps: ActionDeps): boolean {
+  return hasBlockingDoor(doorWorldFrom(deps), deps.behavior.doorSearchRadius)
+}
+
 /** Equipa a melhor arma do inventário. Devolve o nome, ou null se desarmado. */
 export async function equipBestWeapon(bot: Bot): Promise<string | null> {
   const weapon = bestWeapon(bot.inventory.items())
@@ -187,6 +551,12 @@ export async function runIntent(deps: ActionDeps, intent: Intent): Promise<Actio
   switch (intent.type) {
     case 'COLLECT_BLOCK':
       return collectBlock(deps, intent.params.block, intent.params.count)
+    case 'BUILD':
+      return build(deps, intent.params.structure, intent.params.material)
+    case 'ESCAPE_HOLE':
+      return escape(deps)
+    case 'OPEN_DOOR':
+      return openDoor(deps)
     case 'GOTO_COORDS':
       return gotoCoords(deps, intent.params.x, intent.params.y, intent.params.z)
     case 'DROP_ITEM_TO_OWNER':

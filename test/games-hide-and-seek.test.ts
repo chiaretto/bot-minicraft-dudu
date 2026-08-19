@@ -765,22 +765,22 @@ describe('registro de jogos', () => {
 
   it('reconhece o esconde-esconde', () => {
     expect(resolveGame('esconde_esconde')).toBe('esconde_esconde')
-    expect(createSession({ game: 'esconde_esconde' }, deps)).not.toBeNull()
+    expect(createSession({ game: 'esconde_esconde', role: 'bot_esconde' }, deps)).not.toBeNull()
   })
 
   it('recusa jogo desconhecido sem criar sessão', () => {
     expect(resolveGame('xadrez')).toBeNull()
-    expect(createSession({ game: 'xadrez' }, deps)).toBeNull()
-    expect(createSession({ game: 'poquer' }, deps)).toBeNull()
+    expect(createSession({ game: 'xadrez', role: 'bot_esconde' }, deps)).toBeNull()
+    expect(createSession({ game: 'poquer', role: 'bot_esconde' }, deps)).toBeNull()
   })
 
-  it('o papel padrão do esconde-esconde é o bot se esconder', () => {
-    expect(resolveRole('esconde_esconde')).toBe('bot_esconde')
+  it('não existe papel padrão: os dois papéis do jogo são aceitos como pedidos', () => {
+    expect(resolveRole('esconde_esconde', 'bot_esconde')).toBe('bot_esconde')
     expect(resolveRole('esconde_esconde', 'bot_procura')).toBe('bot_procura')
   })
 
   it('a sessão criada nasce com fase de fim até rodar', () => {
-    const s = createSession({ game: 'esconde_esconde' }, deps)
+    const s = createSession({ game: 'esconde_esconde', role: 'bot_esconde' }, deps)
     expect(s?.currentPhase).toBe('fim')
   })
 })

@@ -66,6 +66,31 @@ server:
 npm run dev
 ```
 
+O bot avisa que subiu e lembra o passo seguinte — abrir o mundo em LAN na porta
+que ele está esperando:
+
+```
+╭──────────────────────────────────────────╮
+│                                          │
+│   Odraude está de pé!                    │
+│   Só falta você abrir o mundo pra mim.   │
+│                                          │
+╰──────────────────────────────────────────╯
+
+   1.  Abra o Minecraft na versão 1.21.11
+   2.  Entre no mundo do FresherRobin90
+   3.  Esc  ->  Abrir para LAN  ->  Iniciar mundo em LAN
+   4.  Veja no chat a porta que o jogo mostrar
+
+   Estou esperando em  localhost:55654
+
+   A porta do LAN muda toda vez que você abre o mundo.
+   Se o jogo mostrar outra, troque server.port no config.yaml.
+```
+
+O cartão é coisa de desenvolvimento: em produção (`NODE_ENV=production npm start`)
+o `stdout` fica só com o log estruturado.
+
 ### Windows
 
 O bot precisa rodar no **mesmo Windows onde o Minecraft está aberto** — um mundo
@@ -185,10 +210,17 @@ llm:
 | `dudu, pode brigar`                  | religa a defesa                    |
 | `dudu, olha pra mim`                 | vira para você                     |
 | `dudu, vamos brincar`                | pergunta qual das duas brincadeiras |
-| `dudu, esconde esconde` / `se esconde` | brinca de esconde-esconde (ele esconde) |
-| `dudu, eu vou me esconder` / `conta até 10` | brinca de esconde-esconde (ele procura) |
-| `dudu, pega pega` / `me pega`        | brinca de pega-pega (ele corre atrás) |
-| `dudu, eu vou te pegar` / `você corre` | brinca de pega-pega (ele foge)     |
+| `dudu, abre a porta`                 | abre a porta, o portão ou o alçapão |
+| `dudu, sai do buraco` / `sobe`       | faz escadinha de blocos e sobe     |
+| `dudu, pega madeira` / `pega pedra`  | vai buscar o bloco e traz          |
+| `dudu, faz uma casa`                 | constrói uma casinha ao lado dele  |
+| `dudu, faz uma torre`                | constrói uma torre                 |
+| `dudu, esconde esconde`              | pergunta quem se esconde           |
+| `dudu, pega pega`                    | pergunta quem corre                |
+| `dudu, se esconde`                   | esconde-esconde: ele se esconde    |
+| `dudu, eu vou me esconder` / `conta até 10` | esconde-esconde: ele procura |
+| `dudu, me pega` / `corre atrás de mim` | pega-pega: ele corre atrás       |
+| `dudu, eu vou te pegar` / `você corre` | pega-pega: ele foge              |
 
 O vocativo é opcional: `oi dudu`, `dudu, oi` e `oi` funcionam igual.
 
@@ -199,10 +231,144 @@ o que tem no inventário, cortesia, afeto, piada, onde vocês estão, e mais.
 
 ### Pedidos livres (nível 3 — só com IA ligada)
 
-`dudu, pega umas madeiras pra mim` → o modelo traduz em uma intenção
-estruturada, que é **validada contra um catálogo fechado** antes de virar ação.
-Pedido fora do catálogo é recusado com educação — a IA nunca executa nada
-diretamente.
+Pedido com palavras que o parser não reconhece vai para a IA — e ela responde
+**e age**, na mesma resposta:
+
+```
+Você: dudu, será que dava pra você juntar umas madeirinhas pra mim?
+Dudu: Já vou pegar!            ← fala primeiro
+                               ← e então sai andando atrás de madeira
+```
+
+A IA recebe no prompt a lista do que o bot sabe fazer, e devolve a fala junto de
+uma ação (ou nenhuma, quando é só conversa). A ação é **validada contra um
+catálogo fechado** antes de virar efeito: pedido fora do catálogo é recusado com
+educação, e a IA nunca executa nada diretamente.
+
+Conversa continua sendo conversa: `dudu, você gosta de diamante?` tem resposta e
+nenhuma ação.
+
+---
+
+## Ele abre portas
+
+Fale `dudu, abre a porta` (ou `abre o portão`, `abre aí`). Ele acha a mais
+próxima, vai até ela e abre. **Funciona sem IA ligada.**
+
+E se você entrar em casa e fechar a porta, não precisa nem pedir: porta fechada
+é parede para o pathfinder, então ele percebe que travou e resolve sozinho.
+
+```
+Você: dudu, vem
+      (você entrou em casa e fechou a porta)
+Dudu: Tem uma porta fechada no caminho! Já abro.
+Dudu: Abri a porta!
+      (entra e volta a te seguir)
+```
+
+**Porta de ferro ele não abre** — essa só abre com botão, alavanca ou placa de
+pressão. Ele diz isso em vez de ficar clicando à toa.
+
+Duas sutilezas que ele trata: uma porta ocupa **dois blocos**, e ele só clica na
+metade de baixo (senão abriria e fecharia a mesma porta); e **porta já aberta
+não é reaberta**, porque clicar de novo fecharia.
+
+Ajuste o alcance da busca em `behavior.doorSearchRadius` (padrão 6).
+
+> **Ele não fecha a porta atrás de si.** E não mexe em botão, alavanca nem placa
+> de pressão — que é justamente o que abriria porta de ferro.
+
+---
+
+## Ele não fica preso em buraco
+
+O bot caía numa caverna ou ravina, você mandava `dudu, vem` — e **nada
+acontecia**. O `GoalFollow` do pathfinder não avisa quando não existe caminho:
+ele simplesmente não anda. O bot ficava parado e mudo lá embaixo.
+
+Agora, seguindo você, ele vigia a si mesmo. Se ficar **6 segundos sem sair do
+lugar** e você estiver **3 ou mais blocos acima**, ele conclui que caiu:
+
+```
+Você: dudu, vem
+      (6 segundos parado, você 14 blocos acima)
+Dudu: Peraí, caí num buraco! Vou fazer uma escadinha.
+Dudu: Saí do buraco! Tô indo aí!
+```
+
+Ele empilha blocos embaixo dos próprios pés até chegar ao seu nível e **volta a
+te seguir sozinho** — sem precisar repetir o comando. Dá para pedir na mão
+também: `dudu, sai do buraco`, `sobe`, `faz uma escadinha`.
+
+**Sem bloco na mochila, ele cava as paredes** para arranjar degrau. Nunca o
+chão, que só afundaria mais. E só cava o que pode cavar **e** usar como degrau —
+a interseção de `collectAllowlist` e `buildAllowlist`, o que impede ele de
+demolir a sua casa para subir.
+
+Três coisas que ele **não** faz, de propósito:
+
+- **Não sobe sem te ver.** Uma torre no meio do nada não leva a lugar nenhum.
+- **Não sobe até o céu.** `escapeMaxHeight` (24) limita — se você estiver voando
+  de criativo, ele sobe um pouco e avisa que ainda está fundo.
+- **Não faz isso durante brincadeira.** Um bot empilhando blocos no
+  esconde-esconde estragaria o jogo.
+
+`dudu, para` interrompe a subida; os degraus já colocados ficam.
+
+Ajuste em `behavior`: `escapeMinDrop`, `escapeMaxHeight`, `escapeMaxDigs` e
+`escapeStuckMs`.
+
+> **Ele não sai de sala fechada.** Se você estiver no mesmo nível e houver uma
+> parede no caminho, não é altura que falta — é abrir caminho, e escavar túnel
+> ele não faz.
+
+---
+
+## Pegar bloco e construir
+
+### Pegar
+
+`dudu, pega madeira` (ou `pega pedra`, `pega terra`, `pega areia`). Ele procura
+num raio de 32 blocos, vai até lá, cava e avisa quanto trouxe. **Funciona sem IA
+ligada** — é comando de nível 1.
+
+O pedido vale pelo **grupo**: "madeira" é qualquer tronco. Numa floresta de
+bétula, procurar só carvalho devolveria "não achei" num lugar cheio de árvore.
+
+Só blocos da `collectAllowlist` podem ser cavados — é o que impede uma
+alucinação da IA de virar a casa do jogador demolida. Minério fica de fora:
+`pega diamante` continua sendo uma recusa honesta.
+
+> **Pedra precisa de picareta.** Quebrada com a mão ela some sem dropar nada.
+> Se o bot não tiver picareta, ele diz isso em vez de cavar à toa — e o número
+> que ele fala é sempre o que entrou de verdade na mochila. Madeira, terra e
+> areia ele pega na mão.
+
+### Construir
+
+| Você diz | Ele levanta |
+| --- | --- |
+| `dudu, faz uma casa` | 5x5, paredes de 2, porta, 3 janelas, telhado (52 blocos) |
+| `dudu, faz uma torre` | 3x3, paredes de 4, porta, topo fechado (39 blocos) |
+
+Pequenas de propósito: obra grande demora demais para uma criança assistir, e
+cada bloco a mais é uma chance a mais de dar errado.
+
+**Como ele escolhe o material:** o que tiver em maior quantidade na mochila. Se
+faltar, ele vai buscar sozinho antes de começar (`buildAutoGather`). Se ainda
+faltar, ele recusa **antes de levantar meia parede** e diz quantos blocos
+faltam. Dá para pedir o material: `faz uma torre de pedra`.
+
+**Ele nunca destrói nada para construir.** Posição que já tem bloco é pulada.
+
+`dudu, para` interrompe a obra no meio — o que já subiu fica de pé.
+
+Ajuste em `behavior`: `buildAllowlist` (o que pode virar parede),
+`buildMaxBlocks` (teto de segurança) e `buildAutoGather`.
+
+> **Terreno acidentado sai torto.** Ele não terraplana: constrói a partir do
+> nível onde está e pula o que já existe. Num barranco, parte da casa pode
+> ficar enterrada. Chame ele para um lugar plano antes de pedir.
 
 ---
 
@@ -213,15 +379,38 @@ sem precisar de IA nenhuma ligada.
 
 Fale `dudu, vamos brincar` sem dizer qual e ele **pergunta** qual você quer — com
 duas brincadeiras, escolher por você seria decidir no seu lugar. Responder
-`esconde esconde` ou `pega pega` já começa a rodada.
+`esconde esconde` ou `pega pega` leva à pergunta de papel, logo abaixo.
 
 ---
+
+## Quem faz o quê: ele pergunta
+
+As duas brincadeiras têm dois papéis. Convite que **não diz** quem faz o quê
+não escolhe por você — ele pergunta antes de começar:
+
+```
+Você: dudu, pega pega
+Dudu: Quem corre: eu ou você?
+Você: eu
+Dudu: Então eu pego! Vou contar até 5...
+```
+
+| Você responde | Esconde-esconde | Pega-pega |
+| --- | --- | --- |
+| `eu` | você se esconde, ele procura | você corre, ele pega |
+| `você` | ele se esconde, você procura | ele corre, você pega |
+
+Frase que **já diz** o papel começa direto, sem pergunta: `me pega`,
+`eu vou me esconder`, `se esconde`, `você corre`.
+
+A pergunta espera 45 segundos (`games.roleQuestionTimeoutMs`). Passado o prazo,
+um `eu` solto volta a ser conversa normal.
 
 ## Esconde-esconde
 
 ### Quando ele se esconde
 
-Fale `dudu, esconde esconde` (ou `se esconde`). Ele pede que você feche o olho e
+Fale `dudu, se esconde` — ou `esconde esconde` e responda `você`. Ele pede que você feche o olho e
 conte até 10, e então **anda procurando um esconderijo de verdade** por até 20
 segundos: um ponto que você não esteja enxergando **e** que tenha alguma coisa
 sólida em volta — uma parede, uma árvore, um barranco. Só quando chega lá é que
@@ -239,7 +428,7 @@ planície), aumente `hideSearchMs` ou brinque perto de construções e árvores.
 
 ### Quando ele procura
 
-Fale `dudu, eu vou me esconder` (ou `conta até 10`). Ele **conta de 1 a 20** no
+Fale `dudu, eu vou me esconder` — ou `esconde esconde` e responda `eu`. Ele **conta de 1 a 20** no
 chat, um número por segundo — a contagem leva 20 segundos, o mesmo tempo que ele
 leva procurando esconderijo, para você ter a mesma folga que ele. Depois sai
 procurando, e **vai errar duas vezes de propósito** antes de procurar de verdade.
@@ -270,7 +459,7 @@ Também chamado de pique-pega ou pira-pega — todas as variantes do nome funcio
 
 ### Quando ele pega
 
-Fale `dudu, pega pega` (ou `me pega`, `corre atrás de mim`). Ele **conta até 5**
+Fale `dudu, me pega` — ou `pega pega` e responda `eu`. Ele **conta até 5**
 no chat, parado, e só então sai correndo atrás de você — a contagem é sua
 vantagem de saída. Se encostar em você (2 blocos), ganhou.
 
@@ -280,7 +469,7 @@ mover.
 
 ### Quando ele foge
 
-Fale `dudu, eu vou te pegar` (ou `você corre`). Ele sai correndo **na hora**, sem
+Fale `dudu, eu vou te pegar` — ou `pega pega` e responda `você`. Ele sai correndo **na hora**, sem
 contar — quem conta é quem pega. Encoste nele e ele admite que foi pego.
 
 Depois de **60 segundos fugindo sem ser pego**, ele para de propósito, avisa que

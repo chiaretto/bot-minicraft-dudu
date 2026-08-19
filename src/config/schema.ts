@@ -206,6 +206,11 @@ export const tagSchema = z
 
 export const gamesSchema = z.object({
   enabled: z.boolean().default(true),
+  /**
+   * Quanto tempo a pergunta "quem se esconde?" fica valendo. Passado o prazo,
+   * um `eu` solto volta a ser conversa em vez de iniciar rodada.
+   */
+  roleQuestionTimeoutMs: z.number().int().positive().default(45_000),
   hideAndSeek: hideAndSeekSchema.default({}),
   tag: tagSchema.default({}),
 })
@@ -259,6 +264,41 @@ export const behaviorSchema = z.object({
       'cobblestone',
       'stone',
     ]),
+  /**
+   * Blocos que o bot pode USAR como material de obra.
+   *
+   * Separada da allowlist de coleta de propósito: o que ele pode cavar não é
+   * necessariamente o que faz uma casa decente, e um dia uma pode mudar sem a
+   * outra.
+   */
+  buildAllowlist: z
+    .array(z.string())
+    .default([
+      'oak_log',
+      'birch_log',
+      'spruce_log',
+      'jungle_log',
+      'acacia_log',
+      'dark_oak_log',
+      'cobblestone',
+      'stone',
+      'dirt',
+      'sand',
+    ]),
+  /** Teto de segurança: obra maior que isto é recusada antes de começar. */
+  buildMaxBlocks: z.number().int().positive().default(120),
+  /** Até onde procurar porta quando pedem para abrir, ou quando ele trava. */
+  doorSearchRadius: z.number().int().positive().default(6),
+  /** Desnível a partir do qual vale a pena fazer escada em vez de só pular. */
+  escapeMinDrop: z.number().int().positive().default(3),
+  /** Teto de degraus numa tentativa. Evita torre até o céu. */
+  escapeMaxHeight: z.number().int().positive().default(24),
+  /** Teto de blocos cavados para arranjar degrau, para não virar escavação. */
+  escapeMaxDigs: z.number().int().positive().default(12),
+  /** Quanto tempo parado seguindo o dono antes de suspeitar de buraco. */
+  escapeStuckMs: z.number().int().positive().default(6_000),
+  /** Buscar material sozinho quando faltar, em vez de só recusar. */
+  buildAutoGather: z.boolean().default(true),
 })
 
 export const configSchema = z.object({

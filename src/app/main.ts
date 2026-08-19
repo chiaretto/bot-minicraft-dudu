@@ -2,6 +2,7 @@ import 'dotenv/config'
 import { loadConfig, ConfigError } from '../config/load.js'
 import { RepertoireError } from '../dialogue/loader.js'
 import { createLogger } from '../logging/logger.js'
+import { renderStartupBanner, shouldShowBanner } from './startup-banner.js'
 import { CompanionBot } from './bot.js'
 
 async function main(): Promise<void> {
@@ -17,6 +18,12 @@ async function main(): Promise<void> {
   }
 
   const { config, secrets } = loaded
+
+  // Antes de qualquer tentativa de conexão: quem subiu o processo precisa ler a
+  // instrução do LAN antes de ver o backoff falhando. Fora do `pino` de
+  // propósito — moldura dentro de log estruturado vira uma linha JSON ilegível.
+  if (shouldShowBanner()) console.log(renderStartupBanner(config))
+
   const logger = createLogger(config.logLevel)
   logger.info({ owner: config.ownerPlayer, bot: config.persona.name }, 'iniciando')
 
