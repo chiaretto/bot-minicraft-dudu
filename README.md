@@ -66,6 +66,31 @@ server:
 npm run dev
 ```
 
+O bot avisa que subiu e lembra o passo seguinte — abrir o mundo em LAN na porta
+que ele está esperando:
+
+```
+╭──────────────────────────────────────────╮
+│                                          │
+│   Odraude está de pé!                    │
+│   Só falta você abrir o mundo pra mim.   │
+│                                          │
+╰──────────────────────────────────────────╯
+
+   1.  Abra o Minecraft na versão 1.21.11
+   2.  Entre no mundo do FresherRobin90
+   3.  Esc  ->  Abrir para LAN  ->  Iniciar mundo em LAN
+   4.  Veja no chat a porta que o jogo mostrar
+
+   Estou esperando em  localhost:55654
+
+   A porta do LAN muda toda vez que você abre o mundo.
+   Se o jogo mostrar outra, troque server.port no config.yaml.
+```
+
+O cartão é coisa de desenvolvimento: em produção (`NODE_ENV=production npm start`)
+o `stdout` fica só com o log estruturado.
+
 ### Windows
 
 O bot precisa rodar no **mesmo Windows onde o Minecraft está aberto** — um mundo
