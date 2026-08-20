@@ -59,6 +59,18 @@ const COMMANDS: CommandPattern[] = [
       /^vamos embora$/,
       /^bora$/,
       /^bora la$/,
+      // 2026-08-19 (log): "venha aqui" e "vem aonde estou" caíam na IA.
+      /^venha$/,
+      /^venha aqui$/,
+      /^venha ca$/,
+      /^venha comigo$/,
+      /^vem aonde estou$/,
+      /^vem aonde eu estou$/,
+      /^vem onde estou$/,
+      /^vem onde eu estou$/,
+      // 2026-08-19 (log): "ande", sozinho, é chamado pra vir andando junto.
+      /^ande$/,
+      /^anda$/,
     ],
   },
   {
@@ -77,7 +89,13 @@ const COMMANDS: CommandPattern[] = [
       /^me espera$/,
       /^me espere$/,
       /^nao me segue$/,
-      /^para de me seguir$/,
+      /^nao me siga$/,
+      // 2026-08-19 (log): a criança pede parando o verbo de vários jeitos
+      // ("pare", "pode parar") e erra a digitação ("segir"). Uma linha por
+      // variação viraria lista sem fim: aqui só o verbo varia.
+      /^(pode )?par[ae]r? de me segu?ir$/,
+      /^fique parado$/,
+      /^fique de guarda$/,
     ],
   },
   {
@@ -86,7 +104,20 @@ const COMMANDS: CommandPattern[] = [
   },
   {
     intent: { type: 'DEFENSE_ON', params: {} },
-    patterns: [/^pode brigar$/, /^pode lutar$/, /^me defende$/, /^pode atacar$/],
+    patterns: [
+      /^pode brigar$/,
+      /^pode lutar$/,
+      /^me defende$/,
+      /^pode atacar$/,
+      // 2026-08-19 (log): "me proteja" foi o pedido mais repetido que ninguém
+      // atendia. Pergunta ("voce me protege?") é conversa e fica no repertório.
+      /^me proteja$/,
+      /^me protege$/,
+      /^me protega$/,
+      /^me defenda$/,
+      /^pode me defender$/,
+      /^cuida de mim$/,
+    ],
   },
   {
     intent: { type: 'LOOK_AT_OWNER', params: {} },
@@ -215,6 +246,9 @@ const COMMANDS: CommandPattern[] = [
       /^conta ai$/,
       /^voce procura$/,
       /^voce conta$/,
+      // 2026-08-19 (log): "me procure" apareceu 3x num dia só.
+      /^me procure$/,
+      /^me ache$/,
     ],
   },
   {
@@ -228,6 +262,11 @@ const COMMANDS: CommandPattern[] = [
       /^some daqui que eu te acho$/,
       /^eu vou te achar$/,
       /^eu vou te procurar$/,
+      // 2026-08-19 (log): a criança manda esconder E avisa que vai achar, na
+      // mesma frase.
+      /^se esconda e vou te achar$/,
+      /^se esconda que eu vou te achar$/,
+      /^se esconde que eu vou te achar$/,
     ],
   },
   // Convite pelo NOME do jogo: não diz quem faz o quê, então não escolhe papel.
@@ -248,6 +287,17 @@ const COMMANDS: CommandPattern[] = [
       /^brincar de esconde esconde$/,
       /^esconde esconde$/,
       /^vamos de esconde esconde$/,
+      // 2026-08-19 (log): ela chama a brincadeira de "esconder", não de
+      // "esconde esconde".
+      // 2026-08-19 (log): trocar de brincadeira no meio ("agora de ...").
+      /^agora de esconde esconde$/,
+      /^agora esconde esconde$/,
+      /^agora de esconder$/,
+      /^vamos brincar de esconder$/,
+      /^vamos jogar de esconder$/,
+      /^bora brincar de esconder$/,
+      /^brincar de esconder$/,
+      /^vamos de esconder$/,
     ],
   },
   // ── Pega-pega ──────────────────────────────────────────────────────────
@@ -268,6 +318,13 @@ const COMMANDS: CommandPattern[] = [
       /^sai correndo$/,
       /^foge de mim$/,
       /^foge que eu te pego$/,
+      // 2026-08-19 (log): sem o "eu" na frente, e o revezamento de papel no
+      // meio da brincadeira ("agora eu pego").
+      /^vou te pegar$/,
+      /^corre que vou te pegar$/,
+      /^agora eu pego$/,
+      /^agora eu te pego$/,
+      /^minha vez de pegar$/,
     ],
   },
   {
@@ -301,6 +358,13 @@ const COMMANDS: CommandPattern[] = [
       /^quer jogar pega pega$/,
       /^brincar de pega pega$/,
       /^vamos de pega pega$/,
+      // 2026-08-19 (log): "vamos brincade de pega-pega" — erro de digitação é
+      // o caso normal, não a exceção.
+      /^agora de pega pega$/,
+      /^agora pega pega$/,
+      /^vamos brinca(r|de) de pega pega$/,
+      /^vamos jogar de pega pega$/,
+      /^vamos brincar de pega$/,
     ],
   },
   // Convite genérico, sem nome de jogo. Com duas brincadeiras no registro,
