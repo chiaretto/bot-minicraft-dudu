@@ -21,21 +21,22 @@ Enquanto `llm.provider` estiver em `'none'`, o repertório local é a **única**
 fonte de conversa — não existe IA para cobrir o que ele não previu. Por isso a
 manutenção é recorrente, e o dono do projeto pede essa análise todo dia.
 
-Quando pedirem "analise os logs e incremente o repertório", faça nesta ordem:
+Quando pedirem "analise os logs e incremente o repertório", o caminho pronto é
+o comando **`/upgrade-repertoire`** (`.claude/commands/upgrade-repertoire.md`),
+que já traz esta rotina inteira e roda em qualquer máquina com o repo clonado.
+À mão, a ordem é esta:
 
-1. **Levantar as falhas** — cruzar cada mensagem do jogador com a resposta
-   seguinte e separar as que caíram em `nao_entendi`:
+1. **Levantar as falhas** — o relatório cruza cada fala do jogador com a
+   resposta seguinte e separa em `miss` (caiu em `nao_entendi`) e `ai` (só a IA
+   resolveu; é o que internalizar para depender menos de rede):
 
    ```bash
-   node -e "
-   const fs=require('fs');
-   const f=process.argv[1];
-   const l=fs.readFileSync(f,'utf8').trim().split('\n').map(JSON.parse);
-   for(let i=0;i<l.length;i++){
-     if(l[i].speaker==='FresherRobin90'&&l[i+1]&&l[i+1].entryId==='nao_entendi')
-       console.log(l[i].text);
-   }" data/conversations/AAAA-MM-DD.jsonl
+   npm run repertoire:gaps              # histórico todo
+   npm run repertoire:gaps -- --days 3  # só os 3 dias de log mais recentes
    ```
+
+   Ele já esconde o que comando ou repertório passaram a resolver depois, e
+   aponta a entrada mais parecida com cada frase órfã.
 
 2. **Agrupar por assunto**, não por frase. Cinco jeitos de perguntar a mesma
    coisa viram **uma** entrada com cinco padrões — não cinco entradas.
@@ -56,8 +57,15 @@ Quando pedirem "analise os logs e incremente o repertório", faça nesta ordem:
    ligada; com `provider: 'none'` a resposta honesta é que ainda não aprendeu.
    Se mudar uma capacidade, varra o repertório atrás de promessa desatualizada.
 
-7. **Validar** antes de encerrar: `npm test` e uma checagem de que as frases do
-   log agora casam com a entrada certa.
+7. **Validar** antes de encerrar: `npm test` e conferir onde cada frase do log
+   cai agora na cascata, sem subir o bot:
+
+   ```bash
+   npm run repertoire:check -- "frase do log" "oi" "para"
+   ```
+
+   Rode também com frases antigas que já funcionavam: padrão largo demais rouba
+   frase de outra entrada.
 
 8. **Sincronizar as DUAS cópias do repertório.** Isto é fácil de esquecer e
    custa o trabalho do dia:
@@ -72,8 +80,13 @@ Quando pedirem "analise os logs e incremente o repertório", faça nesta ordem:
    versão e sem backup. Ao terminar a rodada do dia:
 
    ```bash
-   cp data/repertoire.yaml src/dialogue/default-repertoire.yaml
+   npm run repertoire:sync              # data/ -> semente versionada
+   npm run repertoire:sync -- --check   # só compara (bom antes de commitar)
    ```
+
+   Numa máquina onde o bot nunca rodou, `data/repertoire.yaml` não existe: edite
+   a semente direto e use `npm run repertoire:sync -- --from-seed` se quiser a
+   cópia de execução.
 
 Cada entrada nascida de log leva um comentário com a data de origem, para dar
 para rastrear depois por que ela existe.

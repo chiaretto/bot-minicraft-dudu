@@ -572,6 +572,48 @@ persona:
   originStory: 'Seu pai me criou pra jogar com você!'
 ```
 
+### Aprender com o histórico
+
+O repertório melhora olhando o que a criança falou de verdade. O relatório de
+lacunas cruza cada fala do jogador com a resposta que o bot deu e separa o que
+faltou:
+
+```bash
+npm run repertoire:gaps              # histórico todo
+npm run repertoire:gaps -- --days 3  # só os 3 dias de log mais recentes
+npm run repertoire:gaps -- --kind ai # só o que a IA teve de resolver
+```
+
+- **miss** — caiu em `nao_entendi`: o bot não respondeu nada útil.
+- **ai** — a IA salvou, mas custou rede e demora. Virar entrada de repertório é
+  o que faz o bot responder sozinho na próxima.
+
+Cada grupo mostra quantas vezes repetiu, como o jogador escreveu, a resposta que
+a IA deu e a entrada existente mais parecida. O que comando ou repertório já
+passaram a resolver fica escondido (`--include-resolved` mostra).
+
+Depois de editar, confira onde cada frase cai — sem subir o bot:
+
+```bash
+npm run repertoire:check -- "sabe voar" "me segue" "oi"
+#   "sabe voar"  -> REPERTÓRIO habilidade_fisica (confiança 1.00)
+#   "me segue"   -> COMANDO FOLLOW
+```
+
+E sincronize as duas cópias antes de commitar — `data/` está no `.gitignore`, a
+cópia versionada é `src/dialogue/default-repertoire.yaml`:
+
+```bash
+npm run repertoire:sync              # data/ -> semente versionada
+npm run repertoire:sync -- --check    # só compara
+```
+
+Quem usa [Claude Code](https://claude.com/claude-code) tem a rotina inteira no
+comando `/upgrade-repertoire`, versionado em `.claude/commands/`: ele roda o
+relatório, agrupa por assunto, escreve as entradas seguindo as regras acima,
+valida e sincroniza. Vale saber que, nesse caminho, as frases do log passam pelo
+modelo — os scripts acima, sozinhos, não mandam nada para fora da máquina.
+
 ---
 
 ## Histórico de conversa
@@ -611,9 +653,13 @@ São conversas de uma criança, gravadas em texto puro na sua máquina.
 
 ```bash
 npm run dev     # roda com reload
-npm test        # 211 testes
+npm test        # 657 testes
 npm run lint    # eslint + prettier
 npm run build   # compila para dist/
+
+npm run repertoire:gaps   # o que o repertório não cobriu no histórico
+npm run repertoire:check  # em que nível da cascata cai uma frase
+npm run repertoire:sync   # data/repertoire.yaml -> semente versionada
 ```
 
 Arquitetura em camadas, sem dependência de cima para baixo:

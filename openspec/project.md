@@ -56,6 +56,10 @@ a exceção: é para isso que existe `dialogue/normalize.ts`.
 
 - Estrutura em camadas: `config/` → `minecraft/` → `dialogue/` → `memory/` →
   `ai/` → `behaviors/` → `app/`.
+- `tools/` fica fora dessa cascata: ferramenta de manutenção (hoje, a análise do
+  histórico que alimenta o repertório) que o runtime nunca importa. Pode
+  importar de qualquer camada; nenhuma camada importa dele. A leitura de disco
+  fica nos scripts de `scripts/`, o `tools/` só tem função pura.
 - **Cascata de resolução de conversa**: parser de comandos → repertório local
   (`data/repertoire.yaml`) → IA. O modelo é sempre o último recurso.
 - Toda inferência passa pela interface `LlmProvider`. Nenhum código fora de
