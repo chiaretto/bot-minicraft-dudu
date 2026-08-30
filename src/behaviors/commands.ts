@@ -297,6 +297,27 @@ const COMMANDS: CommandPattern[] = [
       /^cercadinho$/,
     ],
   },
+  // ── Onde eu morri ───────────────────────────────────────────────────────
+  // 2026-08-30: o bot guarda o lugar da última morte do dono e leva ele de
+  // volta. As coisas ficam caídas cinco minutos — é uma corrida contra o
+  // relógio, e é justamente aí que a criança mais precisa de ajuda.
+  {
+    intent: { type: 'GO_TO_DEATH_SPOT', params: {} },
+    patterns: [
+      /^onde eu morri$/,
+      /^me leva onde eu morri$/,
+      /^vai onde eu morri$/,
+      /^me leva ate onde eu morri$/,
+      /^pega minhas coisas$/,
+      /^pega as minhas coisas$/,
+      /^busca minhas coisas$/,
+      /^cade minhas coisas$/,
+      /^me leva pras minhas coisas$/,
+      /^leva eu onde eu morri$/,
+      /^morri la$/,
+      /^eu morri ali$/,
+    ],
+  },
   // ── Dormir ──────────────────────────────────────────────────────────────
   // 2026-08-30: os padrões vieram da entrada `pedido_dormir`, que existia só
   // para dizer "eu não durmo". Dormir pula a noite — a parte do jogo que mais

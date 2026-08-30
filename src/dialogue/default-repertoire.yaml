@@ -271,6 +271,18 @@ entries:
       - 'Poxa... me desculpa, eu tentei te proteger.'
       - 'Você caiu! Corre que dá tempo de pegar suas coisas de volta!'
 
+  # ────────── 17b. NÃO SEI ONDE VOCÊ MORREU (ainda não vi) ────────────
+  # 2026-08-30: o bot passou a guardar o lugar da morte do dono. Esta entrada é
+  # o caso em que ele ainda não viu nenhuma — no primeiro dia, ou depois de
+  # reconectar. Honesta e com o que fazer no lugar.
+  - id: lugar_morte_desconhecido
+    trigger: fallback
+    responses:
+      - 'Eu não vi você morrer ainda, {owner}! Não sei pra onde te levar.'
+      - 'Não tenho lugar nenhum marcado. Se você cair perto de mim eu marco!'
+      - 'Ainda não guardei nenhum lugar assim. Fica perto que eu fico de olho.'
+      - 'Não sei onde foi, desculpa! Da próxima vez eu marco pra você.'
+
   # ──────────────── 18. EVENTO: DONO MACHUCADO ───────────────────────
   - id: evento_dono_machucado
     trigger: spontaneous

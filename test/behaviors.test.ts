@@ -290,6 +290,36 @@ describe('contar item da mochila', () => {
   })
 })
 
+/**
+ * Voltar onde o dono morreu. As coisas ficam caídas cinco minutos: é corrida
+ * contra o relógio, e é quando a criança mais precisa de ajuda.
+ * Ver: player_commands_delta.md → "Voltar onde o dono morreu".
+ */
+describe('onde eu morri', () => {
+  it('os jeitos de pedir viram GO_TO_DEATH_SPOT', () => {
+    for (const text of [
+      'onde eu morri',
+      'me leva onde eu morri',
+      'pega minhas coisas',
+      'busca minhas coisas',
+      'cade minhas coisas',
+      'morri la',
+    ]) {
+      expect(parseCommand(text, 'Dudu')?.intent.type, text).toBe('GO_TO_DEATH_SPOT')
+    }
+  })
+
+  /**
+   * A intenção não tem parâmetro, e é isso que a torna decorável: a coordenada
+   * mora na memória do bot, não no pedido. "Me leva onde eu morri" quer dizer a
+   * mesma coisa amanhã, com outro lugar.
+   */
+  it('não carrega coordenada nenhuma no pedido', () => {
+    const parsed = parseCommand('onde eu morri', 'Dudu')
+    expect(parsed?.intent.params).toEqual({})
+  })
+})
+
 describe('desistência no jogo', () => {
   it('reconhece que o jogador desistiu', () => {
     for (const text of ['desisto', 'dudu, desisto', 'cade voce', 'me entrego', 'nao acho voce']) {

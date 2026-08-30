@@ -31,6 +31,7 @@ export const INTENT_TYPES = [
   'PLACE_BLOCK',
   'DIG',
   'SLEEP',
+  'GO_TO_DEATH_SPOT',
   'CHAT',
   'UNKNOWN',
 ] as const
@@ -87,6 +88,7 @@ export const LEARNABLE_INTENTS = [
   'PLACE_BLOCK',
   'DIG',
   'SLEEP',
+  'GO_TO_DEATH_SPOT',
 ] as const
 
 export type LearnableIntentType = (typeof LEARNABLE_INTENTS)[number]
@@ -159,6 +161,10 @@ export const intentSchema = z.discriminatedUnion('type', [
   }),
   // Dormir na cama mais próxima. Sem parâmetro: qual cama é o mundo que diz.
   z.object({ type: z.literal('SLEEP'), params: z.object({}).default({}) }),
+  // Ir até onde o dono morreu. SEM parâmetro de propósito: a coordenada mora na
+  // memória do bot, não no pedido. É o que permite a frase ser decorada — "vai
+  // onde eu morri" quer dizer a mesma coisa amanhã, com outro lugar.
+  z.object({ type: z.literal('GO_TO_DEATH_SPOT'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('JUMP'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('TRICK'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('EQUIP_ITEM'), params: z.object({ item: z.string().min(1) }) }),

@@ -63,6 +63,12 @@ const { goals } = pathfinderPkg
 
 const THREAT_TICK_MS = 250
 
+/**
+ * Quanto tempo as coisas de um jogador morto ficam no chão, no vanilla.
+ * Passou disso, o bot ainda leva — mas avisa antes.
+ */
+const ITEM_DESPAWN_MINUTES = 5
+
 /** Espera antes de tentar destravar de novo, depois de uma tentativa falha. */
 const UNSTICK_RETRY_MS = 60_000
 
@@ -124,6 +130,14 @@ export class CompanionBot {
   private survivalBusy = false
   /** Onde e quando ele acendeu a última tocha. */
   private lastTorch: { pos: Vec3Like; at: number } | null = null
+  /**
+   * Onde o dono morreu da última vez.
+   *
+   * Mora aqui, e não no pedido: a coordenada é de um momento, e é justamente
+   * por isso que a FRASE ("me leva onde eu morri") pode ser decorada sem
+   * mentir amanhã.
+   */
+  private ownerDeathSpot: { pos: Vec3Like; at: number } | null = null
   private engagementStartedAt: number | null = null
   private wasNight: boolean | null = null
   /** Rodada em andamento, ou `null`. */
@@ -322,6 +336,17 @@ export class CompanionBot {
     })
 
     this.mc.on('entityGone', (id) => this.recentAttackers.delete(id))
+
+    // A morte do dono é a hora em que ele mais precisa de ajuda: as coisas
+    // ficam caídas cinco minutos, e achar o lugar de novo é difícil.
+    this.mc.on('ownerDied', (position) => {
+      this.ownerDeathSpot = { pos: position, at: Date.now() }
+      this.logger.info(
+        { x: Math.round(position.x), y: Math.round(position.y), z: Math.round(position.z) },
+        'o dono morreu — lugar guardado',
+      )
+      this.saySpontaneous('evento_dono_morreu')
+    })
 
     this.mc.on('death', () => {
       // `reset()` aborta o sinal e com ele a rodada em andamento.
@@ -610,6 +635,46 @@ export class CompanionBot {
     return true
   }
 
+  /**
+   * Leva o dono até onde ele morreu da última vez.
+   *
+   * As coisas dele ficam caídas cinco minutos. Depois disso o bot vai do
+   * mesmo jeito — quem decide se vale a pena é a criança — mas avisa antes,
+   * porque chegar lá e não achar nada seria pior do que ouvir a verdade.
+   * Ver: player_commands_delta.md → "Voltar onde o dono morreu".
+   */
+  private goToDeathSpot(): boolean {
+    const marca = this.ownerDeathSpot
+    if (!marca) {
+      this.sayFrom('lugar_morte_desconhecido')
+      return false
+    }
+
+    const minutos = Math.floor((Date.now() - marca.at) / 60_000)
+    if (minutos >= ITEM_DESPAWN_MINUTES) {
+      this.say(
+        `Faz ${minutos} minutos que você morreu, suas coisas podem ter sumido. Mas eu te levo lá!`,
+        'command',
+      )
+    }
+
+    const { x, y, z } = marca.pos
+    this.logger.info(
+      { x: Math.round(x), y: Math.round(y), z: Math.round(z), minutos },
+      'levando o dono ao lugar da morte',
+    )
+    this.state.command('ACTION', { actionLabel: 'GO_TO_DEATH_SPOT' })
+    this.mc.gotoPosition(x, y, z, 1)
+    this.say('Vem comigo que eu sei onde foi!', 'command')
+    return true
+  }
+
+  /** Fala uma entrada do repertório, quando ela existe. */
+  private sayFrom(entryId: string): void {
+    const line = this.repertoire.say(entryId, this.snapshot())
+    if (line) this.say(line.text, 'repertoire', line.entryId)
+  }
+
   /** Qual `source` gravar no histórico de conversa para esta resposta. */
   private sourceOf(result: RouteResult): 'llm' | 'learned' | 'repertoire' {
     if (result.source === 'llm') return 'llm'
@@ -804,6 +869,8 @@ export class CompanionBot {
         return this.config.games.enabled
       case 'ATTACK':
         return this.attackOnCommand(intent.params.target)
+      case 'GO_TO_DEATH_SPOT':
+        return this.goToDeathSpot()
       default:
         return this.runWorldAction(intent)
     }

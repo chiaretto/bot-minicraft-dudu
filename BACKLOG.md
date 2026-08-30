@@ -186,7 +186,7 @@ threat-watcher.
 
 **Custo.** Médio.
 
-### 12. Buscar as coisas do dono quando ele morre
+### 12. ~~Buscar as coisas do dono quando ele morre~~ ✅ (2026-08-30, `add-death-spot`)
 
 Marcar a coordenada da morte do dono e ir até lá a pedido — *"morri lá, pega
 minhas coisas"*.

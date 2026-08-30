@@ -21,6 +21,8 @@ export interface McEvents {
   health: []
   death: []
   ownerHurt: [attackerId: number | null]
+  /** O dono morreu, e onde. É o lugar onde as coisas dele ficaram. */
+  ownerDied: [position: { x: number; y: number; z: number }]
   entityGone: [entityId: number]
   kicked: [reason: string]
   end: [reason: string]
@@ -133,6 +135,14 @@ export class MinecraftClient extends EventEmitter {
       if (entity?.username === this.config.ownerPlayer) {
         this.emit('ownerHurt', null)
       }
+    })
+
+    // Morte do dono: guarda ONDE, que é o que interessa. As coisas dele ficam
+    // caídas ali por cinco minutos, e é isso que dá tempo de ir buscar.
+    bot.on('entityDead', (entity) => {
+      if (entity?.username !== this.config.ownerPlayer) return
+      const p = entity.position
+      this.emit('ownerDied', { x: p.x, y: p.y, z: p.z })
     })
 
     bot.on('entityGone', (entity) => {

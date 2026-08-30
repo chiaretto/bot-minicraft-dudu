@@ -309,6 +309,7 @@ llm:
 | `dudu, cava um túnel`                | passagem de 2 de altura            |
 | `dudu, põe um bloco aqui`            | põe um bloco no chão à frente      |
 | `dudu, vamos dormir`                 | deita na cama e **pula a noite**   |
+| `dudu, me leva onde eu morri`        | volta ao lugar da sua última morte |
 | `dudu, esconde esconde`              | pergunta quem se esconde           |
 | `dudu, pega pega`                    | pergunta quem corre                |
 | `dudu, se esconde`                   | esconde-esconde: ele se esconde    |
