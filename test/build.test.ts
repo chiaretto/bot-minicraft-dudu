@@ -124,6 +124,21 @@ describe('construir de verdade', () => {
     expect(outcome.message).toMatch(/casa/i)
   })
 
+  // 2026-08-30: as quatro plantas novas levantam pelo mesmo caminho, e cada
+  // uma termina com a fala DELA — a frase única mandava entrar numa escada.
+  it('levanta as quatro plantas novas, cada uma com a fala dela', async () => {
+    for (const name of ['piscina', 'ponte', 'escada', 'cerca'] as const) {
+      const world = new FakeWorld()
+      const plan = planStructure(name)
+
+      const outcome = await buildStructure(deps(world), name)
+
+      expect(outcome.ok, name).toBe(true)
+      expect(outcome.placed, name).toBe(plan.blocks.length)
+      expect(outcome.message, name).toBe(plan.finishedLine)
+    }
+  })
+
   it('levanta a torre inteira', async () => {
     const world = new FakeWorld()
     const outcome = await buildStructure(deps(world), 'torre')

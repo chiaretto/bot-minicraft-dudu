@@ -81,7 +81,12 @@ uma recusa que vira capacidade — e a entrada correspondente precisa ser
 reescrita no mesmo change (regra número um: nunca prometer o que não faz, nem
 recusar o que já faz).
 
-### 3. Mais plantas de construção
+### 3. ~~Mais plantas de construção~~ ✅
+
+> **Feito em 2026-08-30**, no change `add-more-blueprints`: `piscina`, `ponte`,
+> `escada` e `cerca` entraram, e o catálogo foi de 2 para 6. O `iglu` ficou de
+> fora — sem neve na allowlist, seria uma casa com nome errado. Falta a prova em
+> jogo (tarefas 6.3 e 6.4 do `tasks.md`).
 
 `STRUCTURE_NAMES` tem só `casa` e `torre`. Candidatos: **piscina**, **ponte**,
 **escada**, **cerca/curral**, **iglu**.
@@ -95,7 +100,7 @@ IA segue sozinho por `STRUCTURE_NAMES`.
 
 **Custo.** Baixo — a máquina de construir já existe inteira.
 
-### 4. `JUMP` — pular a pedido
+### 4. ~~`JUMP` — pular a pedido~~ ✅ (2026-08-30, `add-jump-and-trick`)
 
 **Evidência.** Entrada `pedido_pular`, criada em 2026-08-19 depois de `pule`
 aparecer 3x e a IA responder que tinha pulado — mentira.
@@ -105,7 +110,7 @@ aparecer 3x e a IA responder que tinha pulado — mentira.
 
 **Custo.** ~20 linhas (`bot.setControlState('jump')`).
 
-### 5. `TRICK` — dancinha, girar no lugar
+### 5. ~~`TRICK` — dancinha, girar no lugar~~ ✅ (2026-08-30, `add-jump-and-trick`)
 
 **Evidência.** Entrada `pedido_truque` (`faz uma dancinha`, `gira no lugar`,
 `ande em circulos`, `dance`).

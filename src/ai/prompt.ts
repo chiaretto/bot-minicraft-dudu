@@ -1,5 +1,19 @@
 import type { ConversationContext } from './provider.js'
 import { INTENT_TYPES, type IntentType } from '../domain/intent.js'
+import { STRUCTURE_NAMES } from '../domain/blueprints.js'
+
+/**
+ * As plantas que o bot sabe levantar, escritas para o prompt.
+ *
+ * Sai de `STRUCTURE_NAMES` e não da mão de ninguém: prompt desatualizado é a IA
+ * recusando o que o bot sabe fazer — foi o que aconteceu com a piscina, pedida
+ * duas vezes e recusada as duas enquanto o catálogo dizia "casa ou torre".
+ * Ver: local_dialogue_delta.md → "O prompt da IA acompanha a capacidade".
+ */
+function structureList(): string {
+  const nomes = STRUCTURE_NAMES.map((n) => `"${n}"`)
+  return `${nomes.slice(0, -1).join(', ')} ou ${nomes[nomes.length - 1]}`
+}
 
 /**
  * Fatos de identidade injetados como verdade fixa.
@@ -14,7 +28,8 @@ export function identityFacts(ctx: ConversationContext): string {
     `Seu melhor amigo e dono é ${ctx.owner}.`,
     `Sua origem, que você NUNCA contradiz nem reinventa: "${ctx.originStory}"`,
     'Você sabe: seguir o jogador, ficar de guarda num lugar, parar, pegar blocos,',
-    'entregar item, defender o jogador de monstros e construir casinha e torre.',
+    'entregar item, defender o jogador de monstros e construir estas coisas:',
+    `${STRUCTURE_NAMES.join(', ')}.`,
     'Você NÃO sabe: craftar, fazer poções, nem construir o que não está na sua lista.',
     'Você NUNCA ataca outro jogador, em nenhuma circunstância.',
   ].join('\n')
@@ -37,8 +52,9 @@ export const ACTION_DESCRIPTIONS: Record<Exclude<IntentType, 'CHAT' | 'UNKNOWN'>
     'ir pegar blocos — precisa de "block" e "count". ' +
     '"block" pode ser um grupo: madeira, pedra, terra, areia',
   BUILD:
-    'construir — "structure" é "casa" ou "torre". ' +
-    '"material" é opcional (madeira, pedra…): sem ele o bot usa o que tiver',
+    `construir — "structure" é ${structureList()}. ` +
+    '"material" é opcional (madeira, pedra…): sem ele o bot usa o que tiver. ' +
+    'A piscina sai vazia: ele não tem balde, quem põe a água é o jogador',
   ESCAPE_HOLE:
     'sair de um buraco fazendo escadinha de blocos. ' +
     'Use quando ele estiver preso lá embaixo e não conseguir chegar no jogador',
@@ -48,6 +64,8 @@ export const ACTION_DESCRIPTIONS: Record<Exclude<IntentType, 'CHAT' | 'UNKNOWN'>
   GOTO_COORDS: 'ir até um lugar — precisa de "x", "y" e "z"',
   DROP_ITEM_TO_OWNER: 'entregar um item para o jogador — precisa de "item"',
   LOOK_AT_OWNER: 'virar e olhar para o jogador',
+  JUMP: 'dar uns pulinhos no lugar, de brincadeira',
+  TRICK: 'fazer graça: girar no lugar e terminar com um pulo',
   EQUIP_ITEM: 'pegar um item na mão — precisa de "item"',
   DEFENSE_ON: 'voltar a brigar com monstro para proteger o jogador',
   DEFENSE_OFF: 'parar de brigar com monstro',

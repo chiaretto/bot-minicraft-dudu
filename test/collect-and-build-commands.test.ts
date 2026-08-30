@@ -87,13 +87,63 @@ describe('pedir construção vira obra, sem IA nenhuma', () => {
     }
   })
 
+  // 2026-08-30: as quatro plantas novas.
+  it('piscina', () => {
+    // "construa uma piscina" é a frase EXATA do log de 29/08, pedida duas
+    // vezes e recusada as duas.
+    for (const text of ['construa uma piscina', 'faz uma piscina', 'piscininha']) {
+      const parsed = parseCommand(text, BOT)
+      expect(parsed?.intent.type === 'BUILD' && parsed.intent.params.structure, text).toBe(
+        'piscina',
+      )
+    }
+  })
+
+  it('ponte', () => {
+    for (const text of ['faz uma ponte', 'construa uma ponte', 'quero uma ponte']) {
+      const parsed = parseCommand(text, BOT)
+      expect(parsed?.intent.type === 'BUILD' && parsed.intent.params.structure, text).toBe('ponte')
+    }
+  })
+
+  it('cerca, e curral também', () => {
+    for (const text of ['faz uma cerca', 'faz um curral', 'quero um curral', 'cercadinho']) {
+      const parsed = parseCommand(text, BOT)
+      expect(parsed?.intent.type === 'BUILD' && parsed.intent.params.structure, text).toBe('cerca')
+    }
+  })
+
+  /**
+   * A ambiguidade de "escada", resolvida a favor de quem está preso.
+   *
+   * `faz uma escada` já era ESCAPE_HOLE desde `add-escape-hole`, e é assim que
+   * quem caiu num buraco pede socorro. A escadaria pega só a família do verbo
+   * de obra — perder uma escadaria é chato, ficar preso num buraco é pior.
+   */
+  it('escada: verbo de obra constrói, pedido de socorro continua socorro', () => {
+    for (const text of ['constroi uma escada', 'construa uma escada', 'quero uma escada']) {
+      const parsed = parseCommand(text, BOT)
+      expect(parsed?.intent.type === 'BUILD' && parsed.intent.params.structure, text).toBe('escada')
+    }
+    for (const text of ['faz uma escada', 'faz uma escadinha', 'sobe']) {
+      expect(parseCommand(text, BOT)?.intent.type, text).toBe('ESCAPE_HOLE')
+    }
+  })
+
   it('tolera caixa, acento e pontuação, como a criança digita', () => {
     expect(parseCommand('DUDU, FAZ UMA CASA!!!', BOT)?.intent.type).toBe('BUILD')
     expect(parseCommand('Constrói uma casa', BOT)?.intent.type).toBe('BUILD')
   })
 
   it('toda estrutura do catálogo tem como ser pedida', () => {
-    const pedidos = ['faz uma casa', 'faz uma torre']
+    const pedidos = [
+      'faz uma casa',
+      'faz uma torre',
+      'faz uma piscina',
+      'faz uma ponte',
+      'constroi uma escada',
+      'faz um curral',
+    ]
       .map((t) => parseCommand(t, BOT))
       .map((p) => (p?.intent.type === 'BUILD' ? p.intent.params.structure : null))
     for (const name of STRUCTURE_NAMES) {

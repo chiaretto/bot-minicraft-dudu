@@ -228,6 +228,118 @@ const COMMANDS: CommandPattern[] = [
       /^monta uma torre$/,
     ],
   },
+  // 2026-08-30: pedida duas vezes no log de 29/08 ("construa uma piscina") e
+  // recusada as duas. O verbo que a criança usou foi "construa" — os padrões
+  // cobrem a família inteira mesmo assim, que ela troca de verbo sem avisar.
+  {
+    intent: { type: 'BUILD', params: { structure: 'piscina' } },
+    patterns: [
+      /^constroi uma piscina$/,
+      /^construa uma piscina$/,
+      /^faz uma piscina$/,
+      /^faca uma piscina$/,
+      /^me faz uma piscina$/,
+      /^quero uma piscina$/,
+      /^monta uma piscina$/,
+      /^faz uma piscininha$/,
+      /^piscininha$/,
+    ],
+  },
+  {
+    intent: { type: 'BUILD', params: { structure: 'ponte' } },
+    patterns: [
+      /^constroi uma ponte$/,
+      /^construa uma ponte$/,
+      /^faz uma ponte$/,
+      /^faca uma ponte$/,
+      /^me faz uma ponte$/,
+      /^quero uma ponte$/,
+      /^monta uma ponte$/,
+      /^faz uma pontezinha$/,
+      /^pontezinha$/,
+    ],
+  },
+  // ATENÇÃO à palavra "escada": `faz uma escada` e `faz uma escadinha` já são
+  // ESCAPE_HOLE desde `add-escape-hole`, e é assim que quem está preso num
+  // buraco pede socorro. Estes padrões pegam só a família do VERBO DE OBRA
+  // ("constroi", "construa", "monta", "quero", "me faz"), que ninguém usa
+  // quando está caído numa ravina. O empate fica com quem chegou antes: perder
+  // uma escadaria é chato, ficar preso num buraco é pior.
+  {
+    intent: { type: 'BUILD', params: { structure: 'escada' } },
+    patterns: [
+      /^constroi uma escada$/,
+      /^construa uma escada$/,
+      /^me faz uma escada$/,
+      /^quero uma escada$/,
+      /^monta uma escada$/,
+      /^constroi uma escadinha$/,
+      /^construa uma escadinha$/,
+    ],
+  },
+  // "curral" é como a criança chama, "cerca" é o nome da planta. Os dois valem.
+  {
+    intent: { type: 'BUILD', params: { structure: 'cerca' } },
+    patterns: [
+      /^constroi uma cerca$/,
+      /^construa uma cerca$/,
+      /^faz uma cerca$/,
+      /^faca uma cerca$/,
+      /^constroi um curral$/,
+      /^construa um curral$/,
+      /^faz um curral$/,
+      /^faca um curral$/,
+      /^me faz um curral$/,
+      /^quero um curral$/,
+      /^monta um curral$/,
+      /^faz um cercadinho$/,
+      /^cercadinho$/,
+    ],
+  },
+  // ── Graça: pular e dancinha ─────────────────────────────────────────────
+  // 2026-08-30: os 18 padrões vieram inteiros das entradas `pedido_pular` e
+  // `pedido_truque`, que existiam só para dizer "ainda não aprendi". As duas
+  // entradas foram removidas do repertório no mesmo change: comando de ação
+  // não é repertório, e a recusa ganharia do comando na frase que o parser não
+  // pegasse — o bot diria que não sabe pular logo depois de pular.
+  {
+    intent: { type: 'JUMP', params: {} },
+    patterns: [
+      /^pula$/,
+      /^pule$/,
+      /^pula ai$/,
+      /^pule ai$/,
+      /^pula pra mim$/,
+      /^pule pra mim$/,
+      /^pula agora$/,
+      /^pule agora$/,
+      /^da uns pulos$/,
+      /^da um pulo$/,
+      /^da uns pulinhos$/,
+      /^pula pula$/,
+    ],
+  },
+  {
+    intent: { type: 'TRICK', params: {} },
+    patterns: [
+      /^faz uma dancinha$/,
+      /^faca uma dancinha$/,
+      /^dança$/,
+      /^danca$/,
+      /^dance$/,
+      /^faz um truque$/,
+      /^faca um truque$/,
+      /^gira no lugar$/,
+      /^gira$/,
+      /^roda no lugar$/,
+      /^roda$/,
+      /^da uma volta$/,
+      /^ande em circulos$/,
+      /^anda em circulos$/,
+      /^ande em circulo$/,
+      /^anda em circulo$/,
+    ],
+  },
   // ── Brincadeiras ────────────────────────────────────────────────────────
   // Vêm antes do convite genérico: "eu vou me esconder" também casaria com
   // "vou me esconder" de um convite qualquer, e o papel ficaria trocado.

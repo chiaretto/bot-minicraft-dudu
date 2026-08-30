@@ -24,6 +24,8 @@ export const INTENT_TYPES = [
   'PLAY_GAME',
   'ASK_WHICH_GAME',
   'ATTACK',
+  'JUMP',
+  'TRICK',
   'CHAT',
   'UNKNOWN',
 ] as const
@@ -74,6 +76,8 @@ export const LEARNABLE_INTENTS = [
   'DEFENSE_OFF',
   'PLAY_GAME',
   'ASK_WHICH_GAME',
+  'JUMP',
+  'TRICK',
 ] as const
 
 export type LearnableIntentType = (typeof LEARNABLE_INTENTS)[number]
@@ -125,6 +129,11 @@ export const intentSchema = z.discriminatedUnion('type', [
   // Abrir a porta mais próxima. Sem parâmetro: qual porta é o mundo que diz.
   z.object({ type: z.literal('OPEN_DOOR'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('LOOK_AT_OWNER'), params: z.object({}).default({}) }),
+  // Pular e fazer graça. Sem parâmetro de propósito: "pula" não tem
+  // quantidade, e número no pedido viraria parâmetro a validar por uma graça
+  // de dois segundos.
+  z.object({ type: z.literal('JUMP'), params: z.object({}).default({}) }),
+  z.object({ type: z.literal('TRICK'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('EQUIP_ITEM'), params: z.object({ item: z.string().min(1) }) }),
   z.object({ type: z.literal('DEFENSE_ON'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('DEFENSE_OFF'), params: z.object({}).default({}) }),

@@ -10,6 +10,7 @@ import {
 } from '../src/ai/resilient.js'
 import { ProviderError, type ConversationContext, type LlmProvider } from '../src/ai/provider.js'
 import { buildConversePrompt, identityFacts, ACTIONABLE_INTENTS } from '../src/ai/prompt.js'
+import { STRUCTURE_NAMES } from '../src/domain/blueprints.js'
 import { cleanReply } from '../src/ai/providers/ollama.js'
 import {
   validateIntent,
@@ -189,6 +190,20 @@ describe('prompt', () => {
 
   it('o prompt manda uma ação por resposta, nunca duas', () => {
     expect(buildConversePrompt(ctx)).toMatch(/UMA ação por resposta/i)
+  })
+
+  /**
+   * O catálogo de plantas do prompt sai de `STRUCTURE_NAMES`.
+   *
+   * Prompt escrito à mão envelhece: enquanto ele dizia "casa ou torre", a IA
+   * recusou "construa uma piscina" duas vezes — uma coisa que o bot passou a
+   * saber fazer.
+   */
+  it('o prompt cita todas as plantas do catálogo, sem ninguém editar o prompt', () => {
+    const prompt = buildConversePrompt(ctx)
+    for (const name of STRUCTURE_NAMES) {
+      expect(prompt, `a IA não sabe que ele constrói ${name}`).toContain(name)
+    }
   })
 
   it('o prompt não deixa a IA escolher papel de brincadeira', () => {

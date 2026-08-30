@@ -236,6 +236,80 @@ export async function dropItemToOwner(
   return { ok: true, message: `Toma aí o ${itemName}!` }
 }
 
+/**
+ * Espera, mas obedecendo ao `para`.
+ *
+ * Graça é feita de pausas curtas, e uma pausa que ignora o abort faz o `para`
+ * parecer quebrado para quem está olhando.
+ */
+function sleep(ms: number, signal: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new ActionAborted('ação cancelada'))
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    function onAbort(): void {
+      clearTimeout(timer)
+      reject(new ActionAborted('ação cancelada'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+/** Quantos pulos saem de um `pula`. Três é a graça inteira. */
+const JUMP_TIMES = 3
+
+/**
+ * Pula no lugar, a pedido.
+ *
+ * Nenhum controle de andar é ligado: pulo que anda leva o bot para dentro de
+ * um buraco enquanto a criança acha graça.
+ * Ver: player_commands_delta.md → "Pular a pedido".
+ */
+export async function jump(deps: ActionDeps): Promise<ActionOutcome> {
+  const { bot } = deps
+  try {
+    for (let i = 0; i < JUMP_TIMES; i++) {
+      checkAborted(deps.signal)
+      bot.setControlState('jump', true)
+      await sleep(250, deps.signal)
+      bot.setControlState('jump', false)
+      await sleep(200, deps.signal)
+    }
+  } finally {
+    // Controle preso ligado deixa o bot pulando para sempre — inclusive depois
+    // de um `para`.
+    bot.setControlState('jump', false)
+  }
+  return { ok: true, message: 'Olha eu pulando!' }
+}
+
+/** Em quantos passos o giro fecha a volta. */
+const TRICK_STEPS = 8
+
+/**
+ * Faz graça: gira uma volta no lugar e termina com um pulo.
+ *
+ * Gira, não anda em círculo: girar é seguro em qualquer terreno, e andar em
+ * círculo cai em buraco.
+ * Ver: player_commands_delta.md → "Fazer graça a pedido".
+ */
+export async function trick(deps: ActionDeps): Promise<ActionOutcome> {
+  const { bot } = deps
+  const inicio = bot.entity.yaw
+  const passo = (Math.PI * 2) / TRICK_STEPS
+
+  for (let i = 1; i <= TRICK_STEPS; i++) {
+    checkAborted(deps.signal)
+    await bot.look(inicio + passo * i, 0, true)
+    await sleep(120, deps.signal)
+  }
+
+  await jump(deps)
+  return { ok: true, message: 'Tcharam! Gostou da minha dancinha?' }
+}
+
 export async function lookAtOwner(deps: ActionDeps): Promise<ActionOutcome> {
   const owner = deps.bot.players[deps.ownerName]?.entity
   if (!owner) throw new ActionRefused('não tô te vendo')
@@ -565,6 +639,10 @@ export async function runIntent(deps: ActionDeps, intent: Intent): Promise<Actio
       return lookAtOwner(deps)
     case 'EQUIP_ITEM':
       return equipItem(deps, intent.params.item)
+    case 'JUMP':
+      return jump(deps)
+    case 'TRICK':
+      return trick(deps)
     default:
       throw new ActionRefused('essa eu não sei fazer')
   }

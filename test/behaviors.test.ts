@@ -202,6 +202,54 @@ describe('parser de comandos', () => {
   })
 })
 
+/**
+ * Pular e fazer graça, os dois pedidos mais baratos do backlog.
+ * Ver: player_commands_delta.md → "Pular a pedido" / "Fazer graça a pedido".
+ */
+describe('graça: pular e dancinha', () => {
+  it('os nove jeitos de pedir pulo viram JUMP', () => {
+    for (const text of [
+      'pula',
+      'pule',
+      'pula ai',
+      'pula pra mim',
+      'pula agora',
+      'da uns pulos',
+      'da uns pulinhos',
+      'da um pulo',
+      'dudu, PULA!!!',
+    ]) {
+      expect(parseCommand(text, 'Dudu')?.intent.type, text).toBe('JUMP')
+    }
+  })
+
+  it('os jeitos de pedir graça viram TRICK', () => {
+    for (const text of [
+      'faz uma dancinha',
+      'dança',
+      'dance',
+      'faz um truque',
+      'gira no lugar',
+      'gira',
+      'roda',
+      'da uma volta',
+      'ande em circulos',
+    ]) {
+      expect(parseCommand(text, 'Dudu')?.intent.type, text).toBe('TRICK')
+    }
+  })
+
+  /**
+   * As duas entradas de repertório que respondiam isso foram REMOVIDAS no mesmo
+   * change. Se alguém devolver uma delas, o parser continua ganhando — mas a
+   * recusa voltaria a aparecer na frase que o parser não pega.
+   */
+  it('pergunta sobre pular continua sendo conversa, não comando', () => {
+    expect(parseCommand('voce sabe pular', 'Dudu')).toBeNull()
+    expect(parseCommand('voce consegue pular um bloco', 'Dudu')).toBeNull()
+  })
+})
+
 describe('desistência no jogo', () => {
   it('reconhece que o jogador desistiu', () => {
     for (const text of ['desisto', 'dudu, desisto', 'cade voce', 'me entrego', 'nao acho voce']) {

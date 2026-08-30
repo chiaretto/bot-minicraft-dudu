@@ -290,6 +290,8 @@ llm:
 | `dudu, não briga`                    | desliga a defesa automática        |
 | `dudu, pode brigar`                  | religa a defesa                    |
 | `dudu, olha pra mim`                 | vira para você                     |
+| `dudu, pula` / `dá uns pulinhos`     | pula três vezes no lugar           |
+| `dudu, faz uma dancinha` / `gira`    | gira uma volta e termina com pulo  |
 | `dudu, ataca` / `mata ele`           | ataca o monstro mais perto de você |
 | `dudu, ataca o zumbi`                | ataca aquele tipo de monstro       |
 | `dudu, vamos brincar`                | pergunta qual das duas brincadeiras |
@@ -298,6 +300,10 @@ llm:
 | `dudu, pega madeira` / `pega pedra`  | vai buscar o bloco e traz          |
 | `dudu, faz uma casa`                 | constrói uma casinha ao lado dele  |
 | `dudu, faz uma torre`                | constrói uma torre                 |
+| `dudu, faz uma piscina`              | levanta a bacia (a água é sua)     |
+| `dudu, faz uma ponte`                | passarela com parede dos dois lados |
+| `dudu, constrói uma escada`          | escadaria de 5 degraus             |
+| `dudu, faz um curral`                | cerca de 7x7 com portão            |
 | `dudu, esconde esconde`              | pergunta quem se esconde           |
 | `dudu, pega pega`                    | pergunta quem corre                |
 | `dudu, se esconde`                   | esconde-esconde: ele se esconde    |
@@ -440,9 +446,20 @@ alucinação da IA de virar a casa do jogador demolida. Minério fica de fora:
 | --- | --- |
 | `dudu, faz uma casa` | 5x5, paredes de 2, porta, 3 janelas, telhado (52 blocos) |
 | `dudu, faz uma torre` | 3x3, paredes de 4, porta, topo fechado (39 blocos) |
+| `dudu, faz uma piscina` | bacia 5x5 com borda de 1, sem tampa (41 blocos) |
+| `dudu, faz uma ponte` | passarela 3x9 com guarda-corpo dos dois lados (45 blocos) |
+| `dudu, constrói uma escada` | escadaria de 5 degraus, 2 de largura (30 blocos) |
+| `dudu, faz um curral` | cerca 7x7 de 2 de altura, com portão (46 blocos) |
 
 Pequenas de propósito: obra grande demora demais para uma criança assistir, e
-cada bloco a mais é uma chance a mais de dar errado.
+cada bloco a mais é uma chance a mais de dar errado. Nenhuma passa de 80 blocos.
+
+> **A piscina sai vazia.** Ele não tem balde — levanta a bacia e avisa que a
+> água é com você. Prometer piscina cheia seria prometer o que ele não faz.
+
+> **`faz uma escada` continua sendo pedido de socorro.** Essa frase já era como
+> quem caiu num buraco pede para o bot subir, e continua sendo. Para a
+> escadaria, use o verbo de obra: `constrói uma escada`.
 
 **Como ele escolhe o material:** o que tiver em maior quantidade na mochila. Se
 faltar, ele vai buscar sozinho antes de começar (`buildAutoGather`). Se ainda

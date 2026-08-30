@@ -283,18 +283,10 @@ async function place(
   if (postos === 0) {
     return { ok: false, message: 'Não consegui construir aqui, desculpa!', placed: 0, total }
   }
+  // A fala vem da planta: "entra pra ver" está certo numa casa e errado numa
+  // escada, numa ponte e numa piscina.
   if (postos < total) {
-    return {
-      ok: true,
-      message: `Fiz o que deu da ${blueprint.structure}! Faltaram uns pedaços.`,
-      placed: postos,
-      total,
-    }
+    return { ok: true, message: blueprint.partialLine, placed: postos, total }
   }
-  return {
-    ok: true,
-    message: `Pronto! Sua ${blueprint.structure} tá de pé. Entra pra ver!`,
-    placed: postos,
-    total,
-  }
+  return { ok: true, message: blueprint.finishedLine, placed: postos, total }
 }

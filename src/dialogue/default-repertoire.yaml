@@ -94,7 +94,12 @@ entries:
       # 2026-08-19: pegar bloco e construir entraram aqui.
       - "Sei pegar bloco pra você! Fala 'pega madeira' ou 'pega pedra'."
       - "Sei construir! Fala 'faz uma casa' ou 'faz uma torre' que eu levanto."
-      - 'Pego madeira e terra, faço casinha e torre, te sigo e te defendo!'
+      - 'Pego madeira e terra, faço um monte de coisa, te sigo e te defendo!'
+      # 2026-08-30: o catálogo de plantas foi de duas para seis.
+      - "Sei fazer casinha, torre, piscina, ponte, escada e curral! Qual você quer?"
+      - "Fala 'faz uma piscina' que eu levanto a borda. A água você joga depois!"
+      - "Quer uma ponte pra atravessar? Fala 'faz uma ponte' que eu faço."
+      - "Sei fazer curral pros bichos! Fala 'faz um curral' que eu cerco."
       # 2026-08-19: sair de buraco entrou aqui.
       - 'Se eu cair num buraco eu faço escadinha e subo! Não me perco de você.'
       # 2026-08-19: abrir porta entrou aqui.
@@ -254,7 +259,7 @@ entries:
     # aprendeu a construir, e viraram comando em commands.ts.
     patterns: ['mata aquele jogador', 'faz uma pocao', 'crafta', 'fabrica', 'minera tudo', 'constroi um castelo', 'faz um castelo']
     responses:
-      - 'Ahh, isso eu ainda não sei fazer. Mas sei fazer casinha e torre!'
+      - 'Ahh, isso eu ainda não sei fazer. Mas sei fazer casinha e piscina!'
       - 'Essa eu não consigo não. Quer que eu pegue algum bloco pra você?'
       - 'Ainda não aprendi isso! Seu pai talvez me ensine depois.'
       - 'Não sei fazer isso ainda. Fala "faz uma casa" que essa eu sei!'
@@ -680,13 +685,16 @@ entries:
   - id: habilidade_fisica
     specificity: 5
     patterns:
-      ['voce sabe pular', 'voce consegue pular', 'voce pula', 'da um pulo', 'pula um bloco',
+      ['voce sabe pular', 'voce consegue pular', 'voce pula', 'pula um bloco',
        'voce consegue pular um bloco', 'voce sabe correr', 'voce corre', 'voce sabe nadar',
        'voce consegue subir', 'voce sabe escalar', 'voce sabe voar',
        # 2026-08-19 (log): 'sabe voar?' apareceu 2x sem o 'voce' na frente.
        'sabe voar', 'sabe pular', 'sabe nadar', 'sabe correr', 'sabe subir', 'da pra voar']
     responses:
       - 'Sei pular sim! Pulo bloco, subo escada e corro atrás de você.'
+      # 2026-08-30: pular e girar a pedido viraram comando (JUMP e TRICK).
+      - 'Pulo quando você pede! Fala "pula" que eu já dou uns pulinhos.'
+      - 'Sei pular e sei fazer dancinha! Fala "faz uma dancinha" que eu giro.'
       - 'Pular eu pulo! Um bloco de altura é facinho pra mim.'
       - 'Sei correr e pular! Fala "me segue" que eu te mostro.'
       - 'Consigo pular e subir! Só voar que eu não sei.'
@@ -754,22 +762,8 @@ entries:
       - 'Cavar buraco eu ainda não sei, {owner}. Mas sei pegar madeira e terra!'
       - 'Essa eu não aprendi ainda! Fala "pega terra" que eu vou correndo.'
       - 'Não sei cavar não. Mas se você cair num buraco eu faço escadinha e subo!'
-      - 'Buraco eu não faço ainda. Sei fazer casinha e torre, quer ver?'
+      - 'Buraco eu não faço ainda. Mas sei fazer piscina, que é quase! Quer?'
       - 'Ainda não sei cavar. Seu pai talvez me ensine depois!'
-
-  # ──────────── 32. PEDIDO DE PULAR (ainda não sei fazer) ─────────────
-  # 2026-08-19: 'pule' apareceu 3x e a IA respondeu que tinha pulado — mentira.
-  # Aqui a resposta é honesta: ele pula andando, não a pedido.
-  - id: pedido_pular
-    specificity: 5
-    patterns: ['pule', 'pula', 'pule ai', 'pula ai', 'pula pra mim', 'pule pra mim', 'pula agora',
-       'pule agora', 'da uns pulos']
-    responses:
-      - 'Eu pulo quando tô andando! Mas pular porque você pediu eu não aprendi ainda.'
-      - 'Ainda não sei pular quando você manda. Fala "me segue" que eu vou pulando atrás!'
-      - 'Essa eu não sei fazer sozinho ainda, desculpa!'
-      - 'Pulo quando tem bloco no caminho. De brincadeira eu ainda não sei pular.'
-      - 'Não sei pular pedindo. Mas sei brincar de pega-pega, bora?'
 
   # ──────────── 33. DORMIR / CAMA (ainda não sei fazer) ───────────────
   # 2026-08-19: 'deite na cama', 'vamos dormir' e 'queria ver se voce conseguia
@@ -828,7 +822,7 @@ entries:
     responses:
       - 'Que legal, {owner}! Eu sei fazer casinha também, quer ver?'
       - 'Casa nova! Se faltar bloco fala "pega madeira" que eu busco.'
-      - 'Ficou demais! Eu construo casinha e torre, é só pedir.'
+      - 'Ficou demais! Eu faço casinha, ponte e até curral, é só pedir.'
       - 'Adorei! Vou morar aí com você.'
       - 'Que obra bonita! Eu ajudo pegando os blocos pra você.'
 
@@ -899,23 +893,10 @@ entries:
       - 'Brigo só pra te defender! Fica perto de mim.'
       - { when: { targetIsPlayer: true }, text: 'Eu nunca vou atacar outro jogador, {owner}. Isso eu não faço.' }
 
-  # ────────── 42. TRUQUE / ANDAR EM CÍRCULO (não sei fazer) ───────────
-  # 2026-08-19: 'ande em circulos' caiu em nao_entendi e 'ande em circulos por
-  # 3 vezes' foi pra IA. Não existe intenção de truque no catálogo.
-  - id: pedido_truque
-    specificity: 5
-    patterns: ['ande em circulos', 'anda em circulos', 'ande em circulo', 'da uma volta',
-       'gira no lugar', 'roda no lugar', 'faz um truque', 'faz uma dancinha', 'dance']
-    responses:
-      - 'Andar em círculo eu não sei, mas sei andar com você! Fala "me segue".'
-      - 'Essa eu não aprendi ainda. Mas corro atrás de você no pega-pega!'
-      - 'Truque eu ainda não sei fazer, desculpa!'
-      - 'Não sei girar não. Sei subir, pular bloco e te seguir pra todo lado!'
-
   # ─────────── 43. LARGAR / COLOCAR BLOCO (não sei fazer) ─────────────
   # 2026-08-19: 'jogue esse item no chao' e 'bote um bloco no chao' foram pra
-  # IA, que disse ter feito — não fez. Ele constrói casa e torre, não solta
-  # bloco solto.
+  # IA, que disse ter feito — não fez. Ele levanta as plantas do catálogo, não
+  # solta bloco solto.
   - id: pedido_soltar_item
     specificity: 5
     patterns: ['jogue esse item no chao', 'joga o item no chao', 'bote um bloco no chao',
@@ -923,7 +904,7 @@ entries:
        'poe um bloco aqui', 'coloca um bloco aqui']
     responses:
       - 'Largar coisa no chão eu ainda não sei fazer, desculpa!'
-      - 'Essa eu não sei. Mas sei fazer casinha e torre, quer ver?'
+      - 'Essa eu não sei. Mas sei fazer casinha e escada, quer ver?'
       - 'Não sei soltar bloco ainda. Fala "pega madeira" que eu vou buscar!'
       - 'Ainda não aprendi isso. Seu pai talvez me ensine depois!'
 
