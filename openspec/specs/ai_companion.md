@@ -15,6 +15,14 @@
 
 ### Requirement: Conversa natural no chat
 
+> **2026-08-30:** o bloco de situação do mundo passou a incluir **a mochila**.
+> Ele mandava vida, fome, posição, hora e monstros — e não mandava o que o bot
+> está carregando. Era isso que fazia a IA responder no escuro: em 20/08 ela
+> disse *"isso eu não sei ver"* sobre o inventário, que o snapshot já carregava.
+>
+> Só os cinco maiores itens entram, e mochila vazia é dita como `nada` em vez de
+> sumir — campo que some deixa quem lê sem saber se está vazio ou se quebrou.
+
 Mensagens do dono que não são comandos **nem foram resolvidas pelo repertório
 local** viram conversa com IA: o provider de IA gera a resposta a partir da persona, da
 memória curta e do estado atual do mundo.

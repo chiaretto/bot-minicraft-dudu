@@ -100,3 +100,47 @@ manda oferecer o que funciona quando a resposta é não.
 | Padrão de captura roubar pergunta que não é de item | Média | Médio | Catálogo fechado: nome desconhecido não vira comando |
 | Mochila no prompt inchar o contexto | Baixa | Baixo | Só os cinco maiores, uma linha |
 | Criança pedir contagem de item fora do catálogo | Média | Baixo | Desce para a IA, que agora enxerga a mochila e responde |
+
+---
+
+## Archive Information
+
+**Archived:** 2026-08-30
+**Duration:** implementado e arquivado no mesmo dia
+**Outcome:** implementado; ver a ressalva de verificação abaixo
+
+### Specs atualizadas
+
+- `player_commands.md` — "Contar item da mochila" e o catálogo de materiais falados
+- `ai_companion.md` — a mochila no bloco de mundo
+
+### Ressalva de verificação
+
+**Nada deste change foi provado em jogo.** As tarefas em aberto no `tasks.md`
+continuam em aberto, e o arquivamento foi decisão do dono do projeto.
+
+A pergunta nunca foi feita em jogo, com a mochila cheia nem vazia.
+
+O que sustenta o arquivamento é teste unitário, medição sobre os arquivos reais
+de log e de cache, e a prova de que os módulos carregam em Node de verdade sobre
+o `dist/`.
+
+### Nota do arquivamento em lote
+
+Os dez changes de 29 e 30/08 foram arquivados na mesma sessão, em ordem
+cronológica de implementação. Duas coisas apareceram na conferência e valem
+para os próximos deltas:
+
+- **`MODIFIED` que não acha alvo.** Vários deltas apontavam para requisitos que
+  não existem com aquele nome (`Configuração do comportamento`,
+  `Privacidade do que aparece no terminal`, `Comportamento de emergência` no
+  componente errado). Foram escritos do ponto de vista da feature, não do índice
+  da spec. **Confira o índice antes de escrever um `MODIFIED`.**
+- **Configuração sem delta.** Quatro changes criaram chave de configuração e
+  nenhum trouxe delta de `configuration`. As chaves entraram na spec durante o
+  arquivamento, num requisito próprio — sem isso, a fonte da verdade ficaria sem
+  metade do que o `config.example.yaml` tem.
+
+O merge foi por acréscimo e conferido por contagem: nenhum cenário perdido em
+nenhuma das oito specs. As únicas cinco linhas removidas em todo o lote são as
+frases que os requisitos `MODIFIED` reescreveram.

@@ -116,3 +116,49 @@ ao que estava fazendo logo em seguida.
 | Virar fábrica de tochas | Alta sem guarda | Médio | Tempo mínimo + distância mínima |
 | Falha ao colocar tocha derrubar outra ação | Média | Médio | As duas ações nunca lançam |
 | Fala de instinto encher o chat | Média | Baixo | Uma fala por evento, e os eventos são raros |
+
+---
+
+## Archive Information
+
+**Archived:** 2026-08-30
+**Duration:** implementado e arquivado no mesmo dia
+**Outcome:** implementado; ver a ressalva de verificação abaixo
+
+### Specs atualizadas
+
+- `player_defense.md` — "Instintos de sobrevivência" e o catálogo de comida
+- `local_dialogue.md` — `evento_fome` e `evento_tocha`
+- `configuration.md` — requisito novo com as sete chaves
+- `player_commands.md` — nota em "Comportamento de emergência"
+
+### Ressalva de verificação
+
+**Nada deste change foi provado em jogo.** As tarefas em aberto no `tasks.md`
+continuam em aberto, e o arquivamento foi decisão do dono do projeto.
+
+O bot nunca passou fome nem entrou numa caverna escura sob observação. A guarda que mais importa — não comer no meio de uma briga — é a menos provada.
+
+O que sustenta o arquivamento é teste unitário, medição sobre os arquivos reais
+de log e de cache, e a prova de que os módulos carregam em Node de verdade sobre
+o `dist/`.
+
+### Nota do arquivamento em lote
+
+Os dez changes de 29 e 30/08 foram arquivados na mesma sessão, em ordem
+cronológica de implementação. Duas coisas apareceram na conferência e valem
+para os próximos deltas:
+
+- **`MODIFIED` que não acha alvo.** Vários deltas apontavam para requisitos que
+  não existem com aquele nome (`Configuração do comportamento`,
+  `Privacidade do que aparece no terminal`, `Comportamento de emergência` no
+  componente errado). Foram escritos do ponto de vista da feature, não do índice
+  da spec. **Confira o índice antes de escrever um `MODIFIED`.**
+- **Configuração sem delta.** Quatro changes criaram chave de configuração e
+  nenhum trouxe delta de `configuration`. As chaves entraram na spec durante o
+  arquivamento, num requisito próprio — sem isso, a fonte da verdade ficaria sem
+  metade do que o `config.example.yaml` tem.
+
+O merge foi por acréscimo e conferido por contagem: nenhum cenário perdido em
+nenhuma das oito specs. As únicas cinco linhas removidas em todo o lote são as
+frases que os requisitos `MODIFIED` reescreveram.

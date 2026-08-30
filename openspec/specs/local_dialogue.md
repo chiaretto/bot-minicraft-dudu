@@ -265,6 +265,14 @@ O enum de estado da cláusula `when` acompanha `BotState`, incluindo `GAME`.
 
 ### Requirement: Falas espontâneas por evento do jogo
 
+> **2026-08-30:** três entradas espontâneas entraram (`evento_fome`,
+> `evento_tocha`) ou **voltaram a existir de fato** (`evento_dono_morreu`).
+>
+> A última é a lição: ela existia desde 15/08, prometia *"eu marquei onde foi,
+> viu?"* e **nunca era dita** — nenhum código a disparava. Era uma promessa
+> silenciosa de uma capacidade que o bot não tinha. Entrada de repertório que
+> ninguém dispara é entrada morta, e entrada morta que promete é pior.
+
 Alguns acontecimentos disparam fala do repertório sem o jogador ter dito nada.
 
 #### Scenario: Anoiteceu
@@ -830,6 +838,39 @@ criança, e nenhum código de ação alcança ela.
 Foi exatamente o que aconteceu com a coleta: `collectBlock` existia desde o
 começo, e `pedido_coleta` respondia "Buscar coisa eu ainda não aprendi".
 
+**A varredura de 2026-08-30 foi a maior até hoje**, porque cinco capacidades
+novas nasceram no mesmo dia. Ela tem um padrão que vale para as próximas:
+
+| Entrada | Era | Virou |
+|---|---|---|
+| `pedido_pular` | "não sei pular a pedido" | comando `JUMP`; entrada removida |
+| `pedido_truque` | "truque eu não sei fazer" | comando `TRICK`; entrada removida |
+| `pedido_cavar` | "cavar eu ainda não sei" | comando `DIG`; entrada removida |
+| `pedido_dormir` | "eu não sei dormir" | comando `SLEEP`; virou `pergunta_dormir` |
+| `pedido_soltar_item` | "não sei pôr bloco" | comando `PLACE_BLOCK`; entrada reescrita para cobrir só largar item |
+| sete falas de obra | "só sei casa e torre" | seis plantas |
+| três falas de jogo | "sei duas brincadeiras" | três |
+
+**A regra que sai daí:** quando o pedido inteiro vira comando, a entrada é
+**removida** — comando de ação não é repertório, e uma entrada sobrevivente faz
+a recusa ganhar do comando em qualquer frase que o parser não pegue, com o bot
+dizendo que não sabe pular logo depois de ter pulado. Quando só parte do pedido
+vira comando, a entrada é **reescrita** para cobrir o que sobrou, e a pergunta
+*sobre* a capacidade continua sendo conversa.
+
+#### Scenario: A varredura não vira lista no chat
+- **GIVEN** uma fala reescrita por causa de capacidade nova
+- **WHEN** ela é lida
+- **THEN** ela cita uma ou duas capacidades, não todas
+- **AND** continua com uma ou duas frases curtas
+- **AND** a exceção é `capacidades`, cujo trabalho é justamente enumerar
+
+#### Scenario: A pergunta sobrevive ao comando
+- **GIVEN** `vamos dormir` virou comando `SLEEP`
+- **WHEN** a criança pergunta `voce sabe dormir?`
+- **THEN** isso continua sendo conversa
+- **AND** a resposta mudou de "não sei" para "sei, e a noite passa voando"
+
 #### Scenario: Capacidade nova varre o repertório
 - **GIVEN** o bot aprendeu a construir e a pegar bloco
 - **WHEN** o repertório é revisado
@@ -879,6 +920,14 @@ começo, e `pedido_coleta` respondia "Buscar coisa eu ainda não aprendi".
 
 ### Requirement: O prompt da IA acompanha a capacidade
 
+> **2026-08-30:** a descrição de `BUILD` dizia à mão que `"structure" é "casa" ou
+> "torre"`. Passou a ser **gerada** de `STRUCTURE_NAMES`, junto com a linha de
+> identidade que também listava as plantas.
+>
+> O motivo é concreto: enquanto o prompt dizia "casa ou torre", a IA recusou
+> `construa uma piscina` **duas vezes** — uma coisa que o bot passou a saber
+> fazer. Prompt escrito à mão envelhece; catálogo gerado, não.
+
 O que o bot diz que sabe fazer é igual no repertório e no prompt. As duas fontes
 não podem contar histórias diferentes.
 
@@ -923,3 +972,97 @@ instantâneas, sem IA, com 4+ variações.
 - **WHEN** ele fala de novo
 - **THEN** a fala vem da mesma entrada, em outra variação
 - **AND** vale a regra de não repetir a variação anterior
+
+---
+
+### Requirement: Entradas `evento_fome` e `evento_tocha`
+
+As falas dos dois instintos. São `spontaneous`: disparadas pelo laço, nunca por
+padrão de texto.
+
+Existem porque **bot que trava sem explicar parece bug**. Comer para o bot por
+quase dois segundos; sem uma palavra, a criança só vê o amigo congelar.
+
+#### Scenario: Ele explica por que parou
+- **GIVEN** o bot comeu porque estava com fome
+- **WHEN** ele fala
+- **THEN** sai uma variação de `evento_fome`
+- **AND** a fala é curta: ele volta ao que fazia logo em seguida
+
+#### Scenario: A tocha também é anunciada
+- **GIVEN** ele acendeu uma tocha
+- **THEN** sai uma variação de `evento_tocha`
+- **AND** ela pode dizer por que aquilo importa ("monstro não nasce na luz")
+
+#### Scenario: Cinco variações cada
+- **GIVEN** as duas entradas
+- **WHEN** o catálogo é validado
+- **THEN** as duas têm pelo menos `MIN_VARIATIONS_WARN` variações
+- **AND** o sorteio nunca repete a última usada
+
+---
+
+### Requirement: Entrada `lugar_morte_desconhecido`
+
+A fala de quando não há lugar guardado — primeiro dia, ou logo depois de uma
+reconexão. É `fallback`: disparada pelo código.
+
+#### Scenario: Honesta, e com saída
+- **WHEN** a criança pede para ser levada e não há lugar guardado
+- **THEN** o bot diz que não viu ela morrer
+- **AND** oferece o que funciona: ficar perto para ver a próxima
+- **AND** nenhuma variação promete lembrar de mortes que ele não viu
+
+---
+
+### Requirement: Falas do quente e frio
+
+Nove entradas `fallback`, uma por temperatura mais as três da rodada
+(`qf_comecou`, `qf_revela`, `qf_sem_lugar`).
+
+Cada temperatura tem **5 variações**, uma a mais que o mínimo, porque o bot fala
+a cada dois segundos: numa rodada de três minutos ele fala dezenas de vezes.
+
+#### Scenario: Toda temperatura tem fala
+- **GIVEN** o catálogo fechado de temperaturas
+- **WHEN** o repertório é validado
+- **THEN** existe entrada para cada uma
+- **AND** temperatura nova sem fala não compila: o mapa é um `Record` sobre o
+  tipo
+
+#### Scenario: A fala de abertura explica a brincadeira
+- **WHEN** a rodada começa
+- **THEN** a fala diz que existe um lugar secreto e o que a criança deve fazer
+- **AND** ela cabe em uma linha de chat
+
+---
+
+## Descontinuado
+
+### Entrada `pedido_pular` (removida: 2026-08-30)
+
+Nove padrões (`pule`, `pula`, `pula pra mim`, `da uns pulos`…) que existiam só
+para dizer "pular a pedido eu não aprendi ainda". Viraram o comando `JUMP` em
+`behaviors/commands.ts` — origem: `add-jump-and-trick`.
+
+### Entrada `pedido_truque` (removida: 2026-08-30)
+
+Nove padrões (`faz uma dancinha`, `gira no lugar`, `ande em circulos`, `dance`…)
+com o mesmo destino: viraram o comando `TRICK`. Origem: `add-jump-and-trick`.
+
+### Entrada `pedido_cavar` (removida: 2026-08-30)
+
+Nove padrões (`cava um buraco`, `faz um buraco`, `cava aqui`, `cava pra
+baixo`…). Viraram o comando `DIG`. Origem: `add-place-and-dig`.
+
+---
+
+**A regra que as três removem juntas:** quando o pedido inteiro vira comando, a
+entrada de repertório **sai**. Manter a entrada faria a recusa ganhar do comando
+em qualquer frase que o parser não pegasse — e o bot diria que não sabe cavar
+logo depois de abrir um buraco.
+
+Duas entradas do mesmo lote **não** foram removidas, e a diferença é o que
+define a regra: `pedido_dormir` virou `pergunta_dormir` (a ordem virou comando,
+a **pergunta** continua sendo conversa) e `pedido_soltar_item` foi reescrita
+para cobrir só largar item solto, que o bot continua sem saber fazer.

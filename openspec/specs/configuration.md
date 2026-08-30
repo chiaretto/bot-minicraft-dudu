@@ -295,6 +295,73 @@ games:
 
 ---
 
+### Requirement: Configuração dos instintos de sobrevivência
+
+O bloco `behavior` carrega as chaves dos dois instintos — comer e acender tocha
+—, que acontecem **sozinhos** e nunca passam por IA.
+
+| Chave | Padrão | O que faz |
+|---|---|---|
+| `autoEat` | `true` | Comer sozinho quando a fome apertar |
+| `eatBelowFood` | `14` | Fome (0-20) a partir da qual ele come |
+| `autoTorch` | `true` | Acender tocha sozinho no escuro |
+| `torchBelowLight` | `7` | Luz (0-15) abaixo da qual o lugar merece tocha |
+| `torchMinIntervalMs` | `20000` | Espera mínima entre duas tochas |
+| `torchMinDistance` | `5` | Distância mínima da última tocha |
+| `survivalTickMs` | `3000` | De quanto em quanto tempo ele checa |
+
+#### Scenario: Os instintos vêm ligados
+- **GIVEN** um `config.yaml` sem o bloco `behavior`
+- **WHEN** a configuração é carregada
+- **THEN** `autoEat` e `autoTorch` são `true`
+- **AND** os limiares são os da tabela
+
+#### Scenario: Dá para desligar sem mexer em código
+- **GIVEN** `autoEat: false` e `autoTorch: false`
+- **WHEN** o bot roda
+- **THEN** ele não come nem acende tocha sozinho
+- **AND** o comportamento volta a ser o de antes de 2026-08-30
+
+---
+
+### Requirement: Chaves das capacidades de 2026-08-30
+
+Quatro capacidades novas trouxeram chave própria. Ficam registradas aqui porque
+a spec de configuração é o lugar onde se confere o que existe — e nenhum delta
+daquele dia trouxe seção de configuração para elas.
+
+| Chave | Bloco | Padrão | De onde veio |
+|---|---|---|---|
+| `digMaxBlocks` | `behavior` | `16` | `add-place-and-dig` — teto de blocos numa escavação |
+| `logDir` | raiz | `data/logs` | `add-file-logging` — pasta do log em arquivo; `null` desliga |
+| `hotCold` | `games` | ver abaixo | `add-hot-and-cold` — o terceiro jogo |
+
+O bloco `games.hotCold` tem `hideMinDistance` (8), `hideMaxDistance` (30),
+`candidateSamples` (24), `foundRadius` (3), `tickMs` (2000), `repeatEvery` (3) e
+`roundTimeoutMs` (180000).
+
+`repeatEvery` é o que impede o chat de encher: numa rodada o bot fala a cada
+dois segundos, e repetir "frio" a cada passo faria a criança parar de ler.
+
+#### Scenario: Toda chave nova tem padrão que serve sozinho
+- **GIVEN** um `config.yaml` sem nenhuma dessas chaves
+- **WHEN** a configuração é carregada
+- **THEN** todas assumem os padrões da tabela
+- **AND** o bot funciona sem ninguém editar nada
+
+#### Scenario: O log em arquivo pode ser desligado
+- **GIVEN** `logDir: null`
+- **WHEN** o bot roda
+- **THEN** o log vai só para o `stdout`, como antes de 2026-08-30
+
+#### Scenario: O exemplo documenta todas
+- **GIVEN** `config.example.yaml`
+- **WHEN** ele é lido
+- **THEN** cada chave nova aparece com comentário explicando o efeito na
+  brincadeira, não o tipo do dado
+
+---
+
 ### Requirement: `config.example.yaml` documentado
 
 O arquivo de exemplo ganha o bloco `games` comentado, explicando cada parâmetro

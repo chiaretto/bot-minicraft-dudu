@@ -138,6 +138,34 @@ recebe a informação de que o caminho é o comando; não recebe a ação.
 `ATTACK` também fica fora das intenções aprendíveis, pela mesma regra que mantém
 `GOTO_COORDS` fora: o parâmetro é um bicho daquele momento, não vocabulário.
 
+Em 2026-08-30 o catálogo cresceu sete de uma vez: `JUMP`, `TRICK`, `COUNT_ITEM`,
+`PLACE_BLOCK`, `DIG`, `SLEEP` e `GO_TO_DEATH_SPOT`. **Todas** são propostas pela
+IA e **todas** são aprendíveis — os parâmetros de cada uma são vazios ou
+vocabulário (material, forma de escavação), nunca estado do mundo.
+
+`GO_TO_DEATH_SPOT` é o caso que mostra a regra funcionando ao contrário: ela
+leva a criança a um lugar do mundo e mesmo assim é aprendível, porque a
+coordenada mora na **memória do bot**, não no pedido. É o oposto exato de
+`GOTO_COORDS`.
+
+#### Scenario: A IA pode propor as ações novas
+- **GIVEN** a criança pede em palavras livres ("dá uns pulinhos aí")
+- **WHEN** a IA responde
+- **THEN** ela pode propor a ação correspondente
+- **AND** a ação passa pela mesma validação de sempre antes de virar efeito
+
+#### Scenario: Ação que só fala continua sendo ação
+- **GIVEN** `COUNT_ITEM` não muda nada no mundo
+- **WHEN** ela roda
+- **THEN** ela passa pelo mesmo pipeline de qualquer ação
+- **AND** a resposta chega como resultado da ação, igual a `LOOK_AT_OWNER`
+
+#### Scenario: O catálogo de plantas cresce sem mexer no contrato da IA
+- **GIVEN** uma planta nova entra em `STRUCTURE_NAMES`
+- **WHEN** o schema entregue ao provider é montado
+- **THEN** ela aparece no enum automaticamente
+- **AND** ninguém precisa editar o schema nem o prompt à mão
+
 #### Scenario: Coletar um bloco permitido
 - **GIVEN** a allowlist de coleta inclui `oak_log`
 - **WHEN** a intenção `COLLECT_BLOCK{block: "oak_log", count: 4}` é executada
@@ -198,6 +226,11 @@ sim uma sessão com fases. A diferença de tratamento é deliberada.
 ---
 
 ### Requirement: Comportamento de emergência
+
+> **2026-08-30:** os instintos de sobrevivência (comer, acender tocha)
+> **respeitam** este requisito: em `EMERGENCY` nenhum dos dois acontece. Comer
+> trava o bot por quase dois segundos, e seria justamente no momento em que ele
+> precisa se afastar. Ver `player_defense` → "Instintos de sobrevivência".
 
 Vida crítica do próprio bot tem prioridade sobre qualquer ordem e sobre a defesa
 do jogador.
@@ -598,6 +631,13 @@ vale por qualquer tronco.
 ---
 
 ### Requirement: Construir coisa simples
+
+> **2026-08-30:** o catálogo foi de **duas** plantas para **seis** — entraram
+> `piscina`, `ponte`, `escada` e `cerca`. Tudo o que este requisito descreve
+> continua valendo inteiro (âncora que não enterra a criança, obra que nunca
+> derruba o que já existe, material escolhido pelo que há na mochila, obra
+> interrompível); o que mudou foi **quantas** plantas existem. Ver "Catálogo de
+> plantas com seis estruturas".
 
 O bot levanta estruturas de um **catálogo fechado**. Pedido fora da lista nunca
 vira obra.
@@ -1068,3 +1108,428 @@ tocha, as 16 camas, ferramenta, arma e balde.
 - **THEN** sai uma linha só de "madeira", com a soma
 - **AND** a razão é que a mochila do jogo vem por slot, e `oak_log` e
   `birch_log` são a mesma coisa para quem está jogando
+
+---
+
+### Requirement: Catálogo de plantas com seis estruturas
+
+`STRUCTURE_NAMES` passa a ter `casa`, `torre`, `piscina`, `ponte`, `escada` e
+`cerca`. Continua fechado: nome fora da lista nunca vira obra.
+
+As quatro novas foram escolhidas por serem **distintas entre si** — nada de
+variação de tamanho da mesma caixa.
+
+| Planta | Forma | Blocos |
+|---|---|---|
+| `piscina` | Bacia 5x5, fundo fechado e borda de 1, **sem tampa** | 41 |
+| `ponte` | Passarela 3x9 com guarda-corpo dos dois lados | 45 |
+| `escada` | Escadaria de 5 degraus, 2 de largura, subindo em cheio | 30 |
+| `cerca` | Curral 7x7 de 2 de altura, com um vão de portão | 46 |
+
+#### Scenario: Piscina é bacia, não caixa fechada
+- **GIVEN** a planta da `piscina`
+- **WHEN** ela é gerada
+- **THEN** o fundo é uma laje 5x5 inteira
+- **AND** a borda tem 1 bloco de altura em todo o perímetro
+- **AND** **não** existe bloco nenhum por cima: piscina com tampa não é piscina
+
+#### Scenario: Ponte tem por onde andar e de onde não cair
+- **GIVEN** a planta da `ponte`
+- **WHEN** ela é gerada
+- **THEN** o tabuleiro tem 3 de largura por 9 de comprimento, todo no mesmo nível
+- **AND** os dois lados têm guarda-corpo de 1 bloco
+- **AND** o meio do tabuleiro fica livre em toda a extensão
+
+#### Scenario: Escada sobe de verdade
+- **GIVEN** a planta da `escada`
+- **WHEN** ela é gerada
+- **THEN** cada degrau é 1 bloco mais alto que o anterior
+- **AND** o degrau é maciço até o chão, para não ficar degrau flutuando
+- **AND** ela tem 2 de largura, para a criança subir sem cair na beirada
+
+#### Scenario: Cerca é curral com portão
+- **GIVEN** a planta da `cerca`
+- **WHEN** ela é gerada
+- **THEN** o perímetro 7x7 tem 2 blocos de altura
+- **AND** existe um vão de 1 bloco de largura, da altura inteira, para entrar
+- **AND** o miolo fica vazio: é onde os bichos ficam
+
+#### Scenario: Planta fora do catálogo continua recusada
+- **GIVEN** a criança pede `castelo`
+- **WHEN** o pedido é avaliado
+- **THEN** nenhuma obra começa
+- **AND** o bot recusa com educação, como já fazia
+
+---
+
+### Requirement: Cada obra termina com a fala dela
+
+A planta carrega duas frases junto da geometria: a de obra completa
+(`finishedLine`) e a de obra parcial (`partialLine`). Ficam ali, e não num mapa
+em outro arquivo, para a planta nova nascer completa — mapa paralelo é o que
+alguém esquece de estender.
+
+A frase de fracasso total continua sendo uma só: quando nada foi levantado, não
+há obra sobre a qual falar.
+
+#### Scenario: A piscina é honesta sobre a água
+- **GIVEN** a bacia da piscina ficou pronta
+- **WHEN** o bot fala
+- **THEN** ele avisa que falta jogar água com o balde
+- **AND** a razão é que ele não tem balde, e prometer piscina cheia seria
+  quebrar a regra número um
+
+#### Scenario: Nenhuma fala convida a entrar onde não se entra
+- **GIVEN** as falas de conclusão das seis plantas
+- **WHEN** cada uma é lida
+- **THEN** nenhuma manda "entrar pra ver" numa escada, numa ponte ou numa
+  piscina
+- **AND** cada fala combina com a coisa que acabou de ficar de pé
+
+#### Scenario: Obra pela metade fala da obra certa
+- **GIVEN** faltaram pedaços da ponte
+- **WHEN** o bot fala
+- **THEN** a frase é a `partialLine` da ponte
+- **AND** ela não promete que a ponte está atravessável
+
+---
+
+### Requirement: As quatro plantas novas no parser
+
+Cada estrutura nova tem padrão determinístico em `commands.ts`, com os apelidos
+que a criança usa de verdade: `curral` para a cerca, `escadinha`, `pontezinha`,
+`piscininha`.
+
+#### Scenario: Pedido direto vira obra sem IA
+- **GIVEN** o provider está em `none`
+- **WHEN** a criança digita `dudu, faz uma piscina`
+- **THEN** o parser devolve `BUILD` com `structure: 'piscina'`
+- **AND** nenhuma chamada de IA acontece
+
+#### Scenario: O apelido vale igual
+- **GIVEN** a criança digita `faz um curral`
+- **WHEN** o parser lê
+- **THEN** a intenção é `BUILD` com `structure: 'cerca'`
+
+#### Scenario: Os pedidos antigos continuam onde estavam
+- **GIVEN** `faz uma casa` e `faz uma torre`
+- **WHEN** o parser lê
+- **THEN** as duas caem no `BUILD` de sempre
+- **AND** nenhum padrão novo rouba frase de entrada do repertório
+
+---
+
+### Requirement: Pular a pedido
+
+`JUMP` faz o bot pular três vezes no lugar e falar. Sem parâmetro: "pula" não
+tem quantidade, e número no pedido viraria parâmetro a validar por uma graça de
+dois segundos.
+
+#### Scenario: Pedido direto
+- **GIVEN** o provider está em `none`
+- **WHEN** a criança digita `dudu, pula`
+- **THEN** o parser resolve no nível 1, sem IA
+- **AND** o bot pula três vezes no lugar
+- **AND** fala uma frase curta sobre estar pulando
+
+#### Scenario: `para` corta no meio
+- **GIVEN** o bot está no segundo pulo
+- **WHEN** a criança digita `dudu, para`
+- **THEN** a ação termina ali
+- **AND** o bot não completa os três pulos
+
+#### Scenario: Pular não sai do lugar
+- **GIVEN** o bot está perto de uma beirada
+- **WHEN** ele pula a pedido
+- **THEN** nenhum controle de andar é ligado
+- **AND** ele continua onde estava
+
+---
+
+### Requirement: Fazer graça a pedido
+
+`TRICK` gira o bot 360° em passos curtos e termina com um pulo. É a resposta a
+`faz uma dancinha`, `gira no lugar` e `ande em circulos`.
+
+#### Scenario: A dancinha acontece
+- **WHEN** a criança digita `dudu, faz uma dancinha`
+- **THEN** o bot gira uma volta completa em passos
+- **AND** termina com um pulo
+- **AND** fala uma frase curta e animada
+
+#### Scenario: Girar no lugar, nunca andar em círculo
+- **GIVEN** o pedido foi `ande em circulos`
+- **WHEN** a ação roda
+- **THEN** o bot gira sem sair do lugar
+- **AND** a razão é que andar em círculo cai em buraco, e girar é seguro em
+  qualquer terreno
+
+#### Scenario: A graça é curta
+- **WHEN** qualquer uma das duas roda inteira
+- **THEN** ela termina em menos de 3 segundos
+- **AND** a razão é que graça que demora deixa de ser graça
+
+---
+
+### Requirement: Contar item da mochila
+
+`COUNT_ITEM` responde quanto o bot tem de um material, com o número exato e sem
+chamada de IA. O parâmetro `item` é vocabulário — por isso a intenção é
+aprendível.
+
+#### Scenario: A pergunta do log é respondida
+- **GIVEN** o bot tem 12 de madeira na mochila
+- **WHEN** a criança digita `quantos blocos de madeira voce tem?`
+- **THEN** o parser resolve no nível 1, sem IA
+- **AND** o bot responde com o número exato
+
+#### Scenario: Mochila vazia responde e oferece
+- **GIVEN** o bot não tem pedra nenhuma
+- **WHEN** a criança pergunta quanta pedra ele tem
+- **THEN** ele diz que não tem
+- **AND** oferece ir buscar
+
+#### Scenario: O grupo conta junto
+- **GIVEN** o bot tem 3 de `oak_log` e 5 de `birch_log`
+- **WHEN** a criança pergunta quanta madeira ele tem
+- **THEN** a resposta é 8
+- **AND** a razão é que para quem está jogando os dois são "madeira"
+
+---
+
+### Requirement: Catálogo fechado de materiais falados
+
+O que vem depois do "quanto" é capturado e precisa estar no catálogo de nomes
+falados (`madeira`, `pedra`, `terra`, `areia`, `cascalho`, os plurais e os
+nomes técnicos dos blocos). Nome fora dele **não vira comando**.
+
+É a mesma regra do ataque nomeado, e pelo mesmo motivo.
+
+#### Scenario: Pergunta que não é sobre item continua sendo conversa
+- **WHEN** a criança digita `quantos amigos voce tem?`
+- **THEN** nenhum comando é reconhecido
+- **AND** a mensagem desce na cascata
+
+#### Scenario: "blocos de" na frente não atrapalha
+- **GIVEN** a criança escreve `quantos blocos de pedra voce tem`
+- **WHEN** o nome é resolvido
+- **THEN** o "blocos de" é descartado e o material é `pedra`
+
+---
+
+### Requirement: Cavar buraco e túnel
+
+`DIG` abre uma escavação à frente do bot. `shape` é catálogo fechado: `buraco`
+(poço 2x2 e 2 de fundo) ou `tunel` (1 de largura, 2 de altura, 4 de
+comprimento).
+
+#### Scenario: Poço a pedido
+- **WHEN** a criança digita `dudu, cava um buraco`
+- **THEN** o parser resolve no nível 1, sem IA
+- **AND** um poço de 2x2 e 2 de fundo é aberto à frente do bot
+- **AND** o bot continua em pé, fora do buraco
+
+#### Scenario: Túnel a pedido
+- **WHEN** a criança digita `cava um tunel`
+- **THEN** a passagem tem dois blocos de altura
+- **AND** o bot consegue atravessar de pé
+
+#### Scenario: Cavar para baixo vira o poço à frente
+- **WHEN** a criança digita `cava pra baixo`
+- **THEN** o poço é aberto à frente, não sob os pés dele
+- **AND** a razão é que cavar sob os próprios pés derruba o bot no buraco que
+  ele acabou de abrir, e sair de lá depende de outro comando
+
+#### Scenario: Bloco duro é pulado, não trava a obra
+- **GIVEN** um dos alvos é pedra e o bot não tem picareta
+- **WHEN** a escavação roda
+- **THEN** aquele bloco é pulado
+- **AND** o buraco sai menor
+- **AND** a fala diz que teve bloco que ele não conseguiu quebrar
+
+---
+
+### Requirement: Ele nunca cava embaixo dos próprios pés
+
+Nenhuma posição de nenhuma planta pode ser a coluna do bot — apoio, pés ou
+cabeça. A planta já nasce à frente; a checagem é a rede de segurança, e roda
+antes do primeiro golpe.
+
+#### Scenario: A planta é conferida nas quatro direções
+- **GIVEN** qualquer forma do catálogo e qualquer direção cardeal
+- **WHEN** a planta é gerada
+- **THEN** nenhuma posição cai na coluna do bot
+
+#### Scenario: Direção sempre cardeal
+- **GIVEN** o bot está virado numa diagonal qualquer
+- **WHEN** a direção é resolvida
+- **THEN** ela é arredondada para um dos quatro lados
+- **AND** a razão é que buraco em diagonal fica torto e a criança não entende o
+  que ele fez
+
+---
+
+### Requirement: Recusa antes do primeiro golpe
+
+Lava ou água encostada em qualquer alvo, obra maior que `digMaxBlocks`, ou a
+coluna do bot na planta: os três recusam **antes** de cavar.
+
+#### Scenario: Lava do lado
+- **GIVEN** há lava encostada num dos alvos
+- **WHEN** a criança pede o buraco
+- **THEN** nada é cavado
+- **AND** o bot diz que tem lava ali do lado e que é perigoso
+- **AND** a razão é que um buraco meio aberto ao lado de lava é o pior dos dois
+  mundos
+
+#### Scenario: Água também barra
+- **GIVEN** há água encostada num dos alvos
+- **THEN** a escavação é recusada, pelo mesmo motivo
+
+---
+
+### Requirement: O que nunca é cavado
+
+Além da allowlist de coleta, existe `NEVER_DIG`: bedrock, obsidiana, baú,
+fornalha, bancada, cama, spawner.
+
+São duas trancas de propósito — a allowlist diz o que ele **pode** quebrar e
+pode ser afrouxada por configuração; esta lista é sobre não estragar o que a
+criança construiu.
+
+#### Scenario: A casa da criança sobrevive
+- **GIVEN** há um baú dentro da área do buraco
+- **WHEN** a escavação roda
+- **THEN** o baú é pulado
+- **AND** nada dentro dele é perdido
+
+---
+
+### Requirement: Pôr um bloco
+
+`PLACE_BLOCK` põe **um** bloco no chão à frente do bot. `material` é opcional,
+como na obra.
+
+#### Scenario: Um bloco, à frente
+- **WHEN** a criança digita `poe um bloco aqui`
+- **THEN** um bloco aparece à frente do bot
+- **AND** apenas um: ela pediu um bloco, não a mochila inteira
+
+#### Scenario: Sem apoio ele avisa
+- **GIVEN** não há bloco sólido embaixo do lugar
+- **WHEN** o pedido chega
+- **THEN** nada é posto
+- **AND** o bot diz que não tem em que encostar o bloco
+
+#### Scenario: Lugar ocupado
+- **GIVEN** já existe bloco no lugar
+- **THEN** o bot diz que já tem bloco ali, e não derruba nada
+
+---
+
+### Requirement: Dormir na cama
+
+`SLEEP` leva o bot até a cama mais próxima (até `BED_SEARCH_RADIUS`) e o faz
+dormir. O valor da ação é **pular a noite**: a parte do jogo que mais assusta
+uma criança de 7 anos passa em dois segundos.
+
+#### Scenario: Dorme de noite com cama perto
+- **GIVEN** é noite e há uma cama a menos de 24 blocos
+- **WHEN** a criança digita `dudu, vamos dormir`
+- **THEN** o parser resolve no nível 1, sem IA
+- **AND** o bot anda até a cama e deita
+- **AND** fala uma boa-noite curta
+
+#### Scenario: De dia ele recusa antes de andar
+- **GIVEN** é dia
+- **WHEN** o pedido chega
+- **THEN** o bot **não** sai do lugar
+- **AND** diz que só dá para dormir de noite e pede para ser chamado quando
+  escurecer
+- **AND** a razão de recusar cedo é que atravessar o mundo até a cama para levar
+  um "não" do servidor seria pior do que não tentar
+
+#### Scenario: Sem cama, ele pede uma
+- **GIVEN** não há cama por perto
+- **THEN** ele diz que não achou nenhuma e pede que ponham uma
+- **AND** pedir uma cama é pedir uma coisa que a criança sabe fazer
+
+#### Scenario: O "não" do servidor chega em português
+- **GIVEN** há monstro por perto e o servidor recusa o descanso
+- **WHEN** a recusa volta
+- **THEN** o bot diz "Tem monstro por perto! Não dá pra dormir assim."
+- **AND** nenhuma palavra em inglês chega ao chat
+
+#### Scenario: Toda recusa tem fala
+- **GIVEN** qualquer motivo de recusa
+- **WHEN** ele recusa
+- **THEN** existe uma fala para aquele motivo
+- **AND** motivo novo sem fala não compila: as falas são um `Record` sobre o
+  tipo da recusa
+
+#### Scenario: `para` tira ele da cama
+- **GIVEN** o bot está dormindo
+- **WHEN** a criança digita `dudu, para`
+- **THEN** ele acorda
+- **AND** a razão é que o abort não acorda ninguém sozinho
+
+---
+
+### Requirement: "boa noite" é despedida, não ordem
+
+`boa noite` **não** manda o bot dormir. Na boca de uma criança é despedida, e
+obedecer isso como ordem seria obedecer a coisa errada.
+
+#### Scenario: A despedida continua despedida
+- **WHEN** a criança digita `boa noite`
+- **THEN** nenhum comando é reconhecido
+- **AND** a mensagem cai na entrada `despedida`
+
+#### Scenario: "vou dormir" é sobre a criança, não sobre o bot
+- **WHEN** a criança digita `vou dormir`
+- **THEN** nenhum comando é reconhecido
+- **AND** quem vai dormir é ela
+
+---
+
+### Requirement: Voltar onde o dono morreu
+
+O bot guarda onde o dono morreu da última vez e leva ele de volta com
+`GO_TO_DEATH_SPOT`.
+
+A intenção **não tem parâmetro**: a coordenada mora na memória do bot, não no
+pedido. É o contrário exato de `GOTO_COORDS`, e é o que permite a frase ser
+decorada sem mentir amanhã.
+
+#### Scenario: A morte é vista e guardada
+- **GIVEN** o dono morre perto do bot
+- **WHEN** o evento chega
+- **THEN** o lugar e o horário ficam guardados
+- **AND** o bot fala uma variação de `evento_dono_morreu`
+- **AND** a promessa dessa fala ("eu marquei onde foi") passa a ser verdade
+
+#### Scenario: Ele leva de volta
+- **GIVEN** existe um lugar guardado
+- **WHEN** a criança digita `me leva onde eu morri`
+- **THEN** o parser resolve no nível 1, sem IA
+- **AND** o bot vai até a coordenada guardada
+- **AND** avisa que sabe onde foi
+
+#### Scenario: Depois de cinco minutos ele avisa antes de ir
+- **GIVEN** a morte foi há mais de cinco minutos
+- **WHEN** o pedido chega
+- **THEN** o bot diz quantos minutos faz e que as coisas podem ter sumido
+- **AND** vai assim mesmo — quem decide se vale a pena é a criança
+
+#### Scenario: Sem morte nenhuma vista
+- **GIVEN** o bot ainda não viu o dono morrer, ou acabou de reconectar
+- **WHEN** o pedido chega
+- **THEN** ele diz que não viu e não sabe para onde levar
+- **AND** oferece o que funciona: ficar por perto para ver a próxima
+
+#### Scenario: A frase pode ser decorada, o lugar não
+- **GIVEN** a IA resolveu um pedido em `GO_TO_DEATH_SPOT`
+- **WHEN** o cache avalia a gravação
+- **THEN** a frase pode ser decorada
+- **AND** a razão é que os parâmetros são vazios: o lugar sai da memória do
+  bot na hora do replay, e é sempre o mais recente
