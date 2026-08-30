@@ -141,6 +141,10 @@ games:
 llm:
   # 'ollama' = modelo local (padrão, sem custo, sem internet)
   # 'gemini' = nuvem (exige GEMINI_API_KEY no .env)
+  # 'claude' = nuvem pelo Claude Code, na sua ASSINATURA — não é chave de API.
+  #            Use o login que já existe na máquina ou rode `claude setup-token`
+  #            e ponha CLAUDE_CODE_OAUTH_TOKEN no .env.
+  #            A cota é a mesma que você usa no Claude Code do dia a dia.
   # 'none'   = sem IA; o bot roda só com comandos e repertório
   provider: 'ollama'
 
@@ -168,6 +172,18 @@ llm:
     model: 'gemini-flash-lite-latest'
     timeoutMs: 5000
 
+  claude:
+    # Modelo mais rápido da família. Trocar por um maior custa latência, e a
+    # criança lê demora como "travou".
+    model: 'claude-haiku-4-5'
+    timeoutMs: 15000
+    # Este provider mantém uma SESSÃO viva: o Agent SDK sobe um subprocesso, e
+    # subir esse processo leva ~5s contra ~1,4s de uma resposta com a sessão já
+    # de pé. A subida acontece no warmUpOnStart, longe da criança.
+    # Os dois limites abaixo reciclam a sessão antes de ela envelhecer demais.
+    sessionMaxAgeMs: 1800000
+    sessionMaxTurns: 50
+
   # Carrega o modelo na inicialização, para a primeira conversa não pagar o
   # custo do carregamento.
   warmUpOnStart: true
@@ -180,6 +196,34 @@ llm:
   maxCallsPerMinute: 10
   circuitBreakerThreshold: 3
   circuitBreakerResetMs: 60000
+
+# Histórico de comandos aprendidos da IA — o nível 1.5 da cascata.
+#
+# Quando a IA traduz um pedido em ação e a ação DÁ CERTO, o par
+# "frase -> intenção" fica guardado. Na segunda vez que a criança pedir a mesma
+# coisa, o bot age na hora: sem espera, sem custo de nuvem, e sem a frase dela
+# sair da máquina. Funciona até com o provider fora do ar.
+learned:
+  # false volta à cascata de três níveis (comando -> repertório -> IA).
+  enabled: true
+  # Fora do git, como todo o data/: é dado derivado da fala da criança.
+  path: 'data/learned-commands.json'
+  # Mais rígido que o dialogue.minConfidence (0.7) de propósito. Em 0.7 o
+  # casamento aceita saco de palavras, e "pega pedra e madeira" casaria com
+  # "pega madeira". Para conversa isso é uma resposta esquisita; para ação, é o
+  # bot fazendo outra coisa. Suba para 1.0 se quiser só frase idêntica.
+  minConfidence: 0.85
+  # Teto de entradas. A usada há mais tempo sai primeiro.
+  maxEntries: 200
+  # Falas da IA guardadas por entrada. Elas NÃO são ditas no replay (o contexto
+  # vence) — ficam como material para a rotina do /upgrade-repertoire.
+  maxRepliesPerEntry: 4
+  # null = guardar para sempre. Com um número, entrada sem uso há mais dias que
+  # isso é descartada no startup.
+  forgetAfterDays: null
+  # Janela em que um 'para' desfaz o aprendizado que acabou de ser usado. É como
+  # a criança avisa que o bot entendeu errado, sem palavra nova pra decorar.
+  unlearnOnStopMs: 15000
 
 behavior:
   followDistance: 3

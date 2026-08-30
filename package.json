@@ -17,10 +17,15 @@
     "repertoire:sync": "node scripts/repertoire-sync.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "launcher:install": "npm --prefix launcher install",
+    "launcher:dev": "npm --prefix launcher run dev",
+    "launcher:build": "npm --prefix launcher run dist",
+    "launcher:test": "npm --prefix launcher test",
     "lint": "eslint src test && prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\""
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.251",
     "@google/genai": "^0.14.0",
     "dotenv": "^16.4.7",
     "mineflayer": "^4.37.1",
@@ -43,7 +48,10 @@
     "vitest": "^4.1.10"
   },
   "overrides": {
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "@anthropic-ai/claude-agent-sdk": {
+      "zod": "$zod"
+    }
   },
   "allowScripts": {
     "esbuild@0.28.2": true

@@ -4,7 +4,21 @@ import type { Repertoire } from '../dialogue/repertoire.js'
 import type { AiLayer } from '../ai/index.js'
 import type { ConversationContext } from '../ai/provider.js'
 import { parseCommand } from './commands.js'
+import type { LearnedMatch } from '../dialogue/learned.js'
 import type { PersonaConfig } from '../config/schema.js'
+
+/** Entrada do repertório que dá a fala do replay de comando aprendido. */
+const LEARNED_ENTRY = 'comando_aprendido'
+
+/**
+ * O que o roteador precisa do histórico de comandos aprendidos.
+ *
+ * Interface estreita de propósito, como o `GameWorld` das brincadeiras: o
+ * roteador não sabe de arquivo, de teto de entradas nem de escrita atômica.
+ */
+export interface LearnedLookup {
+  find(text: string): LearnedMatch | null
+}
 
 export interface RouteResult {
   /** O que o bot vai falar no chat, se for falar algo. */
@@ -20,10 +34,17 @@ export interface RouteResult {
   entryId?: string
   provider?: string
   latencyMs?: number
+  /**
+   * Frase do histórico que casou, quando a resposta veio do nível 1.5.
+   * É por ela que `app/` conta o uso e desaprende no `para`.
+   */
+  learnedPhrase?: string
 }
 
 export interface RouterDeps {
   repertoire: Repertoire
+  /** `null` desliga o nível 1.5 e devolve a cascata de três níveis. */
+  learned?: LearnedLookup | null
   ai: AiLayer
   persona: PersonaConfig
   owner: string
@@ -40,11 +61,16 @@ function defaultSchedule(fn: () => void, ms: number): { cancel: () => void } {
 }
 
 /**
- * Cascata de resolução: comando → repertório → IA.
+ * Cascata de resolução: comando → comando aprendido → repertório → IA.
  *
  * Cada nível só passa adiante o que não conseguiu resolver. A IA é o último
  * recurso, nunca o primeiro — é o que mantém o bot utilizável (e barato) com
  * o provider fora do ar.
+ *
+ * O nível 1.5 (aprendidos) vem antes do repertório porque produz AÇÃO, e ação
+ * tem precedência sobre conversa — o mesmo motivo que põe o parser de regex na
+ * frente de tudo. E vem DEPOIS do parser porque o que um humano escreveu vale
+ * mais que o que o bot deduziu.
  * Ver: local_dialogue_delta.md → "Cascata de resolução de mensagens".
  */
 export class MessageRouter {
@@ -71,6 +97,23 @@ export class MessageRouter {
     const command = parseCommand(text, this.deps.persona.name)
     if (command) {
       return { reply: null, intent: command.intent, action: null, source: 'command' }
+    }
+
+    // ── Nível 1.5: comando aprendido da IA ───────────────────────────────
+    const learned = this.deps.learned?.find(text) ?? null
+    if (learned) {
+      // A fala sai do repertório, não do arquivo: a fala guardada pode estar
+      // presa ao momento do aprendizado e sairia fora de hora.
+      const spoken = this.deps.repertoire.say(LEARNED_ENTRY, snapshot)
+      return {
+        reply: spoken?.text ?? null,
+        intent: null,
+        action: learned.command.intent,
+        source: 'learned',
+        learnedPhrase: learned.command.phrase,
+        ...(spoken ? { entryId: spoken.entryId } : {}),
+        ...(learned.command.provider ? { provider: learned.command.provider } : {}),
+      }
     }
 
     // ── Nível 2: repertório local ────────────────────────────────────────

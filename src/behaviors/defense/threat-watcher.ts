@@ -1,6 +1,6 @@
 import type { DefenseConfig } from '../../config/schema.js'
 import type { NearbyEntity, Threat, WorldSnapshot } from '../../domain/types.js'
-import { isAttackable, isCreeper } from '../../domain/mobs.js'
+import { canFightUnarmed, isAttackable, isCreeper } from '../../domain/mobs.js'
 
 export interface WatchOptions {
   defense: DefenseConfig
@@ -69,7 +69,7 @@ export type DefensePlan =
   | { kind: 'retreat'; reason: 'criticalHealth' }
   | { kind: 'flee-creeper'; threat: Threat }
   | { kind: 'unarmed'; threat: Threat }
-  | { kind: 'engage'; threat: Threat; weapon: string }
+  | { kind: 'engage'; threat: Threat; weapon: string | null }
 
 export interface PlanOptions extends WatchOptions {
   /** Melhor arma do inventário, ou `null` se desarmado. */
@@ -83,7 +83,7 @@ export interface PlanOptions extends WatchOptions {
  * Ordem das regras, que é a parte que importa:
  *   1. vida crítica  → recuar (EMERGENCY vence DEFEND)
  *   2. creeper perto → fugir, NUNCA corpo a corpo
- *   3. sem arma      → não engajar
+ *   3. sem arma      → encara alvo fraco; recusa o resto
  *   4. caso contrário → engajar o alvo prioritário
  */
 export function planDefense(
@@ -113,8 +113,21 @@ export function planDefense(
     return { kind: 'none' }
   }
 
-  // 3. Desarmado não engaja: só morreria e largaria o inventário.
-  if (options.weapon === null) return { kind: 'unarmed', threat: target }
+  // 3. Desarmado encara o que dá para encarar de mão.
+  //
+  // A regra antiga era "desarmado nunca engaja", escrita para o bot não morrer à
+  // toa. O raciocínio estava certo e o resultado estava errado: o bot entra no
+  // mundo com o inventário vazio, não sabe craftar e nada o faz buscar arma —
+  // então ele NUNCA atacava nada, nem o zumbi batendo no dono. Para a criança,
+  // um amigo que nunca defende.
+  //
+  // Só é seguro afrouxar porque a regra 1 (vida crítica → recuar) já existe e o
+  // tira da briga antes de morrer.
+  // Ver: player_defense_delta.md → "Engajamento corpo a corpo".
+  if (options.weapon === null) {
+    if (!canFightUnarmed(target.entity)) return { kind: 'unarmed', threat: target }
+    return { kind: 'engage', threat: target, weapon: null }
+  }
 
   return { kind: 'engage', threat: target, weapon: options.weapon }
 }
@@ -125,4 +138,66 @@ export function planDefense(
  */
 export function canStrike(entity: NearbyEntity): boolean {
   return isAttackable(entity) && !isCreeper(entity)
+}
+
+/**
+ * Por que um pedido de ataque foi recusado. Cada um vira uma fala diferente:
+ * "não vejo monstro" e "a vaca é amiga" são recusas muito diferentes para uma
+ * criança.
+ */
+export type AttackRefusal = 'protegido' | 'nao-achei' | 'nada-perto' | 'longe-demais'
+
+export type AttackTarget =
+  | { ok: true; entity: NearbyEntity }
+  | { ok: false; reason: AttackRefusal }
+
+export interface SelectAttackOptions {
+  /** Nome do mob pedido, já traduzido do português. Ausente = o mais perto. */
+  target?: string | undefined
+  protectRadius: number
+}
+
+/**
+ * Escolhe o alvo de um ataque **pedido pela criança**. Determinístico e puro:
+ * combate não passa por IA (`project.md`), então a mira é regra, não inferência.
+ *
+ * Nenhuma guarda é afrouxada por o pedido ser explícito — a denylist e a
+ * checagem de domesticado valem igual. Pedir não é autorizar.
+ * Ver: player_defense_delta.md → "Seleção de alvo".
+ */
+export function selectAttackTarget(
+  snapshot: WorldSnapshot,
+  options: SelectAttackOptions,
+): AttackTarget {
+  const wanted = options.target?.toLowerCase()
+
+  const candidates = snapshot.nearbyEntities.filter(
+    (e) => wanted === undefined || e.name.toLowerCase() === wanted,
+  )
+
+  if (candidates.length === 0) {
+    return { ok: false, reason: wanted === undefined ? 'nada-perto' : 'nao-achei' }
+  }
+
+  // Bicho protegido pedido pelo nome: a recusa precisa ser sobre ELE, não um
+  // "não achei" genérico — a criança apontou a vaca e merece ouvir sobre a vaca.
+  if (wanted !== undefined && !candidates.some((e) => isAttackable(e))) {
+    return { ok: false, reason: 'protegido' }
+  }
+
+  const atacaveis = candidates.filter((e) => isAttackable(e))
+  if (atacaveis.length === 0) return { ok: false, reason: 'nada-perto' }
+
+  // Fora do perímetro do dono o bot não vai: ele defende, não caça. Vale também
+  // para pedido explícito, senão "ataca" viraria licença para sair pelo mapa.
+  const noRaio = atacaveis.filter(
+    (e) => e.distanceToOwner !== null && e.distanceToOwner <= options.protectRadius,
+  )
+  if (noRaio.length === 0) return { ok: false, reason: 'longe-demais' }
+
+  const escolhido = [...noRaio].sort(
+    (a, b) => (a.distanceToOwner ?? Infinity) - (b.distanceToOwner ?? Infinity),
+  )[0]!
+
+  return { ok: true, entity: escolhido }
 }

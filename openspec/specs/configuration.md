@@ -3,7 +3,7 @@
 **Componente:** `configuration`
 **Origem:** `add-minecraft-companion-bot` (2026-08-15)
 **Atualizado por:** `add-bot-games-hide-and-seek` (2026-08-15), `fix-hide-and-seek-cover` (2026-08-16),
-`add-bot-game-pega-pega` (2026-08-16)
+`add-bot-game-pega-pega` (2026-08-16), `add-claude-code-provider` (2026-08-29)
 
 ---
 
@@ -80,9 +80,9 @@ do Gemini em toda conversa.
 
 ### Requirement: Segredos apenas por variável de ambiente
 
-A chave da API do Gemini e a senha da conta do bot são lidas exclusivamente do
-ambiente (`.env` ou variáveis do sistema), nunca do `config.yaml`, e nunca
-aparecem em log ou mensagem de erro.
+A chave da API do Gemini, a credencial da assinatura do Claude Code e a senha da
+conta do bot são lidas exclusivamente do ambiente (`.env` ou variáveis do
+sistema), nunca do `config.yaml`, e nunca aparecem em log ou mensagem de erro.
 
 #### Scenario: Chave do Gemini fornecida
 - **GIVEN** `GEMINI_API_KEY` está definida no ambiente
@@ -111,6 +111,66 @@ aparecem em log ou mensagem de erro.
 - **WHEN** o bot valida a configuração
 - **THEN** o bot recusa iniciar
 - **AND** exibe `segredos não são permitidos em config.yaml; use variável de ambiente`
+
+#### Scenario: Credencial da assinatura lida do ambiente
+- **GIVEN** a variável de ambiente da credencial do Claude Code está definida
+- **WHEN** o bot inicializa
+- **THEN** ela fica disponível para o provider `claude`
+- **AND** não aparece em nenhuma linha de log
+
+#### Scenario: Credencial da assinatura no YAML é recusada
+- **GIVEN** `config.yaml` contém a credencial do Claude Code em qualquer
+  profundidade, ou uma chave genérica `token`
+- **WHEN** o bot valida a configuração
+- **THEN** o bot recusa iniciar
+- **AND** aponta a chave proibida e o caminho dela
+
+#### Scenario: Credencial ausente com o provider Claude ativo
+- **GIVEN** `llm.provider` é `"claude"`
+- **AND** a variável da credencial não está definida
+- **WHEN** o bot inicializa
+- **THEN** o bot **inicia mesmo assim**
+- **AND** avisa que vai tentar o login do Claude Code já feito na máquina
+- **AND** diz o comando que gera uma credencial própria
+
+> Aqui a regra diverge do Gemini de propósito: o Agent SDK aceita o login
+> existente na máquina, então a variável não é a única fonte possível. Recusar
+> iniciar rejeitaria uma configuração que funciona.
+
+---
+
+### Requirement: Bloco `claude`
+
+O provider Claude Code tem bloco próprio, ao lado de `ollama` e `gemini`. Além do
+modelo e do tempo limite, ele carrega o que os outros não precisam: **os limites
+da sessão viva**, porque é o primeiro provider do projeto com estado entre
+chamadas.
+
+#### Scenario: Padrões utilizáveis sem configurar nada
+- **GIVEN** o `config.yaml` não traz o bloco `claude`
+- **WHEN** a configuração é carregada
+- **THEN** o modelo padrão é `claude-haiku-4-5`
+- **AND** existem padrões para tempo limite e para os limites da sessão
+
+#### Scenario: Limites da sessão são configuráveis
+- **GIVEN** o bloco `claude` está presente
+- **WHEN** a idade máxima da sessão e o número de falas antes de reciclar são
+  definidos
+- **THEN** os valores são validados como inteiros positivos
+- **AND** o provider recicla a sessão por eles
+
+#### Scenario: `claude` é escolha válida de provider e de fallback
+- **GIVEN** o `config.yaml` define `llm.provider: 'claude'`
+- **OR** define `llm.fallbackProvider: 'claude'`
+- **WHEN** a configuração é carregada
+- **THEN** ela é aceita
+
+#### Scenario: `config.example.yaml` explica o caminho da credencial
+- **GIVEN** alguém abre o `config.example.yaml`
+- **WHEN** lê o bloco `claude`
+- **THEN** ele diz que a credencial vem de `claude setup-token`, não de chave de
+  API
+- **AND** avisa que a cota é a da assinatura, compartilhada com o uso do adulto
 
 ---
 

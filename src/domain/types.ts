@@ -84,7 +84,12 @@ export interface Threat {
   distanceToOwner: number
 }
 
-export type TurnSource = 'command' | 'repertoire' | 'llm' | 'spontaneous'
+/**
+ * De onde saiu a fala. `learned` é comando replicado do histórico de comandos
+ * aprendidos — sem chamada de rede, e por isso distinto de `llm`: é assim que a
+ * rotina diária mede o que foi economizado.
+ */
+export type TurnSource = 'command' | 'repertoire' | 'learned' | 'llm' | 'spontaneous'
 
 /** Uma linha do histórico de conversa. */
 export interface ConversationTurn {

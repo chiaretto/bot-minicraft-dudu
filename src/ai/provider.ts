@@ -1,7 +1,7 @@
 import type { ReplyWithAction } from '../domain/intent.js'
 import type { ConversationTurn, WorldSnapshot } from '../domain/types.js'
 
-export type ProviderName = 'ollama' | 'gemini' | 'none'
+export type ProviderName = 'ollama' | 'gemini' | 'claude' | 'none'
 
 export interface ConversationContext {
   /** Mensagem do jogador. */
@@ -18,7 +18,8 @@ export interface ConversationContext {
 /**
  * Interface única de inferência.
  *
- * Nenhum código fora de `src/ai/providers/` pode referenciar Ollama ou Gemini.
+ * Nenhum código fora de `src/ai/providers/` pode referenciar Ollama, Gemini ou
+ * o Agent SDK do Claude Code.
  * É o que mantém a troca de provider sendo uma linha de config.
  * Ver: llm_provider_delta.md → "Interface única de provider".
  */
@@ -32,7 +33,23 @@ export interface LlmProvider {
    * Ver: llm_provider_delta.md → "Interface única de provider".
    */
   converse(ctx: ConversationContext, signal?: AbortSignal): Promise<ReplyWithAction>
-  warmUp(): Promise<void>
+  /**
+   * Prepara o provider antes da primeira fala.
+   *
+   * `identity` traz persona e nome — o suficiente para montar a parte estática
+   * do prompt sem o bot estar no mundo. Só o provider Claude Code usa: a sessão
+   * dele fixa o system prompt na criação, então aquecer sem identidade
+   * significaria descartar o que foi aquecido.
+   */
+  warmUp(identity?: ConversationContext): Promise<void>
+  /**
+   * Solta o que o provider segura, no encerramento do bot.
+   *
+   * Opcional porque quase nenhum provider tem o que soltar: Ollama e Gemini são
+   * sem estado, cada chamada é independente. Existe para o Claude Code, que
+   * mantém um subprocesso vivo — sem isto ele fica órfão quando o bot fecha.
+   */
+  stop?(): void
 }
 
 export class ProviderError extends Error {

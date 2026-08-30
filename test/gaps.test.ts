@@ -4,9 +4,12 @@ import {
   classifyExchanges,
   closestEntries,
   groupGaps,
+  rankLearned,
   resolveLocally,
+  PROMOTE_AFTER_HITS,
   type LoggedTurn,
 } from '../src/tools/gaps.js'
+import type { LearnedCommand } from '../src/dialogue/learned.js'
 import { entrySchema, type RawEntry } from '../src/dialogue/schema.js'
 
 const BOT = 'Dudu'
@@ -183,5 +186,64 @@ describe('resolveLocally', () => {
 
   it('sobra para a IA o que ninguém cobre', () => {
     expect(resolveLocally('constroi uma ponte de vidro', OPTIONS).level).toBe('ia')
+  })
+})
+
+describe('comandos aprendidos no relatório', () => {
+  const learned: LearnedCommand[] = [
+    {
+      phrase: 'pega umas madeirinhas',
+      intent: { type: 'COLLECT_BLOCK', params: { block: 'madeira', count: 8 } },
+      replies: ['Já vou pegar!'],
+      provider: 'gemini',
+      examples: ['pega umas madeirinhas', 'PEGA UMAS MADEIRINHAS'],
+      learnedAt: '2026-08-20T10:00:00.000Z',
+      lastUsedAt: '2026-08-20T11:00:00.000Z',
+      hits: 5,
+    },
+    {
+      phrase: 'faz uma casinha de pedra',
+      intent: { type: 'BUILD', params: { structure: 'casa', material: 'pedra' } },
+      replies: [],
+      provider: 'ollama',
+      examples: ['faz uma casinha de pedra'],
+      learnedAt: '2026-08-20T10:00:00.000Z',
+      lastUsedAt: '2026-08-20T10:30:00.000Z',
+      hits: 1,
+    },
+  ]
+
+  it('ordena pelo que a criança mais repete', () => {
+    expect(rankLearned(learned).map((l) => l.phrase)).toEqual([
+      'pega umas madeirinhas',
+      'faz uma casinha de pedra',
+    ])
+  })
+
+  it('marca candidato a virar regex a partir do teto de usos', () => {
+    const ranked = rankLearned(learned)
+    expect(ranked[0]?.promote).toBe(true)
+    expect(ranked[1]?.promote).toBe(false)
+    expect(PROMOTE_AFTER_HITS).toBeGreaterThan(1)
+  })
+
+  it('guarda quem ensinou e a intenção', () => {
+    const [top] = rankLearned(learned)
+    expect(top?.provider).toBe('gemini')
+    expect(top?.intent).toBe('COLLECT_BLOCK')
+  })
+
+  it('comando aprendido conta como resolvido local, não como lacuna', () => {
+    const exchanges = classifyExchanges([
+      player('pega umas madeirinhas'),
+      bot('Deixa comigo!', { source: 'learned', entryId: 'comando_aprendido' }),
+    ])
+    expect(exchanges[0]?.kind).toBe('local')
+    expect(groupGaps(exchanges, OPTIONS)).toEqual([])
+  })
+
+  it('reconhece o bot num log que só tem falas de comando aprendido', () => {
+    const bots = botSpeakers([player('pega madeira'), bot('Já vou!', { source: 'learned' })])
+    expect(bots.has(BOT)).toBe(true)
   })
 })

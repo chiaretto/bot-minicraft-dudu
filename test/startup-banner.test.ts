@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { renderStartupBanner, shouldShowBanner, shouldUseColor } from '../src/app/startup-banner.js'
+import {
+  renderStartupBanner,
+  shouldShowBanner,
+  shouldUseColor,
+  type BannerLearned,
+} from '../src/app/startup-banner.js'
 import { parseConfig } from '../src/config/load.js'
 
 const ESC = '\u001b'
@@ -111,5 +116,66 @@ describe('cartão de startup: segredos', () => {
   it('não vaza segredo do ambiente', () => {
     const banner = renderStartupBanner(config, { color: false })
     expect(banner).not.toMatch(/geminiApiKey|apiKey|password|senha/i)
+  })
+})
+
+/**
+ * Contagem de comandos aprendidos no cartão.
+ * Ver: startup_console_delta.md → "Cartão de startup em desenvolvimento".
+ */
+describe('cartão: comandos aprendidos', () => {
+  const learned = (over: Partial<BannerLearned> = {}): BannerLearned => ({
+    enabled: true,
+    count: 12,
+    shadowed: 0,
+    error: null,
+    ...over,
+  })
+
+  it('mostra a contagem do que ele já sabe repetir', () => {
+    const card = renderStartupBanner(config, { color: false, learned: learned() })
+    expect(card).toContain('12 comandos aprendidos')
+  })
+
+  it('menciona o que já virou comando no código', () => {
+    const card = renderStartupBanner(config, {
+      color: false,
+      learned: learned({ shadowed: 3 }),
+    })
+    expect(card).toContain('3 já virou comando no código')
+  })
+
+  it('histórico vazio não parece erro', () => {
+    const card = renderStartupBanner(config, { color: false, learned: learned({ count: 0 }) })
+    expect(card).toContain('nenhum')
+    expect(card.toLowerCase()).not.toContain('motivo')
+  })
+
+  it('desligado não aparece no cartão', () => {
+    const card = renderStartupBanner(config, {
+      color: false,
+      learned: learned({ enabled: false }),
+    })
+    expect(card).not.toContain('aprendid')
+  })
+
+  it('histórico ilegível avisa e diz o motivo', () => {
+    const card = renderStartupBanner(config, {
+      color: false,
+      learned: learned({ count: 0, error: 'Unexpected token' }),
+    })
+    expect(card).toContain('comecei do zero')
+    expect(card).toContain('Unexpected token')
+  })
+
+  it('mostra contagem, nunca a frase da criança', () => {
+    const card = renderStartupBanner(config, { color: false, learned: learned({ count: 2 }) })
+    // Só número. Nenhuma frase aprendida chega ao terminal.
+    expect(card).toContain('2 comandos aprendidos')
+    expect(card).not.toContain('pega')
+  })
+
+  it('sem informação de aprendizado o cartão fica como era', () => {
+    expect(renderStartupBanner(config, { color: false })).not.toContain('aprendid')
   })
 })

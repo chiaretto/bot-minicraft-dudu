@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'"
+    />
+    <title>Odraude</title>
+    <style>
+      /*
+        A tela principal é lida por uma criança de 7 anos: fonte grande, alvo de
+        clique grande, contraste alto e cor que diz o estado sem precisar ler.
+        Ver `src/phrases.ts` e openspec/project.md -> "Público do bot".
+      */
+      :root {
+        --fundo: #1d2026;
+        --caixa: #262a33;
+        --borda: #363c48;
+        --texto: #f2f4f8;
+        --apagado: #9aa3b2;
+        --dormindo: #7d8797;
+        --esperando: #e8b73f;
+        --junto: #5ec26a;
+        --ops: #e8735f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        background: var(--fundo);
+        color: var(--texto);
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        user-select: none;
+      }
+
+      /* ── Estado ───────────────────────────────────────────────────────── */
+
+      #painel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        padding: 28px 20px;
+        background: var(--caixa);
+        border-radius: 18px;
+      }
+
+      #luz {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: var(--dormindo);
+        transition: background 0.3s;
+      }
+
+      #luz.esperando {
+        background: var(--esperando);
+        animation: pulsa 1.2s ease-in-out infinite;
+      }
+      #luz.junto {
+        background: var(--junto);
+      }
+      #luz.ops {
+        background: var(--ops);
+      }
+
+      @keyframes pulsa {
+        50% {
+          opacity: 0.4;
+        }
+      }
+
+      #frase {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.3;
+        text-align: center;
+      }
+
+      /* ── Botões ───────────────────────────────────────────────────────── */
+
+      #botoes {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .linha {
+        display: flex;
+        gap: 12px;
+      }
+
+      button {
+        flex: 1;
+        min-height: 76px;
+        padding: 14px 18px;
+        border: none;
+        border-radius: 16px;
+        font-family: inherit;
+        font-size: 20px;
+        font-weight: 700;
+        color: #16181d;
+        background: var(--apagado);
+        cursor: pointer;
+        transition: transform 0.08s, filter 0.15s;
+      }
+
+      button:hover:not(:disabled) {
+        filter: brightness(1.12);
+      }
+      button:active:not(:disabled) {
+        transform: scale(0.97);
+      }
+      button:disabled {
+        opacity: 0.32;
+        cursor: default;
+      }
+
+      #chamar {
+        background: var(--junto);
+      }
+      #parar {
+        background: var(--esperando);
+      }
+      #reiniciar {
+        background: #7f8ba0;
+        min-height: 58px;
+        font-size: 17px;
+      }
+
+      /* ── Bloco do adulto ──────────────────────────────────────────────── */
+
+      details {
+        margin-top: auto;
+        border-top: 1px solid var(--borda);
+        padding-top: 14px;
+        font-size: 13px;
+        color: var(--apagado);
+      }
+
+      summary {
+        cursor: pointer;
+        padding: 4px 0;
+      }
+
+      #detalhes {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding-top: 12px;
+      }
+
+      .campo {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      label {
+        min-width: 108px;
+      }
+
+      input {
+        width: 110px;
+        padding: 7px 9px;
+        border: 1px solid var(--borda);
+        border-radius: 7px;
+        background: var(--fundo);
+        color: var(--texto);
+        font-family: inherit;
+        font-size: 13px;
+      }
+
+      .miudo {
+        min-height: 34px;
+        padding: 6px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        border-radius: 8px;
+        background: var(--borda);
+        color: var(--texto);
+        flex: 0 0 auto;
+      }
+
+      #recado {
+        min-height: 17px;
+        font-size: 12px;
+      }
+      #recado.erro {
+        color: var(--ops);
+      }
+      #recado.ok {
+        color: var(--junto);
+      }
+
+      #log {
+        height: 190px;
+        overflow-y: auto;
+        padding: 10px;
+        border-radius: 8px;
+        background: #14161b;
+        color: #b9c2d0;
+        font-family: Consolas, 'Courier New', monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-all;
+        user-select: text;
+      }
+
+      #pasta {
+        font-size: 11px;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <section id="painel">
+      <div id="luz"></div>
+      <p id="frase">Carregando...</p>
+    </section>
+
+    <div id="botoes">
+      <div class="linha">
+        <button id="chamar" type="button">Chamar</button>
+        <button id="parar" type="button">Mandar dormir</button>
+      </div>
+      <div class="linha">
+        <button id="reiniciar" type="button">Acordar de novo</button>
+      </div>
+    </div>
+
+    <details>
+      <summary>Coisas de adulto</summary>
+      <div id="detalhes">
+        <div class="campo">
+          <label for="porta">Porta do LAN</label>
+          <input id="porta" type="number" min="1" max="65535" step="1" />
+          <button id="salvar-porta" class="miudo" type="button">Salvar</button>
+        </div>
+        <p id="recado"></p>
+        <div class="campo">
+          <span id="pasta"></span>
+          <button id="escolher" class="miudo" type="button">Escolher pasta do bot</button>
+        </div>
+        <div id="log"></div>
+      </div>
+    </details>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

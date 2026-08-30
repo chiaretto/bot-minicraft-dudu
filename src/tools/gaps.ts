@@ -13,6 +13,7 @@ import { prepare } from '../dialogue/normalize.js'
 import { findBestMatch } from '../dialogue/matcher.js'
 import type { RawEntry } from '../dialogue/schema.js'
 import { parseCommand } from '../behaviors/commands.js'
+import type { LearnedCommand } from '../dialogue/learned.js'
 
 /** Uma linha do JSONL, reduzida ao que a análise precisa. */
 export interface LoggedTurn {
@@ -25,7 +26,11 @@ export interface LoggedTurn {
   day?: string
 }
 
-/** `miss` caiu em `nao_entendi`; `ai` só a IA resolveu; `local` já era coberto. */
+/**
+ * `miss` caiu em `nao_entendi`; `ai` só a IA resolveu; `local` já era coberto —
+ * e comando aprendido (`source: 'learned'`) conta como `local`, porque é
+ * justamente economia de IA, não lacuna.
+ */
 export type ExchangeKind = 'miss' | 'ai' | 'local'
 
 export interface Exchange {
@@ -41,12 +46,18 @@ export interface Exchange {
  *
  * Deduzido do próprio arquivo em vez de vir da config: o nome do bot muda de
  * máquina para máquina e log antigo pode ter outro. Só o bot fala com
- * `repertoire`, `llm` ou `spontaneous`; a fala do jogador entra com `command`.
+ * `repertoire`, `learned`, `llm` ou `spontaneous`; a fala do jogador entra com
+ * `command`.
  */
 export function botSpeakers(turns: readonly LoggedTurn[]): Set<string> {
   const bots = new Set<string>()
   for (const turn of turns) {
-    if (turn.source === 'repertoire' || turn.source === 'llm' || turn.source === 'spontaneous') {
+    if (
+      turn.source === 'repertoire' ||
+      turn.source === 'learned' ||
+      turn.source === 'llm' ||
+      turn.source === 'spontaneous'
+    ) {
       bots.add(turn.speaker)
     }
   }
@@ -255,4 +266,45 @@ export function resolveLocally(text: string, options: GroupOptions): LocalResolu
   }
 
   return { level: 'ia', detail: normalized || '(vazio depois de normalizar)' }
+}
+
+/** Uma linha da seção de comandos aprendidos do relatório. */
+export interface LearnedRanking {
+  phrase: string
+  intent: string
+  hits: number
+  provider: string
+  examples: string[]
+  /**
+   * Repetiu o bastante para valer virar regex em `behaviors/commands.ts`.
+   *
+   * Promover é decisão de código, revisada por gente — o relatório só aponta.
+   * Promovida a frase, a entrada some do cache sozinha no próximo startup.
+   */
+  promote: boolean
+}
+
+/** A partir de quantos usos uma frase aprendida merece virar código. */
+export const PROMOTE_AFTER_HITS = 3
+
+/**
+ * Ordena os comandos aprendidos pelo que a criança mais repete.
+ *
+ * É o outro lado do relatório: as lacunas mostram o que a IA precisou resolver,
+ * e isto mostra o que ela já ensinou e o bot já replica sozinho.
+ */
+export function rankLearned(
+  commands: readonly LearnedCommand[],
+  promoteAfterHits = PROMOTE_AFTER_HITS,
+): LearnedRanking[] {
+  return [...commands]
+    .sort((a, b) => b.hits - a.hits || a.phrase.localeCompare(b.phrase))
+    .map((command) => ({
+      phrase: command.phrase,
+      intent: command.intent.type,
+      hits: command.hits,
+      provider: command.provider,
+      examples: command.examples,
+      promote: command.hits >= promoteAfterHits,
+    }))
 }

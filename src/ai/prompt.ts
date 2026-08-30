@@ -55,6 +55,9 @@ export const ACTION_DESCRIPTIONS: Record<Exclude<IntentType, 'CHAT' | 'UNKNOWN'>
     'começar uma brincadeira — "game" é "esconde_esconde" ou "pega_pega". ' +
     'NÃO mande "role": quem escolhe o papel é o jogador, e o bot pergunta',
   ASK_WHICH_GAME: 'perguntar qual brincadeira, quando o convite não disser qual',
+  ATTACK:
+    'atacar um monstro — **você NÃO propõe esta ação**. ' +
+    'Atacar é comando direto: quem resolve é o parser, não você',
 }
 
 /** Tipos que podem virar ação. `CHAT` e `UNKNOWN` nunca viram efeito no mundo. */
@@ -62,8 +65,18 @@ export const ACTIONABLE_INTENTS = INTENT_TYPES.filter(
   (t): t is Exclude<IntentType, 'CHAT' | 'UNKNOWN'> => t !== 'CHAT' && t !== 'UNKNOWN',
 )
 
+/**
+ * O que a IA vê como ação disponível — `ATTACK` fica de fora.
+ *
+ * Combate é determinístico e não passa por IA (`project.md`). Mas ela precisa
+ * saber que o comando EXISTE: sem isso ela improvisa promessa ("já tô indo te
+ * ajudar!") quando a criança pede para atacar, e nada acontece. Saber vem da
+ * instrução de "Quando mandar ação"; poder propor, não vem.
+ */
+const AI_ACTION_CATALOG = ACTIONABLE_INTENTS.filter((t) => t !== 'ATTACK')
+
 function actionCatalog(): string {
-  return ACTIONABLE_INTENTS.map((type) => `- ${type}: ${ACTION_DESCRIPTIONS[type]}`).join('\n')
+  return AI_ACTION_CATALOG.map((type) => `- ${type}: ${ACTION_DESCRIPTIONS[type]}`).join('\n')
 }
 
 function worldContext(ctx: ConversationContext): string {
@@ -94,12 +107,31 @@ function worldContext(ctx: ConversationContext): string {
  */
 export function buildConversePrompt(ctx: ConversationContext): string {
   return [
-    ctx.personaDescription,
-    '',
-    identityFacts(ctx),
+    staticPrompt(ctx),
     '',
     '## Situação atual no jogo',
     worldContext(ctx),
+  ].join('\n')
+}
+
+/** O bloco de mundo, sozinho. Muda a cada fala; o resto do prompt não. */
+export function worldBlock(ctx: ConversationContext): string {
+  return ['## Situação atual no jogo', worldContext(ctx)].join('\n')
+}
+
+/**
+ * A parte do prompt que NÃO muda durante uma sessão: persona, identidade,
+ * regras de resposta, catálogo de ação e exemplos.
+ *
+ * Existe separada por causa do provider Claude Code, que fixa o system prompt na
+ * criação da sessão e precisa dele antes de o bot entrar no mundo. Os outros
+ * providers continuam recebendo o prompt inteiro por `buildConversePrompt`.
+ */
+export function staticPrompt(ctx: ConversationContext): string {
+  return [
+    ctx.personaDescription,
+    '',
+    identityFacts(ctx),
     '',
     '## Como responder',
     'Responda SEMPRE com um objeto JSON com dois campos:',
@@ -120,6 +152,14 @@ export function buildConversePrompt(ctx: ConversationContext): string {
     '- Pedido que não está na lista acima: "action": null, e diga que não sabe.',
     '- A fala combina com a ação: se vai pegar madeira, diga que vai pegar.',
     '',
+    '## Atacar é comando, não é ação sua',
+    'Brigar com monstro NÃO está na sua lista de ações e você NUNCA promete atacar.',
+    'Quando o jogador pedir para atacar, matar ou bater em alguma coisa:',
+    '- "action": null, sempre.',
+    '- Ensine a frase que funciona: mandar "ataca" ou "ataca o zumbi".',
+    '- Nunca diga "já vou", "tô indo" nem "deixa comigo" para pedido de ataque —',
+    '  quem faz isso é o comando, e prometer sem fazer é o pior que você pode fazer.',
+    '',
     '## Exemplos',
     '  "pega umas madeiras pra mim"',
     '    -> {"reply":"Já vou pegar!","action":{"type":"COLLECT_BLOCK","params":{"block":"madeira","count":4}}}',
@@ -139,6 +179,14 @@ export function buildConversePrompt(ctx: ConversationContext): string {
     '    -> {"reply":"Adoro! Brilha muito!","action":null}',
     '  "faz uma poção pra mim"',
     '    -> {"reply":"Essa eu não sei fazer ainda, desculpa!","action":null}',
+    // Exemplo obrigatório: sem ele o modelo tenta emitir uma ação para o pedido
+    // de ataque e, como ATTACK não está no schema, a saída estruturada acaba
+    // empurrando para outra ação válida — já saiu STOP, que cancelaria o que a
+    // criança estava mandando fazer.
+    '  "ataca aquele bicho"',
+    '    -> {"reply":"Fala \\"ataca\\" que eu vou lá!","action":null}',
+    '  "mata o monstro ali"',
+    '    -> {"reply":"Manda \\"ataca o zumbi\\" que eu resolvo!","action":null}',
   ].join('\n')
 }
 

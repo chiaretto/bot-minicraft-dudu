@@ -1,0 +1,61 @@
+/**
+ * Leitura do que o processo do bot escreve.
+ *
+ * Duas coisas saem misturadas no mesmo `stdout`: as linhas de status do
+ * protocolo (contrato) e o log (texto para gente). Aqui elas são separadas — e
+ * nada aqui importa `electron`: é função pura, testada sem abrir janela.
+ *
+ * O prefixo é o mesmo declarado em `src/app/status-channel.ts` do bot. Os dois
+ * lados repetem a constante de propósito: são processos separados, e um
+ * `import` entre eles amarraria o launcher ao build do bot.
+ */
+
+export type BotStatus = 'ligando' | 'procurando' | 'no_mundo' | 'desistiu'
+
+export const STATUS_PREFIX = '@dudu-status'
+
+const KNOWN: readonly BotStatus[] = ['ligando', 'procurando', 'no_mundo', 'desistiu']
+
+export type ChildLine =
+  | { kind: 'status'; status: BotStatus }
+  | { kind: 'log'; text: string }
+
+/**
+ * Classifica uma linha do filho.
+ *
+ * Linha malformada com o prefixo cai como log: o adulto vê no bloco de detalhes
+ * em vez de sumir em silêncio, e nada explode. Status inventado (versão nova do
+ * bot falando com launcher velho) também vira log, pelo mesmo motivo.
+ */
+export function parseLine(line: string): ChildLine {
+  if (!line.startsWith(`${STATUS_PREFIX} `)) return { kind: 'log', text: line }
+
+  const payload = line.slice(STATUS_PREFIX.length + 1)
+  try {
+    const parsed: unknown = JSON.parse(payload)
+    const status = (parsed as { status?: unknown } | null)?.status
+    if (typeof status === 'string' && (KNOWN as readonly string[]).includes(status)) {
+      return { kind: 'status', status: status as BotStatus }
+    }
+  } catch {
+    // JSON quebrado não derruba o supervisor: cai como log, abaixo.
+  }
+  return { kind: 'log', text: line }
+}
+
+/**
+ * Quebra os pedaços do `stdout` em linhas inteiras.
+ *
+ * O `stdout` chega em pedaços arbitrários — uma linha de status pode vir
+ * cortada no meio do JSON, e tratar pedaço como linha perderia a transição.
+ */
+export function createLineSplitter(): (chunk: string) => string[] {
+  let buffer = ''
+  return (chunk: string) => {
+    buffer += chunk
+    const parts = buffer.split('\n')
+    // O último pedaço é o resto sem `\n`: fica guardado para o próximo chunk.
+    buffer = parts.pop() ?? ''
+    return parts.map((line) => line.replace(/\r$/, '')).filter((line) => line.length > 0)
+  }
+}

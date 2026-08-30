@@ -112,6 +112,54 @@ describe('config: segredos', () => {
   })
 })
 
+describe('config: provider claude', () => {
+  it('lê a credencial da assinatura do ambiente', () => {
+    const secrets = readSecrets({ CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-xyz' })
+    expect(secrets.claudeOauthToken).toBe('sk-ant-oat01-xyz')
+  })
+
+  it('recusa a credencial colocada no YAML', () => {
+    expect(() => parseConfig({ ...minimal, claudeOauthToken: 'sk-ant-oat01-xyz' })).toThrow(
+      /segredos não são permitidos/,
+    )
+  })
+
+  it('recusa qualquer chave `token` aninhada', () => {
+    expect(() => parseConfig({ ...minimal, llm: { claude: { token: 'x' } } })).toThrow(
+      /segredos não são permitidos/,
+    )
+  })
+
+  it('aceita claude como provider e como fallback', () => {
+    expect(parseConfig({ ...minimal, llm: { provider: 'claude' } }).llm.provider).toBe('claude')
+    expect(
+      parseConfig({ ...minimal, llm: { provider: 'ollama', fallbackProvider: 'claude' } }).llm
+        .fallbackProvider,
+    ).toBe('claude')
+  })
+
+  it('sem credencial NÃO impede o bot de subir', () => {
+    // Diferente do Gemini: o Agent SDK também aceita o login que o Claude Code
+    // já fez na máquina, então não há variável para exigir. Falhar aqui seria
+    // recusar uma configuração que funciona.
+    const config = parseConfig({ ...minimal, llm: { provider: 'claude' } }, {})
+    expect(() => assertSecretsForProvider(config, {})).not.toThrow()
+  })
+
+  it('traz padrões utilizáveis sem configurar nada', () => {
+    const c = parseConfig(minimal)
+    expect(c.llm.claude.model).toBe('claude-haiku-4-5')
+    expect(c.llm.claude.timeoutMs).toBeGreaterThan(0)
+    expect(c.llm.claude.sessionMaxAgeMs).toBeGreaterThan(0)
+    expect(c.llm.claude.sessionMaxTurns).toBeGreaterThan(0)
+  })
+
+  it('recusa limite de sessão inválido', () => {
+    expect(() => parseConfig({ ...minimal, llm: { claude: { sessionMaxTurns: 0 } } })).toThrow()
+    expect(() => parseConfig({ ...minimal, llm: { claude: { sessionMaxAgeMs: -1 } } })).toThrow()
+  })
+})
+
 describe('config: padrões dos blocos novos', () => {
   it('aplica os padrões de llm, defense, dialogue e memory', () => {
     const c = parseConfig(minimal)
@@ -321,5 +369,50 @@ describe('logging: redaction', () => {
 
   it('ignora valores curtos demais para serem segredo', () => {
     expect(scrubSecrets('abc', ['abc'])).toBe('abc')
+  })
+})
+
+/**
+ * Bloco `learned`: histórico de comandos aprendidos.
+ * Ver: configuration_delta.md → "Bloco `learned`".
+ */
+describe('configuração do aprendizado', () => {
+  it('defaults funcionam sem ninguém mexer em nada', () => {
+    const config = parseConfig(minimal)
+    expect(config.learned).toMatchObject({
+      enabled: true,
+      path: 'data/learned-commands.json',
+      minConfidence: 0.85,
+      maxEntries: 200,
+      maxRepliesPerEntry: 4,
+      forgetAfterDays: null,
+      unlearnOnStopMs: 15000,
+    })
+  })
+
+  it('limiar do aprendizado é mais rígido que o da conversa', () => {
+    const config = parseConfig(minimal)
+    expect(config.learned.minConfidence).toBeGreaterThan(config.dialogue.minConfidence)
+  })
+
+  it('config antiga, sem o bloco, continua válida', () => {
+    expect(() => parseConfig(minimal)).not.toThrow()
+  })
+
+  it('desligar é uma linha', () => {
+    expect(parseConfig({ ...minimal, learned: { enabled: false } }).learned.enabled).toBe(false)
+  })
+
+  it('limiar fora da faixa é recusado', () => {
+    expect(() => parseConfig({ ...minimal, learned: { minConfidence: 1.4 } })).toThrow()
+    expect(() => parseConfig({ ...minimal, learned: { minConfidence: -0.1 } })).toThrow()
+  })
+
+  it('teto de entradas precisa ser positivo', () => {
+    expect(() => parseConfig({ ...minimal, learned: { maxEntries: 0 } })).toThrow()
+  })
+
+  it('caminho do histórico fica dentro de data/', () => {
+    expect(parseConfig(minimal).learned.path.startsWith('data/')).toBe(true)
   })
 })

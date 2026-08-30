@@ -23,11 +23,63 @@ export const INTENT_TYPES = [
   'DEFENSE_OFF',
   'PLAY_GAME',
   'ASK_WHICH_GAME',
+  'ATTACK',
   'CHAT',
   'UNKNOWN',
 ] as const
 
 export type IntentType = (typeof INTENT_TYPES)[number]
+
+/**
+ * Intenções que a IA pode PROPOR.
+ *
+ * `ATTACK` fica de fora, e essa é a única diferença em relação a
+ * `INTENT_TYPES`. Combate e defesa são determinísticos e nunca dependem de uma
+ * chamada de IA (`project.md`), e escolher em quem bater é decisão de combate —
+ * quem resolve ataque é o parser do nível 1.
+ *
+ * A IA precisa SABER que o comando existe, senão continua improvisando promessa
+ * quando a criança pede para atacar. Saber está no prompt; poder propor, não.
+ * Ver: player_commands_delta.md → "Catálogo de ações executáveis".
+ */
+export const AI_PROPOSABLE_INTENTS = INTENT_TYPES.filter(
+  (type): type is Exclude<IntentType, 'ATTACK'> => type !== 'ATTACK',
+)
+
+/**
+ * Intenções que podem entrar no histórico de comandos aprendidos.
+ *
+ * Catálogo fechado, como o de intenções, o de plantas e o de jogos, e pelo
+ * mesmo motivo: limitar o que o bot decide sozinho.
+ *
+ * `GOTO_COORDS` fica DE FORA de propósito. Os parâmetros dela guardam um lugar
+ * do mundo naquele instante: "vem aqui" decorado como x=104, y=64, z=-233
+ * manda o bot para o lugar errado amanhã. A regra geral é essa — só entra
+ * intenção cujos parâmetros são VOCABULÁRIO (nome de bloco, estrutura, item,
+ * jogo), nunca estado do mundo.
+ * Ver: learned_commands_delta.md → "Catálogo fechado de intenções aprendíveis".
+ */
+export const LEARNABLE_INTENTS = [
+  'FOLLOW',
+  'STAY',
+  'STOP',
+  'COLLECT_BLOCK',
+  'BUILD',
+  'ESCAPE_HOLE',
+  'OPEN_DOOR',
+  'DROP_ITEM_TO_OWNER',
+  'LOOK_AT_OWNER',
+  'EQUIP_ITEM',
+  'DEFENSE_ON',
+  'DEFENSE_OFF',
+  'PLAY_GAME',
+  'ASK_WHICH_GAME',
+] as const
+
+export type LearnableIntentType = (typeof LEARNABLE_INTENTS)[number]
+
+/** Parâmetro que carrega posição do mundo, e por isso não pode ser decorado. */
+const WORLD_STATE_PARAMS = ['x', 'y', 'z'] as const
 
 export const intentSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('FOLLOW'), params: z.object({}).default({}) }),
@@ -63,6 +115,13 @@ export const intentSchema = z.discriminatedUnion('type', [
   // Sair de buraco fazendo escadinha. Sem parâmetro: a altura sai do desnível
   // até o dono, não de um pedido.
   z.object({ type: z.literal('ESCAPE_HOLE'), params: z.object({}).default({}) }),
+  // Atacar sob comando. `target` é o nome do mob já traduzido do português pelo
+  // catálogo fechado; ausente significa "o que estiver mais perto do dono".
+  // Nunca vem da IA — ver `AI_PROPOSABLE_INTENTS`.
+  z.object({
+    type: z.literal('ATTACK'),
+    params: z.object({ target: z.string().min(1).optional() }).default({}),
+  }),
   // Abrir a porta mais próxima. Sem parâmetro: qual porta é o mundo que diz.
   z.object({ type: z.literal('OPEN_DOOR'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('LOOK_AT_OWNER'), params: z.object({}).default({}) }),
@@ -93,13 +152,30 @@ export type Intent = z.infer<typeof intentSchema>
 export const UNKNOWN_INTENT: Intent = { type: 'UNKNOWN', params: {} }
 
 /**
+ * A intenção pode ser guardada no histórico de comandos aprendidos?
+ *
+ * Duas condições. O tipo está no catálogo fechado, E nenhum parâmetro carrega
+ * posição do mundo. A segunda parece redundante hoje — só `GOTO_COORDS` tem
+ * coordenada, e ela já está fora do catálogo — mas é ela que impede que um
+ * `LEARNABLE_INTENTS` desatualizado, no futuro, deixe passar uma intenção nova
+ * que grava um lugar de um momento.
+ */
+export function isLearnable(intent: Intent): boolean {
+  if (!(LEARNABLE_INTENTS as readonly string[]).includes(intent.type)) return false
+
+  const params = intent.params as Record<string, unknown>
+  return !WORLD_STATE_PARAMS.some((key) => params[key] !== undefined)
+}
+
+/**
  * JSON Schema entregue ao provider para forçar saída estruturada.
  * Tanto o Ollama (`format`) quanto o Gemini (`responseSchema`) aceitam este shape.
  */
 export const INTENT_JSON_SCHEMA = {
   type: 'object',
   properties: {
-    type: { type: 'string', enum: [...INTENT_TYPES] },
+    // Sem `ATTACK`: a IA não propõe ataque, nem por engano de schema.
+    type: { type: 'string', enum: [...AI_PROPOSABLE_INTENTS] },
     params: {
       type: 'object',
       properties: {
@@ -114,6 +190,7 @@ export const INTENT_JSON_SCHEMA = {
         role: { type: 'string', enum: [...GAME_ROLES] },
         structure: { type: 'string', enum: [...STRUCTURE_NAMES] },
         material: { type: 'string' },
+        target: { type: 'string' },
       },
     },
   },

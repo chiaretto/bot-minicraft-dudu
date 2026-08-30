@@ -152,12 +152,29 @@ describe('prompt', () => {
    * consegue fazer. Intenção nova que não chegue aqui vira capacidade morta —
    * este teste é o que impede isso de passar em silêncio.
    */
-  it('o prompt de conversa descreve TODAS as ações do catálogo', () => {
+  it('o prompt de conversa descreve todas as ações que a IA pode propor', () => {
     const prompt = buildConversePrompt(ctx)
     for (const type of ACTIONABLE_INTENTS) {
+      // `ATTACK` é a única executável que a IA NÃO propõe: combate é
+      // determinístico e quem resolve é o parser.
+      // Ver: player_commands_delta.md → "Catálogo de ações executáveis".
+      if (type === 'ATTACK') continue
       expect(prompt, type).toContain(type)
     }
     expect(prompt).not.toContain('BUILD_HOUSE')
+  })
+
+  it('o prompt NÃO oferece ATTACK como ação da IA', () => {
+    const prompt = buildConversePrompt(ctx)
+    expect(prompt).not.toContain('- ATTACK:')
+  })
+
+  it('o prompt manda a IA nunca prometer ataque', () => {
+    // Era exatamente o bug: sem ação para propor, a IA improvisava "já tô indo
+    // te ajudar!" e nada acontecia.
+    const prompt = buildConversePrompt(ctx)
+    expect(prompt).toMatch(/nunca promete atacar/i)
+    expect(prompt).toContain('ataca')
   })
 
   it('o prompt ensina a não agir quando é só conversa', () => {

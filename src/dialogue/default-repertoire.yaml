@@ -321,13 +321,70 @@ entries:
       - 'Cuidado!! Creeper chegando, se afasta!'
       - 'Não deixa ele chegar perto! Corre, {owner}!'
 
+  # 2026-08-29: mudou de sentido. Antes era "desarmado eu nunca brigo"; agora o
+  # bot encara alvo fraco de mão, e esta entrada é só para o que é forte demais.
+  # Por isso todas as variações PEDEM a espada: é o passo seguinte que tira ele
+  # do estado desarmado de verdade.
   - id: combate_desarmado
     trigger: fallback
     responses:
-      - 'Eu tô sem arma, {owner}! Não consigo brigar!'
-      - 'Não tenho espada nenhuma! Foge que eu vou junto!'
-      - 'Desarmado aqui! Melhor a gente correr!'
-      - 'Sem arma eu não seguro, {owner}! Recua!'
+      - 'Esse aí é forte demais sem espada, {owner}! Me dá uma?'
+      - 'Sem arma eu não seguro esse! Me arruma uma espada!'
+      - 'Esse é grande demais pra mão vazia! Me dá uma espada?'
+      - 'Não dou conta desse sem arma, {owner}! Joga uma espada pra mim!'
+
+  # 2026-08-29: o bot vai encarar mesmo sem arma. Avisa para a criança entender
+  # por que ele pode apanhar — e continuar podendo ajudar.
+  - id: combate_sem_arma_encara
+    trigger: fallback
+    responses:
+      - 'Tô sem espada mas vou encarar, {owner}!'
+      - 'Vou de mão mesmo! Segura essa!'
+      - 'Sem arma, mas não deixo ele te pegar!'
+      - 'Deixa comigo! Nem preciso de espada pra esse.'
+
+  # ── Ataque pedido pela criança (2026-08-29) ───────────────────────────
+  # Uma entrada por motivo de recusa: "não vejo monstro" e "a vaca é amiga" são
+  # coisas muito diferentes para quem está esperando.
+  - id: ataque_bicho_amigo
+    trigger: fallback
+    responses:
+      - 'Esse bichinho é amigo! Não machuco ele, não.'
+      - 'Ah não, esse é do bem! Só brigo com monstro.'
+      - 'Não bato em bichinho, {owner}! Só em monstro.'
+      - 'Esse aí não fez nada pra gente! Deixa ele quieto.'
+
+  - id: ataque_nao_achei
+    trigger: fallback
+    responses:
+      - 'Não tô vendo esse aqui perto, {owner}!'
+      - 'Cadê ele? Não achei esse bicho!'
+      - 'Não tem nenhum desse por aqui não!'
+      - 'Esse aí sumiu, {owner}! Não tô vendo.'
+
+  - id: ataque_sem_alvo
+    trigger: fallback
+    responses:
+      - 'Não tô vendo monstro nenhum aqui perto!'
+      - 'Tá tudo tranquilo, {owner}! Nenhum monstro.'
+      - 'Não tem no que bater aqui não!'
+      - 'Tá limpo por aqui! Nenhum monstro à vista.'
+
+  - id: ataque_longe
+    trigger: fallback
+    responses:
+      - 'Esse tá longe demais, {owner}! Chega mais perto.'
+      - 'Não alcanço ele daqui! Vamos chegar perto?'
+      - 'Tá muito longe pra eu ir sozinho!'
+      - 'Se você chegar mais perto eu pego ele!'
+
+  - id: combate_desligado
+    trigger: fallback
+    responses:
+      - 'Você pediu pra eu não brigar! Fala "pode brigar" que eu volto.'
+      - 'Tô de paz agora! Manda "pode brigar" se mudou de ideia.'
+      - 'Não tô brigando, lembra? Fala "me defende" que eu volto!'
+      - 'Você desligou minha briga! Fala "pode brigar" pra ligar.'
 
   - id: combate_recuo
     trigger: fallback
@@ -883,3 +940,20 @@ entries:
       - 'A gente pode brincar de esconde-esconde! Ou fazer uma casinha.'
       - 'Vamos pegar madeira? Ou brincar de pega-pega!'
       - 'Onde você for eu vou. Só não me deixa pra trás :D'
+
+  # ─────────── 45. FALA DO COMANDO APRENDIDO (instantâneo) ────────────
+  # 2026-08-20: fala do replay de comando aprendido da IA (nível 1.5 da
+  # cascata). Curta e SEM contexto de propósito — sai em qualquer hora do dia,
+  # para qualquer ação, em qualquer lugar do mundo. Quem conta o que aconteceu é
+  # o resultado da ação, logo depois. A fala que a IA deu no dia do aprendizado
+  # fica guardada no arquivo, mas nunca é dita: o contexto dela vence.
+  # Ver: learned_commands_delta.md → "Replay sem chamada de rede".
+  - id: comando_aprendido
+    trigger: fallback
+    responses:
+      - 'Deixa comigo!'
+      - 'Já vou!'
+      - 'Pode deixar!'
+      - 'Essa eu já sei fazer!'
+      - 'Tô indo!'
+      - 'Já aprendi essa, olha só!'

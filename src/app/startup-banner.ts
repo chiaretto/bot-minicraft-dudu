@@ -17,6 +17,23 @@ import type { Config } from '../config/schema.js'
 export interface BannerOptions {
   /** Cor ANSI. Padrão: ligada só em TTY e sem `NO_COLOR`. */
   color?: boolean
+  /**
+   * Resumo da carga do histórico de comandos aprendidos.
+   *
+   * Sem isto o aprendizado é invisível: quem cuida do bot não tem como saber se
+   * ele decorou dois comandos ou duzentos. Só CONTAGEM entra aqui — frase de
+   * criança no terminal seria vazamento.
+   * Ver: startup_console_delta.md → "Cartão de startup em desenvolvimento".
+   */
+  learned?: BannerLearned
+}
+
+/** Resumo da carga do histórico de comandos aprendidos. Só contagem. */
+export interface BannerLearned {
+  enabled: boolean
+  count: number
+  shadowed: number
+  error: string | null
 }
 
 /** Espaço entre a borda da moldura e o texto. */
@@ -95,6 +112,32 @@ function frame(lines: readonly string[], c: Palette): string[] {
 }
 
 /**
+ * Linha do aprendizado, quando há aprendizado para mostrar.
+ *
+ * Anunciar contagem de um recurso desligado é ruído, então com
+ * `learned.enabled: false` não sai nada.
+ */
+function learnedLines(learned: BannerOptions['learned'], c: Palette): string[] {
+  if (!learned || !learned.enabled) return []
+
+  if (learned.error !== null) {
+    return [
+      '',
+      c.warn('   Não consegui ler o que eu já tinha aprendido — comecei do zero.'),
+      c.warn(`   Motivo: ${learned.error}`),
+    ]
+  }
+
+  if (learned.count === 0) {
+    return ['', `   Ainda não aprendi ${c.address('nenhum')} comando com a IA.`]
+  }
+
+  const noun = learned.count === 1 ? 'comando aprendido' : 'comandos aprendidos'
+  const shadowed = learned.shadowed > 0 ? `  (${learned.shadowed} já virou comando no código)` : ''
+  return ['', `   Sei repetir ${c.address(String(learned.count))} ${noun} sozinho${shadowed}`]
+}
+
+/**
  * Monta o cartão de startup. Função pura: devolve a string, quem imprime é o
  * `main.ts`. Recebe `Config` e nunca `Secrets` — assim nenhum segredo chega
  * aqui nem por acidente.
@@ -117,6 +160,7 @@ export function renderStartupBanner(config: Config, options: BannerOptions = {})
     ...steps.map((step) => `   ${c.step(step)}`),
     '',
     `   Estou esperando em  ${c.address(`${host}:${port}`)}`,
+    ...learnedLines(options.learned, c),
     '',
     c.warn('   A porta do LAN muda toda vez que você abre o mundo.'),
     c.warn(`   Se o jogo mostrar outra, troque server.port no config.yaml.`),

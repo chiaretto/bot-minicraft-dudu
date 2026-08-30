@@ -118,13 +118,59 @@ Para ter reload, mova o repositório para um caminho nativo do Windows
 
 ---
 
+## Ligar o bot sem terminal
+
+Quem vai jogar com o bot é uma criança, e criança não abre terminal. Existe um
+aplicativo de desktop com um botão grande para chamar o bot, outro para mandar
+ele dormir e um para acordar de novo.
+
+```bash
+npm run launcher:install   # uma vez: instala o Electron (só do launcher)
+npm run launcher:build     # gera o instalador
+```
+
+O instalador sai em `launcher/release/Odraude Setup <versão>.exe`. Rode ele uma
+vez: ele cria o atalho na área de trabalho e no menu iniciar. Daí em diante é
+duplo clique no ícone.
+
+A janela mostra em que pé está a conexão, em frase de criança:
+
+| O que aparece | O que é |
+|---|---|
+| "O Odraude tá dormindo." | desligado |
+| "Procurando seu mundo..." | ligado, ainda não entrou |
+| "O Odraude tá com você!" | dentro do mundo |
+| "Não achei seu mundo! Abriu ele pra LAN?" | não conseguiu entrar |
+
+Em **"Coisas de adulto"** (fechado por padrão) ficam o log ao vivo e o campo da
+**porta do LAN** — que muda toda vez que o mundo é aberto. Corrigir por ali
+grava no `config.yaml` preservando os comentários; clique em "Acordar de novo"
+para a porta nova valer.
+
+O aplicativo executa o bot **a partir desta pasta do repositório**, não de uma
+cópia embutida: é o que mantém `data/conversations/` e a rotina de repertório
+funcionando. Se o repositório mudar de lugar, aponte a pasta nova pelo botão
+"Escolher pasta do bot".
+
+O terminal continua funcionando igual — `npm run dev` não mudou, e `npm install`
+na raiz **não** baixa o Electron.
+
+Para mexer no aplicativo:
+
+```bash
+npm run launcher:dev    # abre a janela a partir do código
+npm run launcher:test   # testes das partes puras
+```
+
+---
+
 ## IA: local, nuvem ou nenhuma
 
 O provider é plugável. Trocar é **uma linha** de `config.yaml`:
 
 ```yaml
 llm:
-  provider: 'ollama' # 'ollama' | 'gemini' | 'none'
+  provider: 'ollama' # 'ollama' | 'gemini' | 'claude' | 'none'
 ```
 
 ### `ollama` — modelo local (padrão)
@@ -179,6 +225,41 @@ llm:
 GEMINI_API_KEY=sua-chave-aqui
 ```
 
+### `claude` — nuvem, pela sua assinatura
+
+Fala com o Claude pelo **Claude Code rodando local**, usando a credencial da
+**assinatura** — não é chave de API cobrada por token.
+
+```yaml
+llm:
+  provider: 'claude'
+```
+
+```bash
+claude setup-token     # gera a credencial
+# no .env
+CLAUDE_CODE_OAUTH_TOKEN=a-credencial-gerada
+```
+
+Se você já usa o Claude Code nesta máquina, o login existente serve e o `.env`
+nem é necessário.
+
+**A cota é a sua.** Diferente de uma chave de API com crédito próprio, é a mesma
+assinatura que você usa no Claude Code do dia a dia — uma criança conversando a
+tarde inteira consome dela. O `maxCallsPerMinute` limita o ritmo.
+
+**Latência medida** (5 frases reais do log, mesma máquina, mesmo dia):
+
+| | mediana | pior caso | falhas |
+|---|---|---|---|
+| `claude` (haiku 4.5) | **1,6 s** | 2,4 s | 0/5 |
+| `gemini` (flash-lite) | 11,2 s | 16,4 s | 0/5 |
+
+O que faz a diferença não é o modelo, é a **sessão viva**: o Claude Code sobe um
+subprocesso, e isso leva ~14 s. O bot paga essa subida no startup
+(`warmUpOnStart`), longe da criança, e reaproveita a sessão nas falas seguintes.
+Com o aquecimento desligado, a primeira frase da criança paga os 14 s.
+
 ### `none` — sem IA
 
 O bot roda só com comandos e repertório. Nenhuma dependência externa.
@@ -209,6 +290,8 @@ llm:
 | `dudu, não briga`                    | desliga a defesa automática        |
 | `dudu, pode brigar`                  | religa a defesa                    |
 | `dudu, olha pra mim`                 | vira para você                     |
+| `dudu, ataca` / `mata ele`           | ataca o monstro mais perto de você |
+| `dudu, ataca o zumbi`                | ataca aquele tipo de monstro       |
 | `dudu, vamos brincar`                | pergunta qual das duas brincadeiras |
 | `dudu, abre a porta`                 | abre a porta, o portão ou o alçapão |
 | `dudu, sai do buraco` / `sobe`       | faz escadinha de blocos e sobe     |
@@ -223,6 +306,13 @@ llm:
 | `dudu, eu vou te pegar` / `você corre` | pega-pega: ele foge              |
 
 O vocativo é opcional: `oi dudu`, `dudu, oi` e `oi` funcionam igual.
+
+> **Atacar é comando, não conversa.** A IA nunca decide em quem bater — combate é
+> determinístico. Se você pedir em linguagem livre ("mata aquele bicho ali"), o
+> bot ensina a frase que funciona em vez de prometer e não fazer.
+>
+> Bicho pacífico (vaca, porco, galinha, ovelha) e jogador **nunca** são alvo, nem
+> pedindo pelo nome. Ele recusa e diz por quê.
 
 ### Conversa (nível 2 — repertório local)
 
@@ -524,7 +614,10 @@ Regras que valem sempre:
 - **Nunca ataca outro jogador.** Nem mob passivo, nem bicho domesticado.
 - **Vida crítica desengaja.** Auto-preservação vence a defesa: um bot morto não
   protege ninguém.
-- **Sem arma não engaja.** Avisa e recua junto com você.
+- **Sem arma ele encara o que dá.** Zumbi, aranha, esqueleto e afins ele enfrenta
+  de mão. Contra os fortes (ravager, bruxa, blaze) ele recusa e **pede uma
+  espada**. A regra antiga era "desarmado nunca briga", e o efeito era um bot que
+  nunca atacava nada: ele entra no mundo sem inventário e não sabe craftar.
 - **Não sai caçando.** Só age dentro do raio de proteção (16 blocos por padrão).
 - **Termina o combate e volta ao que fazia** — seguindo, ou de volta ao ponto do
   `fica aqui`, ou retomando a coleta de onde parou.
@@ -613,6 +706,76 @@ comando `/upgrade-repertoire`, versionado em `.claude/commands/`: ele roda o
 relatório, agrupa por assunto, escreve as entradas seguindo as regras acima,
 valida e sincroniza. Vale saber que, nesse caminho, as frases do log passam pelo
 modelo — os scripts acima, sozinhos, não mandam nada para fora da máquina.
+
+---
+
+## Comandos aprendidos da IA
+
+Um pedido em palavras livres custa uma chamada de IA na **primeira** vez. Da
+segunda em diante, não custa nada.
+
+```
+Miguel: dudu, será que dava pra você juntar umas madeirinhas?
+Dudu:   Já vou pegar umas madeirinhas pra você!   <- IA (Gemini), 3 s
+Dudu:   Peguei 8 de madeira!
+
+... no dia seguinte, mesma frase ...
+
+Miguel: dudu, será que dava pra você juntar umas madeirinhas?
+Dudu:   Deixa comigo!                             <- histórico, instantâneo
+Dudu:   Peguei 8 de madeira!
+```
+
+É o **nível 1.5** da cascata: `comando → comando aprendido → repertório → IA`.
+
+### O que ele aprende
+
+Só com as três condições juntas: a IA **propôs ação**, a ação **executou** e
+**deu certo**. Conversa não vira comando, e ação recusada, cancelada ou falha
+não ensina nada — aprender o que deu errado é ensinar o bot a errar mais rápido.
+
+Também não entra intenção cujos parâmetros sejam estado do mundo. `GOTO_COORDS`
+está fora do catálogo por isso: "vem aqui" decorado como `x=104, y=64, z=-233`
+mandaria o bot para o lugar errado amanhã.
+
+### O que ele fala no replay
+
+A **ação** vem do histórico; a **fala** vem do repertório (entrada
+`comando_aprendido`, com 6 variações). A fala que a IA deu no dia do aprendizado
+fica guardada no arquivo, mas não é dita: ela pode estar presa àquele momento
+("tá escuro aqui, acende uma tocha") e sairia fora de hora.
+
+### Quando ele erra
+
+Duas saídas, e a primeira é da criança:
+
+- **`para` logo depois desfaz.** `dudu, para` dentro de 15 segundos de um
+  comando aprendido apaga a entrada, e o pedido volta a passar pela IA. É o
+  jeito mais honesto que uma criança de 7 anos tem de dizer "não era isso" — e
+  ela já sabe esse comando.
+- **Apagar na mão:** com o bot parado, apague `data/learned-commands.json` (ou
+  só a entrada errada, é JSON legível). Na volta ele começa do zero.
+
+Entrada cuja frase virou padrão de regex em `behaviors/commands.ts` é descartada
+no startup — é assim que a promoção pela rotina diária limpa o cache sozinha.
+
+### Onde ver
+
+O cartão de startup diz quantos comandos ele já sabe repetir, e
+`npm run repertoire:gaps` lista os aprendidos por uso, marcando os que já
+merecem virar regex. No histórico de conversa eles aparecem com
+`source: "learned"` — dá para medir quanta chamada de IA foi economizada.
+
+Desligar é uma linha em `config.yaml`:
+
+```yaml
+learned:
+  enabled: false   # volta à cascata de três níveis
+```
+
+> **Privacidade:** o arquivo é derivado das falas da criança e mora em `data/`,
+> que está inteiro no `.gitignore`. Ele nunca é enviado a provider nenhum — e
+> cada acerto do histórico é uma frase que **deixa** de sair da máquina.
 
 ---
 

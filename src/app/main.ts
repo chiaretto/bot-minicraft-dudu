@@ -3,9 +3,15 @@ import { loadConfig, ConfigError } from '../config/load.js'
 import { RepertoireError } from '../dialogue/loader.js'
 import { createLogger } from '../logging/logger.js'
 import { renderStartupBanner, shouldShowBanner } from './startup-banner.js'
+import { createStatusChannel, listenForStop } from './status-channel.js'
 import { CompanionBot } from './bot.js'
 
 async function main(): Promise<void> {
+  // Antes de tudo: se a configuração nem carregar, o supervisor precisa saber
+  // que houve uma tentativa, senão a janela fica em "parado" sem explicação.
+  const status = createStatusChannel()
+  status.emit('ligando')
+
   let loaded
   try {
     loaded = loadConfig(process.env.DUDU_CONFIG ?? 'config.yaml')
@@ -18,11 +24,6 @@ async function main(): Promise<void> {
   }
 
   const { config, secrets } = loaded
-
-  // Antes de qualquer tentativa de conexão: quem subiu o processo precisa ler a
-  // instrução do LAN antes de ver o backoff falhando. Fora do `pino` de
-  // propósito — moldura dentro de log estruturado vira uma linha JSON ilegível.
-  if (shouldShowBanner()) console.log(renderStartupBanner(config))
 
   const logger = createLogger(config.logLevel)
   logger.info({ owner: config.ownerPlayer, bot: config.persona.name }, 'iniciando')
@@ -38,6 +39,17 @@ async function main(): Promise<void> {
     throw err
   }
 
+  // Depois de montar o bot e ANTES de qualquer tentativa de conexão: quem subiu
+  // o processo precisa ler a instrução do LAN antes de ver o backoff falhando, e
+  // o cartão mostra quantos comandos o bot já sabe repetir — o que só se sabe
+  // depois de carregar o histórico. Fora do `pino` de propósito: moldura dentro
+  // de log estruturado vira uma linha JSON ilegível.
+  if (shouldShowBanner()) {
+    console.log(renderStartupBanner(config, { learned: bot.learnedSummary }))
+  }
+
+  bot.onLifecycle((state) => status.emit(state))
+
   // Encerramento gracioso: desconecta limpo e fecha o arquivo do dia.
   let shuttingDown = false
   const shutdown = (signal: string) => {
@@ -51,6 +63,12 @@ async function main(): Promise<void> {
 
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
+
+  // No Windows, `SIGTERM` mandado a um processo filho não é sinal de verdade: o
+  // Node o traduz para `TerminateProcess` e o handler acima NÃO roda — o bot
+  // sairia sem desconectar e ficaria de fantasma no mundo. Por isso o
+  // supervisor pede a parada por uma linha no `stdin`.
+  listenForStop(() => shutdown('parar'))
 
   await bot.start()
 }

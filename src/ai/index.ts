@@ -6,6 +6,7 @@ import { ProviderError } from './provider.js'
 import { ResilientProvider, BusyError, CircuitOpenError, RateLimitError } from './resilient.js'
 import { OllamaProvider } from './providers/ollama.js'
 import { GeminiProvider } from './providers/gemini.js'
+import { ClaudeProvider } from './providers/claude.js'
 import { NoneProvider } from './providers/none.js'
 
 export * from './provider.js'
@@ -22,6 +23,14 @@ export interface AiDeps {
   secrets: Secrets
   now?: () => number
   onCircuitChange?: (provider: ProviderName, open: boolean) => void
+  /**
+   * O primário falhou e a vez passou para o reserva.
+   *
+   * Sem isto a troca é invisível: o bot responde normalmente e ninguém descobre
+   * que o provider configurado parou de atender — até a conta do reserva
+   * chegar, ou ele cair também.
+   */
+  onFallback?: (from: ProviderName, to: ProviderName, err: unknown) => void
 }
 
 function buildRaw(name: ProviderName, llm: LlmConfig, secrets: Secrets): LlmProvider {
@@ -38,6 +47,14 @@ function buildRaw(name: ProviderName, llm: LlmConfig, secrets: Secrets): LlmProv
         apiKey: secrets.geminiApiKey ?? '',
         model: llm.gemini.model,
       })
+    case 'claude':
+      // Sem segredo aqui: o Agent SDK lê a credencial do ambiente ou do login
+      // que o Claude Code já fez na máquina.
+      return new ClaudeProvider({
+        model: llm.claude.model,
+        sessionMaxAgeMs: llm.claude.sessionMaxAgeMs,
+        sessionMaxTurns: llm.claude.sessionMaxTurns,
+      })
     case 'none':
       return new NoneProvider()
   }
@@ -46,6 +63,7 @@ function buildRaw(name: ProviderName, llm: LlmConfig, secrets: Secrets): LlmProv
 function timeoutFor(name: ProviderName, llm: LlmConfig): number {
   if (name === 'ollama') return llm.ollama.timeoutMs
   if (name === 'gemini') return llm.gemini.timeoutMs
+  if (name === 'claude') return llm.claude.timeoutMs
   return 1000
 }
 
@@ -63,6 +81,11 @@ export function wrapWithResilience(
     ...(deps.now ? { now: deps.now } : {}),
     onStateChange: (open) => deps.onCircuitChange?.(provider.name, open),
   })
+}
+
+/** Provider cuja chamada faz a mensagem do jogador sair da máquina. */
+function isCloud(name: ProviderName): boolean {
+  return name === 'gemini' || name === 'claude'
 }
 
 export interface AiResult<T> {
@@ -115,7 +138,17 @@ export class AiLayer {
    * a mensagem do jogador PASSA A SAIR da máquina quando o local falha.
    */
   get leaksToCloudOnFallback(): boolean {
-    return this.deps.llm.provider === 'ollama' && this.deps.llm.fallbackProvider === 'gemini'
+    const fallback = this.deps.llm.fallbackProvider
+    return this.deps.llm.provider === 'ollama' && fallback !== null && isCloud(fallback)
+  }
+
+  /**
+   * Solta o que os providers seguram. Só o Claude Code tem o que soltar hoje —
+   * um subprocesso que ficaria órfão se ninguém encerrasse.
+   */
+  stop(): void {
+    this.primary.stop()
+    this.fallback?.stop()
   }
 
   private async attempt<T>(
@@ -130,6 +163,7 @@ export class AiLayer {
       if (err instanceof BusyError) return null
       if (this.fallback === null) return null
 
+      this.deps.onFallback?.(this.primary.name, this.fallback.name, err)
       onFallback?.(err)
       try {
         const value = await fn(this.fallback)
@@ -156,10 +190,10 @@ export class AiLayer {
    * Aquece o modelo. Falha aqui NUNCA impede o bot de iniciar: ele apenas
    * opera pelos níveis 1 e 2 até a IA voltar.
    */
-  async warmUp(): Promise<ProviderError | null> {
+  async warmUp(identity?: ConversationContext): Promise<ProviderError | null> {
     if (!this.enabled || !this.deps.llm.warmUpOnStart) return null
     try {
-      await this.primary.warmUp()
+      await this.primary.warmUp(identity)
       return null
     } catch (err) {
       return err instanceof ProviderError ? err : new ProviderError(String(err), this.primary.name)

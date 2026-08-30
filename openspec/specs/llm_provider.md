@@ -2,6 +2,7 @@
 
 **Componente:** `llm_provider`
 **Origem:** `add-minecraft-companion-bot` (2026-08-15)
+**Ampliado por:** `add-claude-code-provider` (2026-08-29) — provider Claude Code
 
 > Este arquivo cobre **de onde vem** a inferência. O *comportamento* de conversa
 > e interpretação continua em `ai_companion.md`, que é agnóstico de provider.
@@ -16,7 +17,17 @@
 ### Requirement: Interface única de provider
 
 Toda inferência passa por uma interface `LlmProvider`. O resto do bot não sabe
-qual implementação está ativa.
+qual implementação está ativa. Os nomes válidos são
+`'ollama' | 'gemini' | 'claude' | 'none'`.
+
+A regra que dá sentido a ela: **nenhum código fora de `src/ai/providers/` pode
+referenciar Ollama, Gemini ou o Agent SDK do Claude Code**. É o que mantém a
+troca de provider sendo uma linha de configuração — e o que torna cada provider
+removível sem tocar no resto.
+
+A interface tem três métodos: `converse()`, `warmUp(identity?)` e um `stop?()`
+opcional. `stop()` existe porque um provider pode segurar recurso vivo (o Claude
+Code segura um subprocesso); Ollama e Gemini não implementam.
 
 ```ts
 interface LlmProvider {
@@ -108,6 +119,211 @@ A implementação de nuvem continua disponível, agora atrás da mesma interface
 
 ---
 
+### Requirement: Provider Claude Code (assinatura)
+
+O provider `claude` fala com o Claude pelo **Agent SDK**
+(`@anthropic-ai/claude-agent-sdk`) rodando localmente, autenticado pela
+**credencial da assinatura** — não por chave de API cobrada por token.
+
+A escolha do SDK é consequência da credencial, não preferência de arquitetura: a
+Messages API seria mais rápida e mais simples, e está fora porque só aceita chave
+de API. É isso que justifica todo o requisito de escopo mínimo abaixo.
+
+#### Scenario: Responder pela assinatura, sem chave de API
+- **GIVEN** `llm.provider` é `'claude'`
+- **AND** a credencial da assinatura está disponível
+- **AND** nenhuma chave de API da Anthropic está configurada
+- **WHEN** a criança fala algo que a cascata leva até a IA
+- **THEN** o bot responde no chat
+- **AND** a resposta traz fala e, quando cabe, ação validada
+
+#### Scenario: Credencial ausente não impede o bot de subir
+- **GIVEN** `llm.provider` é `'claude'`
+- **AND** a variável de ambiente da credencial não está definida
+- **WHEN** o bot inicia
+- **THEN** ele sobe assim mesmo
+- **AND** avisa no log, nomeando a variável e o comando que a gera
+- **AND** tenta usar o login do Claude Code já feito na máquina
+
+> Diferente do Gemini, aqui a ausência da variável **não** é erro: o SDK também
+> aceita o login existente na máquina. Falhar recusaria uma configuração que
+> funciona.
+
+#### Scenario: A credencial nunca aparece
+- **GIVEN** o provider está ativo
+- **WHEN** qualquer erro do SDK é registrado no log
+- **THEN** o valor da credencial não aparece em lugar nenhum da mensagem
+
+---
+
+### Requirement: Escopo mínimo do harness
+
+O Agent SDK é o harness do Claude Code: loop de agente, ferramentas de arquivo e
+bash, subagentes, leitura de configuração do disco. Para responder uma frase no
+chat do Minecraft **nada disso serve**, e tudo custa token e tempo.
+
+O provider é obrigado a desligar cada peça. Isto é **requisito, não recomendação
+de configuração**: esquecer um item devolve o harness inteiro, e o sintoma é
+latência — a coisa exata que o provider existe para evitar.
+
+#### Scenario: Nenhuma ferramenta é oferecida ao modelo
+- **GIVEN** o provider `claude` está montando uma requisição
+- **WHEN** as opções são construídas
+- **THEN** o conjunto base de ferramentas embutidas está vazio
+- **AND** o modelo não recebe Read, Write, Edit, Bash, Glob, Grep, WebSearch nem
+  WebFetch
+- **AND** nenhuma chamada de ferramenta aparece no log durante uma conversa
+
+> A opção que desliga ferramenta é a que declara o **conjunto base**, não a de
+> auto-aprovação: a lista de auto-aprovação já é vazia por padrão e mesmo assim
+> deixa a ferramenta no contexto do modelo.
+>
+> Isto não é ajuste de performance: é o que mantém a regra de que a IA **nunca**
+> executa efeito direto.
+
+#### Scenario: A configuração do repositório não entra no prompt
+- **GIVEN** o repositório tem um `CLAUDE.md` na raiz
+- **WHEN** o provider monta uma requisição
+- **THEN** as fontes de configuração em disco estão explicitamente vazias
+- **AND** o conteúdo do `CLAUDE.md` não faz parte do prompt enviado
+
+#### Scenario: O prompt é o do bot, não o do Claude Code
+- **GIVEN** o provider está montando uma requisição
+- **WHEN** o system prompt é definido
+- **THEN** ele é o do projeto, com a persona, o catálogo de ação e a regra
+  número um
+- **AND** o preset de agente de código do Claude Code não é usado
+
+#### Scenario: Uma fala, uma resposta
+- **GIVEN** o provider está montando uma requisição
+- **WHEN** o número de turnos é definido
+- **THEN** ele permite exatamente uma fala do jogador e uma resposta do bot,
+  e nada além disso
+- **AND** nenhum servidor MCP é carregado
+
+> Medido: o SDK conta a fala e a resposta como **dois** turnos. Um limite de 1
+> estoura em `error_max_turns`, derruba o aquecimento e, de vez em quando, uma
+> fala no meio da conversa — que então paga a subida de uma sessão nova.
+
+#### Scenario: Sem raciocínio estendido
+- **GIVEN** o provider está montando uma requisição
+- **WHEN** as opções são construídas
+- **THEN** o raciocínio estendido está desligado
+
+#### Scenario: Modelo rápido por padrão
+- **GIVEN** a configuração não diz o contrário
+- **WHEN** o provider é construído
+- **THEN** o modelo é o mais rápido da família (`claude-haiku-4-5`)
+- **AND** o modelo pode ser trocado pela configuração
+
+---
+
+### Requirement: Sessão viva
+
+O Agent SDK sobe um subprocesso. Pagar essa subida a cada fala da criança domina
+qualquer ganho de escolher um modelo rápido — medido nesta máquina, **~14 s de
+subida contra ~1,6 s de resposta com a sessão de pé**. É a diferença entre uma
+resposta e um silêncio que a criança lê como "travou".
+
+Por isso o provider mantém **uma sessão viva** e manda as falas por ela. É o
+primeiro provider do projeto **com estado**: os outros são sem estado, e cada
+chamada neles é independente.
+
+#### Scenario: O subprocesso sobe no aquecimento
+- **GIVEN** `llm.provider` é `'claude'` e o aquecimento está ligado
+- **WHEN** o bot inicia
+- **THEN** a sessão é criada e o subprocesso sobe durante o aquecimento
+- **AND** a primeira fala da criança não paga a subida do processo
+
+> Criar a sessão não basta: o SDK só sobe o processo na primeira mensagem. O
+> aquecimento manda uma fala descartável justamente para forçar a subida.
+
+#### Scenario: A sessão aquecida é a que atende
+- **GIVEN** o aquecimento terminou
+- **WHEN** a criança fala pela primeira vez
+- **THEN** a fala é atendida pela sessão que já estava de pé
+- **AND** essa sessão já tem a persona, o catálogo de ação e a regra número um
+
+> O system prompt é fixado na criação da sessão. Uma sessão aquecida com prompt
+> genérico e depois descartada jogaria o aquecimento fora; pior, se fosse
+> reusada, o bot passaria a conversa inteira respondendo como assistente
+> genérico. Por isso o aquecimento recebe a identidade do bot.
+
+#### Scenario: Falas seguidas reaproveitam a sessão
+- **GIVEN** a sessão está viva
+- **WHEN** a criança fala duas vezes seguidas
+- **THEN** nenhum processo novo é criado para a segunda fala
+- **AND** a segunda resposta não é mais lenta que a primeira
+
+#### Scenario: O estado do mundo acompanha a fala, não a sessão
+- **GIVEN** a sessão foi criada há algum tempo
+- **WHEN** a criança fala
+- **THEN** o estado atual do mundo vai junto da mensagem
+- **AND** o bot não responde sobre o mundo do momento em que a sessão nasceu
+
+#### Scenario: Falha de aquecimento não impede o bot de subir
+- **GIVEN** a sessão não consegue ser criada no startup
+- **WHEN** o bot inicia
+- **THEN** ele sobe assim mesmo
+- **AND** avisa no log que a IA está indisponível
+- **AND** comandos e repertório continuam funcionando
+
+#### Scenario: Sessão morta é resubida sozinha
+- **GIVEN** a sessão morreu entre uma fala e outra
+- **WHEN** a criança fala
+- **THEN** o provider sobe uma sessão nova e atende
+- **AND** a criança não vê mensagem técnica nenhuma
+
+#### Scenario: Falha persistente cai para o repertório
+- **GIVEN** a sessão não consegue ser recriada
+- **WHEN** a criança fala
+- **THEN** o provider devolve erro à camada de resiliência
+- **AND** a cascata responde pelo repertório, com fala de criança
+
+#### Scenario: Sessão é reciclada antes de envelhecer demais
+- **GIVEN** a sessão passou do limite de idade ou de falas da configuração
+- **WHEN** a criança fala de novo
+- **THEN** o provider recicla a sessão
+- **AND** a troca é invisível para a criança
+
+#### Scenario: Nenhum subprocesso órfão
+- **GIVEN** o bot está rodando com a sessão viva
+- **WHEN** o bot é encerrado
+- **THEN** a sessão é encerrada junto
+- **AND** nenhum subprocesso do Claude Code sobra na máquina
+
+---
+
+### Requirement: Fala e ação com formato pedido
+
+O provider entrega ao SDK o mesmo schema de resposta que Ollama e Gemini já
+usam, e lê a resposta estruturada que volta — a garantia de formato é a mesma dos
+outros providers, não uma versão mais frouxa.
+
+O parser tolerante do projeto continua como rede. O pior caso precisa ser **bot
+conversa e não age** — nunca erro no chat, nunca ação errada.
+
+#### Scenario: Resposta bem formada vira fala e ação
+- **GIVEN** o modelo devolveu fala e ação no formato pedido
+- **WHEN** a resposta é lida
+- **THEN** a fala vai para o chat
+- **AND** a ação passa pela validação de intenção antes de virar efeito
+
+#### Scenario: Resposta estruturada ausente cai para o texto
+- **GIVEN** a resposta estruturada veio vazia
+- **WHEN** a resposta é lida
+- **THEN** o texto final é lido pelo parser tolerante
+- **AND** o bot fala, mesmo sem ação
+
+#### Scenario: Texto que não é o formato vira só fala
+- **GIVEN** o modelo devolveu texto fora do formato pedido
+- **WHEN** a resposta é lida
+- **THEN** o texto vira a fala do bot
+- **AND** nenhuma ação é executada
+- **AND** nenhuma mensagem de erro chega ao chat
+
+---
+
 ### Requirement: Resiliência compartilhada entre providers
 
 Timeout, retry e circuit breaker são um decorador único aplicado sobre qualquer
@@ -188,7 +404,20 @@ O bot não pode degradar o jogo que ele deveria tornar mais divertido.
 
 ### Requirement: Fallback entre providers (opt-in)
 
-O provider primário pode ter um reserva, desligado por padrão.
+O provider primário pode ter um reserva, desligado por padrão. Qualquer provider
+pode ser primário ou reserva — inclusive `claude`, dos dois lados.
+
+Duas nuvens de **fornecedores diferentes** deixam de fazer da cota de um só um
+ponto único de falha.
+
+#### Scenario: Nuvem primária com outra nuvem de reserva
+- **GIVEN** `llm.provider: "claude"` e `llm.fallbackProvider: "gemini"`
+- **WHEN** o Claude falha, estoura o timeout ou esgota a cota
+- **THEN** a fala é atendida pelo Gemini
+- **AND** a criança não percebe a troca
+
+> Aqui o fallback não muda a privacidade — o primário já é de nuvem. Muda a
+> resiliência: cota estourada de um fornecedor não deixa a criança sem bot.
 
 #### Scenario: Fallback desligado por padrão
 - **GIVEN** `config.yaml` não define `llm.fallbackProvider`
@@ -208,6 +437,8 @@ O provider primário pode ter um reserva, desligado por padrão.
 - **THEN** um aviso é registrado deixando claro que, na falha do local, as
   mensagens do jogador passam a ser enviadas para fora da máquina
 - **AND** o `config.example.yaml` documenta essa consequência junto do campo
+- **AND** o aviso vale para **qualquer** fallback de nuvem, não para um provider
+  em particular
 
 #### Scenario: Origem registrada no histórico
 - **GIVEN** uma resposta veio do provider de fallback

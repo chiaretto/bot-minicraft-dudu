@@ -36,6 +36,11 @@ Cada grupo já vem com: quantas vezes repetiu, como o jogador escreveu de
 verdade, a resposta que a IA deu (matéria-prima para as variações) e a entrada
 mais parecida que já existe.
 
+O relatório traz ainda uma terceira seção: os **comandos aprendidos** da IA
+(nível 1.5 da cascata), ordenados por uso. Os marcados como candidatos já
+repetiram o bastante para virar regex em `src/behaviors/commands.ts` — promova
+os que fizerem sentido, que a entrada sai do cache sozinha no startup seguinte.
+
 O que **ignorar** ao ler:
 
 - grupos marcados `JÁ RESOLVE HOJE` (o relatório esconde por padrão) — o gap

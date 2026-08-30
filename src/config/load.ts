@@ -40,6 +40,7 @@ function formatZodError(error: z.ZodError): string {
 export function readSecrets(env: NodeJS.ProcessEnv = process.env): Secrets {
   const secrets: Secrets = {}
   if (env.GEMINI_API_KEY) secrets.geminiApiKey = env.GEMINI_API_KEY
+  if (env.CLAUDE_CODE_OAUTH_TOKEN) secrets.claudeOauthToken = env.CLAUDE_CODE_OAUTH_TOKEN
   if (env.MINECRAFT_PASSWORD) secrets.minecraftPassword = env.MINECRAFT_PASSWORD
   return secrets
 }
@@ -55,6 +56,18 @@ export function assertSecretsForProvider(config: Config, secrets: Secrets): void
     throw new ConfigError(
       "provider 'gemini' exige a variável de ambiente GEMINI_API_KEY\n" +
         '  variável de ambiente obrigatória ausente: GEMINI_API_KEY',
+    )
+  }
+
+  // O Claude Code também aceita o login já feito na máquina, e nesse caso não há
+  // variável nenhuma para conferir — então aqui NÃO é erro, é aviso com o comando
+  // que resolve. Falhar seria recusar uma configuração que funciona.
+  const usesClaude = config.llm.provider === 'claude' || config.llm.fallbackProvider === 'claude'
+  if (usesClaude && !secrets.claudeOauthToken) {
+    console.warn(
+      "\naviso: provider 'claude' sem CLAUDE_CODE_OAUTH_TOKEN no ambiente.\n" +
+        '  O bot vai tentar o login do Claude Code já feito nesta máquina.\n' +
+        '  Para gerar uma credencial própria: claude setup-token\n',
     )
   }
 }

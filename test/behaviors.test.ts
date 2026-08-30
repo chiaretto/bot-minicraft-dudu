@@ -645,9 +645,35 @@ describe('plano de defesa', () => {
     expect(result.kind).toBe('engage')
   })
 
-  it('desarmado não engaja', () => {
+  it('desarmado ENGAJA alvo fraco', () => {
+    // Regra mudou em 2026-08-29. A antiga ("desarmado nunca engaja") deixava o
+    // bot sem atacar NADA, porque ele entra no mundo sem inventário e não sabe
+    // craftar. Ver: player_defense_delta.md → "Engajamento corpo a corpo".
     const result = plan(snapshot(), [zombie], null)
+    expect(result.kind).toBe('engage')
+    if (result.kind === 'engage') expect(result.weapon).toBeNull()
+  })
+
+  it('desarmado recusa alvo forte demais', () => {
+    const ravager = {
+      entity: entity({ id: 7, name: 'ravager' }),
+      targetingOwner: true,
+      isCreeper: false,
+      distanceToOwner: 3,
+    }
+    const result = plan(snapshot(), [ravager], null)
     expect(result.kind).toBe('unarmed')
+  })
+
+  it('com arma, alvo forte é engajado normalmente', () => {
+    const ravager = {
+      entity: entity({ id: 7, name: 'ravager' }),
+      targetingOwner: true,
+      isCreeper: false,
+      distanceToOwner: 3,
+    }
+    const result = plan(snapshot(), [ravager], 'iron_sword')
+    expect(result.kind).toBe('engage')
   })
 
   it('vida crítica vence o desarmado', () => {

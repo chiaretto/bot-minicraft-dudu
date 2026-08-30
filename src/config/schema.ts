@@ -5,7 +5,14 @@ import { z } from 'zod'
  * O loader recusa iniciar se encontrar qualquer um deles no arquivo.
  * Ver: configuration_delta.md → "Segredos apenas por variável de ambiente".
  */
-export const FORBIDDEN_YAML_KEYS = ['geminiApiKey', 'apiKey', 'password', 'senha'] as const
+export const FORBIDDEN_YAML_KEYS = [
+  'geminiApiKey',
+  'claudeOauthToken',
+  'apiKey',
+  'token',
+  'password',
+  'senha',
+] as const
 
 export const serverSchema = z.object({
   host: z.string().min(1).default('localhost'),
@@ -229,11 +236,35 @@ export const geminiSchema = z.object({
   timeoutMs: z.number().int().positive().default(5_000),
 })
 
+/**
+ * Provider Claude Code, pelo Agent SDK.
+ *
+ * Diferente dos outros dois, este tem **sessão**: o SDK sobe um subprocesso, e
+ * pagar essa subida a cada fala da criança dominaria qualquer ganho de escolher
+ * um modelo rápido (medido: ~5 s de subida contra ~1,4 s de resposta com a
+ * sessão de pé). Por isso existem os limites de reciclagem aqui embaixo — eles
+ * não têm equivalente no Ollama nem no Gemini.
+ * Ver: llm_provider_delta.md → "Sessão viva".
+ */
+export const claudeSchema = z.object({
+  model: z.string().min(1).default('claude-haiku-4-5'),
+  timeoutMs: z.number().int().positive().default(15_000),
+  /** Idade máxima da sessão antes de reciclar. */
+  sessionMaxAgeMs: z
+    .number()
+    .int()
+    .positive()
+    .default(30 * 60_000),
+  /** Falas atendidas por uma sessão antes de reciclar. */
+  sessionMaxTurns: z.number().int().positive().default(50),
+})
+
 export const llmSchema = z.object({
-  provider: z.enum(['ollama', 'gemini', 'none']).default('ollama'),
-  fallbackProvider: z.enum(['ollama', 'gemini']).nullable().default(null),
+  provider: z.enum(['ollama', 'gemini', 'claude', 'none']).default('ollama'),
+  fallbackProvider: z.enum(['ollama', 'gemini', 'claude']).nullable().default(null),
   ollama: ollamaSchema.default({}),
   gemini: geminiSchema.default({}),
+  claude: claudeSchema.default({}),
   warmUpOnStart: z.boolean().default(true),
   /** Após esse tempo sem resposta, o bot fala algo de espera no chat. */
   fillerAfterMs: z.number().int().positive().default(2_000),
@@ -242,6 +273,30 @@ export const llmSchema = z.object({
   maxCallsPerMinute: z.number().int().positive().default(10),
   circuitBreakerThreshold: z.number().int().positive().default(3),
   circuitBreakerResetMs: z.number().int().positive().default(60_000),
+})
+
+/**
+ * Histórico de comandos aprendidos da IA (nível 1.5 da cascata).
+ *
+ * `minConfidence` é mais rígido que o do repertório de propósito: em 0.7 o
+ * casamento aceita saco de palavras, e "nao pega madeira" tem as mesmas
+ * palavras de "pega madeira". Para conversa isso custa uma resposta esquisita;
+ * para ação, custa o bot fazendo o contrário do pedido.
+ * Ver: configuration_delta.md → "Bloco `learned`".
+ */
+export const learnedSchema = z.object({
+  enabled: z.boolean().default(true),
+  /** Fora do git, como todo o `data/`: é dado derivado da fala da criança. */
+  path: z.string().min(1).default('data/learned-commands.json'),
+  minConfidence: z.number().min(0).max(1).default(0.85),
+  /** Teto de entradas; a usada há mais tempo sai primeiro. */
+  maxEntries: z.number().int().positive().default(200),
+  /** Falas da IA guardadas por entrada, como material para a rotina diária. */
+  maxRepliesPerEntry: z.number().int().nonnegative().default(4),
+  /** `null` = guardar para sempre, como `memory.retentionDays`. */
+  forgetAfterDays: z.number().int().positive().nullable().default(null),
+  /** Janela em que um `para` desfaz o aprendizado que acabou de ser usado. */
+  unlearnOnStopMs: z.number().int().positive().default(15_000),
 })
 
 export const behaviorSchema = z.object({
@@ -312,6 +367,7 @@ export const configSchema = z.object({
   defense: defenseSchema.default({}),
   games: gamesSchema.default({}),
   llm: llmSchema.default({}),
+  learned: learnedSchema.default({}),
   behavior: behaviorSchema.default({}),
   logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 })
@@ -323,6 +379,7 @@ export type GamesConfig = z.infer<typeof gamesSchema>
 export type HideAndSeekConfig = z.infer<typeof hideAndSeekSchema>
 export type TagConfig = z.infer<typeof tagSchema>
 export type DialogueConfig = z.infer<typeof dialogueSchema>
+export type LearnedConfig = z.infer<typeof learnedSchema>
 export type MemoryConfig = z.infer<typeof memorySchema>
 export type BehaviorConfig = z.infer<typeof behaviorSchema>
 export type PersonaConfig = z.infer<typeof personaSchema>
@@ -330,5 +387,7 @@ export type PersonaConfig = z.infer<typeof personaSchema>
 /** Segredos, que vêm só do ambiente e nunca do YAML. */
 export interface Secrets {
   geminiApiKey?: string
+  /** Credencial da assinatura, de `claude setup-token`. Não é chave de API. */
+  claudeOauthToken?: string
   minecraftPassword?: string
 }

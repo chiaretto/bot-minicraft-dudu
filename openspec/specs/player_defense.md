@@ -2,7 +2,8 @@
 
 **Componente:** `player_defense`
 **Origem:** `add-minecraft-companion-bot` (2026-08-15)
-**Atualizado por:** `add-bot-games-hide-and-seek` (2026-08-15)
+**Atualizado por:** `add-bot-games-hide-and-seek` (2026-08-15),
+`fix-attack-on-command` (2026-08-29) — regra do desarmado e ataque sob comando
 
 > Todo o comportamento descrito aqui é **determinístico**. Nenhum cenário deste
 > arquivo depende de uma chamada de IA.
@@ -92,6 +93,12 @@ Um vigia roda a cada tick e classifica ameaças ao dono, independente do chat.
 
 Havendo várias ameaças, o bot ataca uma por vez, na ordem de prioridade definida.
 
+A seleção atende **duas origens**: a ameaça detectada pelo laço de defesa, como
+sempre, e um pedido explícito da criança pelo comando de ataque. A origem muda
+quem escolhe o alvo; **não** muda nenhuma guarda — a denylist, a allowlist e a
+checagem de domesticado valem igual nos dois caminhos, e continuam sendo
+conferidas duas vezes.
+
 #### Scenario: Prioridade para quem está machucando o dono
 - **GIVEN** há um zumbi atacando o dono e um esqueleto parado a 12 blocos
 - **WHEN** o bot escolhe o alvo
@@ -107,6 +114,50 @@ Havendo várias ameaças, o bot ataca uma por vez, na ordem de prioridade defini
 - **AND** outro hostil continua atacando o dono
 - **WHEN** o vigia reavalia
 - **THEN** o bot desengaja do primeiro e passa para o segundo
+
+#### Scenario: Alvo pedido pela criança
+- **GIVEN** a criança mandou atacar um tipo de bicho
+- **WHEN** o alvo é escolhido
+- **THEN** é o bicho daquele tipo mais perto do dono
+- **AND** ele passa pelas mesmas guardas de um alvo detectado pela defesa
+
+#### Scenario: Pedido não afrouxa proteção nenhuma
+- **GIVEN** a criança pediu um alvo que a denylist proíbe
+- **WHEN** o alvo é avaliado
+- **THEN** ele é recusado
+- **AND** o pedido explícito não vale como autorização
+
+#### Scenario: Alvo pedido fora do raio de proteção
+- **GIVEN** a criança mandou atacar um bicho longe do dono
+- **WHEN** o alvo é avaliado
+- **THEN** o bot recusa e avisa que está longe demais
+
+> Vale também para pedido explícito: o bot defende, não caça. Sem isso, "ataca"
+> viraria licença para sair pelo mapa.
+
+---
+
+### Requirement: Catálogo de alvos enfrentáveis desarmado
+
+Quais hostis o bot encara de mão é um **catálogo fechado**, não um cálculo de
+dano. Lista fechada é auditável e não surpreende: dá para ler e saber exatamente
+o que o bot vai encarar, e um mob novo no jogo não entra sozinho.
+
+#### Scenario: Alvo fora do catálogo é sempre recusado desarmado
+- **GIVEN** o bot está sem arma
+- **AND** o alvo não está no catálogo de enfrentáveis
+- **WHEN** a defesa decide
+- **THEN** ele não engaja, independentemente de distância ou de quem pediu
+
+#### Scenario: O catálogo não abre exceção na denylist
+- **GIVEN** uma criatura está na denylist absoluta
+- **WHEN** ela é avaliada para engajamento desarmado
+- **THEN** ela continua proibida
+
+#### Scenario: Creeper nunca é enfrentável de mão
+- **GIVEN** o bot está sem arma e há um creeper
+- **WHEN** a defesa decide
+- **THEN** vale a regra do creeper, não o catálogo
 
 ---
 
@@ -166,6 +217,17 @@ justamente quem o bot deveria proteger.
 
 ### Requirement: Engajamento corpo a corpo
 
+> **Mudou em `fix-attack-on-command` (2026-08-29).** A regra antiga era
+> **desarmado nunca engaja**, escrita para o bot não morrer à toa. O raciocínio
+> estava certo e o resultado estava errado: o bot entra no mundo com o inventário
+> vazio, não sabe craftar e nada o faz buscar arma — então ele podia passar a
+> partida inteira sem atacar nada, nem o zumbi batendo no dono. Para a criança,
+> um amigo que nunca defende.
+>
+> Um bot que nunca briga é pior que um bot que tenta e às vezes apanha. Só dá
+> para afrouxar porque a regra de vida crítica já existe e o tira da briga antes
+> de morrer.
+
 Ao defender, o bot equipa a melhor arma que tiver e ataca respeitando o cooldown.
 
 #### Scenario: Equipar a melhor arma disponível
@@ -173,12 +235,37 @@ Ao defender, o bot equipa a melhor arma que tiver e ataca respeitando o cooldown
 - **WHEN** o bot entra em `DEFEND`
 - **THEN** a espada de ferro é equipada na mão antes do primeiro golpe
 
-#### Scenario: Bot sem arma nenhuma
+#### Scenario: Desarmado contra alvo que dá para enfrentar
 - **GIVEN** o inventário do bot não tem arma
-- **WHEN** um zumbi ataca o dono
-- **THEN** o bot **não** engaja em corpo a corpo
-- **AND** avisa no chat que está desarmado
-- **AND** recua junto com o dono
+- **AND** um zumbi ataca o dono
+- **WHEN** o laço de defesa decide
+- **THEN** o bot **engaja** o zumbi de mão
+- **AND** avisa no chat que vai encarar mesmo sem espada
+
+#### Scenario: Desarmado contra alvo forte demais
+- **GIVEN** o inventário do bot não tem arma
+- **AND** um ravager ameaça o dono
+- **WHEN** o laço de defesa decide
+- **THEN** o bot **não** engaja
+- **AND** explica que aquele é forte demais sem espada
+- **AND** pede uma espada ao dono
+
+#### Scenario: Desarmado e creeper
+- **GIVEN** o inventário do bot não tem arma
+- **AND** um creeper está perto do dono
+- **WHEN** o laço de defesa decide
+- **THEN** vale a regra do creeper: fuga, nunca corpo a corpo
+
+#### Scenario: Vida crítica vence o engajamento desarmado
+- **GIVEN** o bot está engajado de mão
+- **WHEN** a vida dele cai abaixo do limite crítico
+- **THEN** ele recua
+- **AND** o combate termina
+
+#### Scenario: Com arma, nada muda
+- **GIVEN** o bot tem uma espada no inventário
+- **WHEN** um hostil ameaça o dono
+- **THEN** o comportamento é idêntico ao de antes de `fix-attack-on-command`
 
 #### Scenario: Ataque respeitando o cooldown
 - **GIVEN** o bot está engajado com uma espada de ferro
@@ -254,6 +341,19 @@ O dono liga e desliga a defesa automática em runtime, por comando de chat.
 ---
 
 ### Requirement: Defesa independente da IA
+
+Vale também para o **ataque sob comando**, acrescentado em
+`fix-attack-on-command`: ele é resolvido no nível 1 da cascata, sem consultar a
+IA. Havia um caminho mais confortável — dar a intenção de atacar à IA e deixá-la
+interpretar o pedido em linguagem livre. Foi recusado de propósito: escolher em
+quem bater é decisão de combate, e combate não depende de rede.
+
+#### Scenario: Ataque sob comando não chama a IA
+- **GIVEN** a criança manda atacar
+- **WHEN** o comando é resolvido
+- **THEN** nenhuma chamada de inferência acontece
+- **AND** o ataque funciona com a IA desligada, fora do ar ou com o circuito
+  aberto
 
 O loop de defesa nunca espera por uma resposta da IA.
 

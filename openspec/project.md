@@ -60,6 +60,11 @@ a exceção: é para isso que existe `dialogue/normalize.ts`.
   histórico que alimenta o repertório) que o runtime nunca importa. Pode
   importar de qualquer camada; nenhuma camada importa dele. A leitura de disco
   fica nos scripts de `scripts/`, o `tools/` só tem função pura.
+- `launcher/` fica fora do pacote: é o aplicativo de desktop que **supervisiona**
+  o processo do bot, com `package.json` próprio para o Electron não virar
+  dependência do bot. Não importa nenhuma camada — fala com o bot por processo,
+  `stdout` e `stdin`. A regra de dentro dele é a mesma do resto: regra pura em
+  módulo testável, I/O na borda.
 - **Cascata de resolução de conversa**: parser de comandos → repertório local
   (`data/repertoire.yaml`) → IA. O modelo é sempre o último recurso.
 - Toda inferência passa pela interface `LlmProvider`. Nenhum código fora de

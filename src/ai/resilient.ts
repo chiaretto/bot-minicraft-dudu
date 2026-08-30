@@ -136,7 +136,12 @@ export class ResilientProvider implements LlmProvider {
     return this.guard((signal) => this.inner.converse(ctx, signal))
   }
 
-  async warmUp(): Promise<void> {
-    return this.inner.warmUp()
+  async warmUp(identity?: ConversationContext): Promise<void> {
+    return this.inner.warmUp(identity)
+  }
+
+  /** Repassa o encerramento ao provider de baixo, quando ele tem o que soltar. */
+  stop(): void {
+    this.inner.stop?.()
   }
 }

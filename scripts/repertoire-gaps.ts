@@ -20,17 +20,22 @@ import { MIN_VARIATIONS_WARN, type RawEntry } from '../src/dialogue/schema.js'
 import {
   classifyExchanges,
   groupGaps,
+  rankLearned,
   resolveLocally,
+  PROMOTE_AFTER_HITS,
   type Exchange,
   type GapGroup,
+  type LearnedRanking,
   type LoggedTurn,
 } from '../src/tools/gaps.js'
+import type { LearnedCommand } from '../src/dialogue/learned.js'
 
 const DEFAULTS = {
   botName: 'Dudu',
   catalogPath: 'data/repertoire.yaml',
   memoryDir: 'data/conversations',
   minConfidence: 0.7,
+  learnedPath: 'data/learned-commands.json',
 }
 
 interface Options {
@@ -145,6 +150,7 @@ interface LooseConfig {
   catalogPath: string
   memoryDir: string
   minConfidence: number
+  learnedPath: string
 }
 
 /**
@@ -168,6 +174,7 @@ function readConfigLoose(path: string): LooseConfig {
   const persona = root.persona ?? {}
   const dialogue = root.dialogue ?? {}
   const memory = root.memory ?? {}
+  const learned = root.learned ?? {}
 
   return {
     botName: typeof persona.name === 'string' ? persona.name : DEFAULTS.botName,
@@ -176,6 +183,54 @@ function readConfigLoose(path: string): LooseConfig {
     memoryDir: typeof memory.dir === 'string' ? memory.dir : DEFAULTS.memoryDir,
     minConfidence:
       typeof dialogue.minConfidence === 'number' ? dialogue.minConfidence : DEFAULTS.minConfidence,
+    learnedPath: typeof learned.path === 'string' ? learned.path : DEFAULTS.learnedPath,
+  }
+}
+
+/**
+ * Comandos que a IA já ensinou, se o arquivo existir.
+ *
+ * Tolerante como o store do bot: isto é cache, e relatório nenhum vale derrubar
+ * por causa de um JSON quebrado.
+ */
+function readLearned(path: string): LearnedCommand[] {
+  if (!existsSync(path)) return []
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as { commands?: unknown }
+    return Array.isArray(parsed.commands) ? (parsed.commands as LearnedCommand[]) : []
+  } catch {
+    console.error(`aviso: ${path} não é JSON válido; ignorando os comandos aprendidos`)
+    return []
+  }
+}
+
+function printLearned(learned: readonly LearnedRanking[], options: Options): void {
+  console.log(`
+=== COMANDOS APRENDIDOS DA IA (${learned.length}) ===`)
+  if (learned.length === 0) {
+    console.log('  nenhum ainda. Eles nascem quando a IA resolve um pedido e a ação dá certo.')
+    return
+  }
+
+  for (const command of learned.slice(0, options.limit)) {
+    const times = command.hits === 1 ? '1 uso' : `${command.hits} usos`
+    console.log(`
+  [${times}]  "${command.phrase}"  ->  ${command.intent}`)
+    console.log(`    ensinado por: ${command.provider}`)
+    for (const example of command.examples.slice(0, 3)) {
+      console.log(`    jogador: ${truncate(example)}`)
+    }
+    if (command.promote) {
+      console.log(
+        `    CANDIDATO A VIRAR REGEX (${PROMOTE_AFTER_HITS}+ usos): ` +
+          'promova em behaviors/commands.ts e a entrada sai do cache sozinha',
+      )
+    }
+  }
+
+  if (learned.length > options.limit) {
+    console.log(`
+  ... e mais ${learned.length - options.limit} (use --limit).`)
   }
 }
 
@@ -362,6 +417,7 @@ function main(): void {
 
   const open = options.includeResolved ? groups : groups.filter((g) => g.resolvedNow.level === 'ia')
   const alreadyClosed = groups.length - open.length
+  const learned = rankLearned(readLearned(config.learnedPath))
   const misses = options.kind === 'ai' ? [] : open.filter((g) => g.kind === 'miss')
   const aiHandled = options.kind === 'miss' ? [] : open.filter((g) => g.kind === 'ai')
   const playerTurns = exchanges.length
@@ -381,6 +437,7 @@ function main(): void {
           alreadyClosed,
           misses,
           aiHandled,
+          learned,
         },
         null,
         2,
@@ -394,6 +451,7 @@ function main(): void {
   console.log(`  ${catalog.entries.length} entradas, ${catalog.responseCount} respostas`)
   console.log(`log: ${days.length} dia(s) — ${days[0]} a ${days[days.length - 1]}`)
   console.log(`  ${playerTurns} falas do jogador, ${covered} resolvidas local (${pct}%)`)
+  console.log(`  ${learned.length} comando(s) aprendido(s) da IA em ${config.learnedPath}`)
   if (corrupted > 0) console.log(`  ${corrupted} linha(s) corrompida(s), ignoradas`)
   if (alreadyClosed > 0) {
     console.log(
@@ -404,6 +462,7 @@ function main(): void {
 
   if (options.kind !== 'ai') printGroups('NÃO ENTENDI (miss)', misses, options)
   if (options.kind !== 'miss') printGroups('RESOLVIDO SÓ PELA IA (ai)', aiHandled, options)
+  printLearned(learned, options)
 
   if (catalog.warnings.length > 0) {
     console.log(`\n=== avisos do repertório (menos de ${MIN_VARIATIONS_WARN} variações) ===`)

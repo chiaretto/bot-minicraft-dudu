@@ -1,5 +1,6 @@
 import type { Intent } from '../domain/intent.js'
 import { botRoleForChoice, type GameName, type GameRole, type RoleChoice } from '../domain/games.js'
+import { mobFromSpokenName } from '../domain/mobs.js'
 import { prepare } from '../dialogue/normalize.js'
 
 interface CommandPattern {
@@ -532,6 +533,67 @@ function stripFillers(text: string): string {
   return out
 }
 
+/**
+ * Ataque sem alvo nomeado: o bot mira a ameaça mais perto do dono.
+ *
+ * Frases EXATAS de propósito. Um padrão aberto como `^mata (.*)$` transformaria
+ * "mata a saudade" num ataque de verdade.
+ */
+const ATTACK_ANY = [
+  /^ataca$/,
+  /^ataque$/,
+  /^atacar$/,
+  /^ataca ele$/,
+  /^ataca ela$/,
+  /^ataca esse$/,
+  /^ataca essa$/,
+  /^ataca isso$/,
+  /^mata ele$/,
+  /^mata ela$/,
+  /^mata esse$/,
+  /^mata essa$/,
+  /^bate nele$/,
+  /^bate nela$/,
+  /^bate nesse$/,
+  /^pega ele$/,
+  /^briga com ele$/,
+  /^luta com ele$/,
+]
+
+/**
+ * Ataque com alvo nomeado. O que vem depois do artigo é capturado e precisa
+ * estar no catálogo fechado — senão NÃO vira comando e a frase desce na cascata.
+ *
+ * Recusar o desconhecido é de propósito: atacar o bicho errado é pior que não
+ * atacar, e uma frase que não é pedido de ataque ("mata a saudade") tem que
+ * continuar sendo conversa.
+ */
+const ATTACK_NAMED = [
+  /^ataca (?:o |a |os |as |aquele |aquela |esse |essa |um |uma )?(.+)$/,
+  /^ataque (?:o |a |os |as |aquele |aquela |esse |essa |um |uma )?(.+)$/,
+  /^mata (?:o |a |os |as |aquele |aquela |esse |essa |um |uma )?(.+)$/,
+  /^bate n(?:o |a )(.+)$/,
+  /^briga com (?:o |a )?(.+)$/,
+]
+
+function parseAttack(normalized: string): ParsedCommand | null {
+  for (const pattern of ATTACK_ANY) {
+    if (pattern.test(normalized)) {
+      return { intent: { type: 'ATTACK', params: {} }, matched: normalized }
+    }
+  }
+
+  for (const pattern of ATTACK_NAMED) {
+    const found = pattern.exec(normalized)
+    if (!found?.[1]) continue
+    const target = mobFromSpokenName(found[1])
+    if (!target) continue // nome fora do catálogo: não é comando
+    return { intent: { type: 'ATTACK', params: { target } }, matched: normalized }
+  }
+
+  return null
+}
+
 function match(normalized: string): ParsedCommand | null {
   for (const command of COMMANDS) {
     for (const pattern of command.patterns) {
@@ -551,12 +613,17 @@ export function parseCommand(text: string, botName: string): ParsedCommand | nul
   const normalized = prepare(text, botName)
   if (!normalized) return null
 
+  // A tabela fixa vem primeiro para `pode atacar` e `nao ataca` continuarem
+  // sendo controle da defesa, e não pedido de ataque.
   const direct = match(normalized)
   if (direct) return direct
 
+  const attack = parseAttack(normalized)
+  if (attack) return attack
+
   const stripped = stripFillers(normalized)
   if (stripped === normalized || !stripped) return null
-  return match(stripped)
+  return match(stripped) ?? parseAttack(stripped)
 }
 
 /** Exposto para teste: quantos padrões o parser cobre. */

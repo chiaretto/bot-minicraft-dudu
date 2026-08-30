@@ -1,0 +1,55 @@
+{
+  "name": "dudu-launcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aplicativo de desktop para ligar, parar e reiniciar o bot",
+  "author": "bot-minicraft-dudu",
+  "main": "dist/main.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "npm run build && electron .",
+    "start": "electron .",
+    "dist": "npm run build && node scripts/pack.mjs",
+    "test": "vitest run",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10"
+  },
+  "build": {
+    "appId": "com.dudu.launcher",
+    "productName": "Odraude",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "ui/**/*",
+      "build/icon.ico",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Odraude"
+    }
+  }
+}

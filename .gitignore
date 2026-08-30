@@ -13,6 +13,10 @@ data/
 # O repertório é copiado para data/ na primeira execução; a fonte versionada
 # fica em src/dialogue/default-repertoire.yaml
 
+# Instaladores gerados pelo electron-builder (node_modules/ e dist/ do launcher
+# já caem nas regras do topo, que valem em qualquer nível).
+launcher/release/
+
 *.log
 .DS_Store
 coverage/

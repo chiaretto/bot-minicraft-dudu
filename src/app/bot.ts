@@ -6,10 +6,19 @@ import { buildSnapshot } from '../minecraft/snapshot.js'
 import { Repertoire } from '../dialogue/repertoire.js'
 import { loadCatalog } from '../dialogue/loader.js'
 import { MemoryStore } from '../memory/store.js'
+import { LearnedStore } from '../memory/learned-store.js'
+import { shouldLearn, shouldUnlearn } from '../dialogue/learned.js'
 import { AiLayer } from '../ai/index.js'
+import type { ConversationContext } from '../ai/provider.js'
 import { MessageRouter, type RouteResult } from '../behaviors/router.js'
 import { StateMachine } from '../behaviors/state-machine.js'
-import { classifyThreats, planDefense, canStrike } from '../behaviors/defense/threat-watcher.js'
+import {
+  classifyThreats,
+  planDefense,
+  canStrike,
+  selectAttackTarget,
+  type AttackRefusal,
+} from '../behaviors/defense/threat-watcher.js'
 import {
   createSession,
   GameAborted,
@@ -18,7 +27,7 @@ import {
   type GameWorld,
 } from '../behaviors/games/index.js'
 import type { GameName, GameRole } from '../domain/games.js'
-import { isGiveUp, parseRoleAnswer } from '../behaviors/commands.js'
+import { isGiveUp, parseCommand, parseRoleAnswer } from '../behaviors/commands.js'
 import {
   blockSourceFrom,
   coverAround,
@@ -44,6 +53,7 @@ import { needsEscape } from '../domain/escape.js'
 import { bestWeapon } from '../domain/mobs.js'
 import type { Intent } from '../domain/intent.js'
 import type { Vec3Like, WorldSnapshot } from '../domain/types.js'
+import type { BotStatus } from './status-channel.js'
 
 const { goals } = pathfinderPkg
 
@@ -57,6 +67,14 @@ const GAME_GOAL_RANGE = 1
 
 /** Teto por caminhada dentro de uma rodada, para a busca não passar do tempo. */
 const GAME_WALK_TIMEOUT_MS = 8_000
+
+/** Cada recusa de ataque tem fala própria: são coisas diferentes para a criança. */
+const REFUSAL_ENTRY: Record<AttackRefusal, string> = {
+  protegido: 'ataque_bicho_amigo',
+  'nao-achei': 'ataque_nao_achei',
+  'nada-perto': 'ataque_sem_alvo',
+  'longe-demais': 'ataque_longe',
+}
 
 /** Entrada do repertório que faz a pergunta de papel de cada jogo. */
 const ROLE_QUESTION_ENTRY: Record<GameName, string> = {
@@ -74,9 +92,19 @@ export class CompanionBot {
   private readonly mc: MinecraftClient
   private readonly repertoire: Repertoire
   private readonly memory: MemoryStore
+  /** Histórico de comandos aprendidos, ou `null` com o recurso desligado. */
+  private readonly learned: LearnedStore | null
+  private readonly learnedLoad: { count: number; shadowed: number; error: string | null }
   private readonly ai: AiLayer
   private readonly router: MessageRouter
   private readonly state = new StateMachine()
+
+  /**
+   * Observador do ciclo de vida da conexão, quando alguém supervisiona o
+   * processo. O bot NÃO sabe que existe uma janela: ele só conta o que está
+   * acontecendo, e quem traduz isso para frase de criança é o supervisor.
+   */
+  private lifecycle: ((status: BotStatus) => void) | null = null
 
   private defenseEnabled: boolean
   private readonly recentAttackers = new Set<number>()
@@ -102,6 +130,15 @@ export class CompanionBot {
   private stuckSince: number | null = null
   /** Evita reentrar na subida enquanto uma já está em andamento. */
   private escaping = false
+  /**
+   * Último comando aprendido replicado, para o `para` poder desfazer.
+   *
+   * Um aprendizado errado é pior que nenhum: a criança repete o pedido e o bot
+   * repete o erro, cada vez mais rápido. `para` na sequência é o sinal mais
+   * honesto de "não era isso" que uma criança de 7 anos vai dar.
+   * Ver: learned_commands_delta.md → "Desaprender comando errado".
+   */
+  private lastLearnedReplay: { phrase: string; at: number } | null = null
   /**
    * Até quando não vale a pena tentar destravar de novo.
    *
@@ -139,15 +176,52 @@ export class CompanionBot {
       onWarning: (message) => logger.warn(message),
     })
 
+    if (config.learned.enabled) {
+      this.learned = new LearnedStore({
+        config: config.learned,
+        botName: config.persona.name,
+        // Frase que o parser de regex já resolve não precisa de cache: é assim
+        // que a promoção para código limpa o histórico sozinha.
+        isShadowed: (phrase) => parseCommand(phrase, config.persona.name) !== null,
+        onWarning: (message) => logger.warn(message),
+        onWriteError: (err) =>
+          logger.error({ err: err.message }, 'falha ao gravar comandos aprendidos'),
+      })
+      const report = this.learned.load()
+      this.learnedLoad = {
+        count: report.loaded,
+        shadowed: report.shadowed,
+        error: report.error,
+      }
+      logger.info(
+        {
+          aprendidos: report.loaded,
+          jaNoParser: report.shadowed,
+          expirados: report.expired,
+          invalidos: report.invalid,
+        },
+        'comandos aprendidos carregados',
+      )
+    } else {
+      this.learned = null
+      this.learnedLoad = { count: 0, shadowed: 0, error: null }
+    }
+
     this.ai = new AiLayer({
       llm: config.llm,
       secrets,
       onCircuitChange: (provider, open) =>
         logger[open ? 'warn' : 'info']({ provider }, open ? 'circuito aberto' : 'circuito fechado'),
+      onFallback: (from, to, err) =>
+        logger.warn(
+          { de: from, para: to, motivo: err instanceof Error ? err.message : String(err) },
+          'provider primário falhou — respondendo pelo reserva',
+        ),
     })
 
     this.router = new MessageRouter({
       repertoire: this.repertoire,
+      learned: this.learned,
       ai: this.ai,
       persona: config.persona,
       owner: config.ownerPlayer,
@@ -158,6 +232,11 @@ export class CompanionBot {
 
     this.mc = new MinecraftClient(config, secrets, logger)
     this.wireEvents()
+  }
+
+  /** Registra quem acompanha o ciclo de vida. Chamar antes do `start()`. */
+  onLifecycle(listener: (status: BotStatus) => void): void {
+    this.lifecycle = listener
   }
 
   async start(): Promise<void> {
@@ -184,10 +263,14 @@ export class CompanionBot {
     // Conecta primeiro: em CPU, carregar o modelo leva minutos, e o bot não
     // pode ficar fora do mundo esperando isso — a criança está lá olhando.
     // Comandos e repertório já funcionam sem a IA estar quente.
+    this.lifecycle?.('procurando')
     this.mc.connect()
 
     // Falha de aquecimento NUNCA impede o bot de iniciar.
-    const warmUpError = await this.ai.warmUp()
+    // A identidade vai junto porque o provider Claude Code fixa o prompt na
+    // criação da sessão: sem ela, a sessão aquecida não serviria para conversar
+    // e o aquecimento seria jogado fora.
+    const warmUpError = await this.ai.warmUp(this.identityContext())
     if (warmUpError) {
       this.logger.warn(
         { provider: warmUpError.provider },
@@ -198,6 +281,7 @@ export class CompanionBot {
 
   private wireEvents(): void {
     this.mc.on('spawn', () => {
+      this.lifecycle?.('no_mundo')
       this.state.reset()
       const greeting = this.repertoire.say('saudacao', this.snapshot())
       if (greeting) this.say(greeting.text, 'repertoire', greeting.entryId)
@@ -228,8 +312,35 @@ export class CompanionBot {
       if (wasPlaying) this.sayGame('jogo_cancelado')
     })
 
-    this.mc.on('end', () => this.stopThreatWatcher())
-    this.mc.on('giveUp', () => this.stop())
+    // Cair do mundo volta a `procurando`: o `end` vem ANTES da decisão de
+    // reconectar, e quando ela é negativa o `giveUp` logo em seguida corrige o
+    // estado para `desistiu`.
+    this.mc.on('end', () => {
+      this.lifecycle?.('procurando')
+      this.stopThreatWatcher()
+    })
+    this.mc.on('giveUp', () => {
+      this.lifecycle?.('desistiu')
+      this.stop()
+    })
+  }
+
+  /**
+   * Identidade do bot sem contexto de mundo, para o aquecimento.
+   *
+   * Roda antes de o bot entrar no mundo, então `snapshot` é `null` — o prompt
+   * estático não usa mundo, e o mundo vai em cada fala depois.
+   */
+  private identityContext(): ConversationContext {
+    return {
+      message: '',
+      owner: this.config.ownerPlayer,
+      botName: this.config.persona.name,
+      originStory: this.config.persona.originStory,
+      personaDescription: this.config.persona.description,
+      snapshot: null,
+      history: [],
+    }
   }
 
   private snapshot(): WorldSnapshot {
@@ -250,11 +361,27 @@ export class CompanionBot {
 
   private say(
     text: string,
-    source: 'repertoire' | 'llm' | 'command' | 'spontaneous',
+    source: 'repertoire' | 'learned' | 'llm' | 'command' | 'spontaneous',
     entryId?: string,
     provider?: string,
   ): void {
     this.mc.say(text)
+
+    // Ponto único de saída de fala: tudo que o bot diz passa por aqui, venha do
+    // repertório, da IA, de uma ação ou de um evento espontâneo. Por isso o log
+    // vive aqui e não em cada chamador — o histórico em `data/` registra o que
+    // ele DECIDIU dizer, e este log é o que dá para acompanhar ao vivo.
+    this.logger.info(
+      {
+        texto: text,
+        origem: source,
+        estado: this.state.state,
+        ...(entryId ? { entryId } : {}),
+        ...(provider ? { provider } : {}),
+      },
+      'bot falou',
+    )
+
     this.memory.record({
       speaker: this.config.persona.name,
       text,
@@ -274,23 +401,32 @@ export class CompanionBot {
    * resposta `nao_entendi` só acontece quando o provider estourou o tempo ou
    * falhou — é o sinal para ajustar `llm.ollama.timeoutMs`.
    */
-  private logLlm(question: string, result: RouteResult): void {
-    if (result.source === 'llm') {
-      this.logger.info(
-        {
-          pergunta: question,
-          resposta: result.reply,
-          // A ação proposta precisa aparecer no log: é por aqui que se descobre
-          // se a IA está propondo ação demais, de menos ou errada.
-          acao: result.action ? result.action.type : null,
-          params: result.action ? result.action.params : null,
-          provider: result.provider,
-          latencyMs: result.latencyMs,
-        },
-        'IA respondeu',
-      )
-      return
-    }
+  /**
+   * Registra TODA fala do jogador e em que nível da cascata ela morreu.
+   *
+   * Antes daqui só o nível 3 aparecia no log, e isso escondia o que mais
+   * importa na rotina diária: quanto o comando e o repertório estão resolvendo
+   * sozinhos, e quais frases estão caindo em `nao_entendi`. Sem os quatro
+   * níveis lado a lado não dá para saber se uma entrada nova ajudou.
+   */
+  private logTurn(speaker: string, question: string, result: RouteResult): void {
+    this.logger.info(
+      {
+        jogador: speaker,
+        disse: question,
+        // O nível que resolveu: command → learned → repertoire → llm.
+        nivel: result.source,
+        respondeu: result.reply,
+        // A ação proposta precisa aparecer no log: é por aqui que se descobre
+        // se a IA está propondo ação demais, de menos ou errada.
+        acao: result.action ? result.action.type : (result.intent?.type ?? null),
+        params: result.action ? result.action.params : (result.intent?.params ?? null),
+        ...(result.entryId ? { entryId: result.entryId } : {}),
+        ...(result.provider ? { provider: result.provider } : {}),
+        ...(result.latencyMs !== undefined ? { latencyMs: result.latencyMs } : {}),
+      },
+      'conversa',
+    )
 
     if (this.ai.enabled && result.entryId === 'nao_entendi') {
       this.logger.warn(
@@ -313,7 +449,7 @@ export class CompanionBot {
     if (!isOwner) {
       // Outros jogadores conversam, mas não comandam.
       const parsed = await this.router.route(message, this.snapshot())
-      this.logLlm(message, parsed)
+      this.logTurn(username, message, parsed)
       if (parsed.intent !== null) {
         this.say(`Desculpa ${username}, eu só obedeço o ${this.config.ownerPlayer}!`, 'repertoire')
       } else if (parsed.reply) {
@@ -330,6 +466,9 @@ export class CompanionBot {
     // Desistir só faz sentido com uma rodada rolando. Fora dela, `cade voce`
     // é conversa e desce na cascata normalmente.
     if (this.game !== null && isGiveUp(message, this.config.persona.name)) {
+      // Sai antes da cascata, então precisa do próprio registro — senão a fala
+      // da criança simplesmente some do log.
+      this.logger.info({ jogador: username, disse: message }, 'jogador desistiu da rodada')
       this.game.requestReveal()
       return
     }
@@ -339,13 +478,30 @@ export class CompanionBot {
     // pé. Sem pendência viva, desce como conversa normal.
     const answered = this.takeRoleAnswer(message)
     if (answered) {
+      this.logger.info(
+        { jogador: username, disse: message, jogo: answered.game, papel: answered.role },
+        'jogador escolheu o papel',
+      )
       await this.startGame(answered.game, answered.role)
       return
     }
 
     const snapshot = this.snapshot()
     const result = await this.router.route(message, snapshot)
-    this.logLlm(message, result)
+    this.logTurn(username, message, result)
+
+    // `para` na sequência de um comando aprendido é a criança dizendo que não
+    // era aquilo. Antes de executar: o `stopEverything` não sabe de cache.
+    if (result.intent?.type === 'STOP') this.unlearnRecent()
+
+    if (result.source === 'learned' && result.learnedPhrase) {
+      this.learned?.touch(result.learnedPhrase)
+      this.lastLearnedReplay = { phrase: result.learnedPhrase, at: Date.now() }
+      this.logger.info(
+        { frase: result.learnedPhrase, acao: result.action?.type, ensinadoPor: result.provider },
+        'comando aprendido replicado — chamada de IA economizada',
+      )
+    }
 
     // Comando reconhecido descarta a pergunta: quem manda `me segue` mudou de
     // ideia sobre brincar, e uma pendência sobrevivente faria um `eu` solto lá
@@ -353,19 +509,19 @@ export class CompanionBot {
     if (result.intent) this.pendingRole = null
 
     if (result.reply) {
-      this.say(
-        result.reply,
-        result.source === 'llm' ? 'llm' : 'repertoire',
-        result.entryId,
-        result.provider,
-      )
+      this.say(result.reply, this.sourceOf(result), result.entryId, result.provider)
 
       // A fala vem antes da ação de propósito: a criança ouve "já vou pegar!"
       // e SÓ ENTÃO vê o bot sair andando. Agir calado parece bug.
       // Ver: ai_companion_delta.md → "Resposta da IA carrega a ação".
       if (result.action) {
         this.pendingRole = null
-        await this.execute(result.action)
+        const ok = await this.execute(result.action)
+        // Aprender só o que DEU CERTO: uma ação recusada, cancelada ou falha
+        // ensinaria o bot a errar mais rápido.
+        if (shouldLearn({ source: result.source, hadAction: true, actionOk: ok })) {
+          this.learn(message, result.action, result)
+        }
         return
       }
 
@@ -381,6 +537,114 @@ export class CompanionBot {
     }
 
     this.reaskRoleOnce()
+  }
+
+  /**
+   * Ataque pedido pela criança.
+   *
+   * Não reimplementa combate: escolhe o alvo por regra determinística e o marca
+   * como agressor, e daí em diante quem cuida é o mesmo laço de defesa que já
+   * existe — aproximação, arma, cooldown, guarda dupla e recuo por vida crítica.
+   * Duas implementações de combate divergiriam em comportamento de falha.
+   *
+   * Nenhuma guarda é afrouxada por o pedido ser explícito: pedir não autoriza.
+   * Ver: player_defense_delta.md → "Seleção de alvo".
+   */
+  private attackOnCommand(target?: string): boolean {
+    if (!this.defenseEnabled) {
+      this.sayCombat('combate_desligado', this.snapshot())
+      return false
+    }
+
+    const snapshot = this.snapshot()
+    const chosen = selectAttackTarget(snapshot, {
+      target,
+      protectRadius: this.config.defense.protectRadius,
+    })
+
+    if (!chosen.ok) {
+      this.logger.info({ alvoPedido: target ?? null, recusa: chosen.reason }, 'ataque recusado')
+      this.sayCombat(REFUSAL_ENTRY[chosen.reason], snapshot)
+      return false
+    }
+
+    this.logger.info(
+      { alvoPedido: target ?? null, alvo: chosen.entity.name, id: chosen.entity.id },
+      'ataque pedido pela criança',
+    )
+
+    // Marcar como agressor é o que faz o laço de defesa tratá-lo como ameaça na
+    // próxima passada, com todas as regras dele valendo.
+    this.recentAttackers.add(chosen.entity.id)
+    this.engage(chosen.entity.id, snapshot)
+    return true
+  }
+
+  /** Qual `source` gravar no histórico de conversa para esta resposta. */
+  private sourceOf(result: RouteResult): 'llm' | 'learned' | 'repertoire' {
+    if (result.source === 'llm') return 'llm'
+    if (result.source === 'learned') return 'learned'
+    return 'repertoire'
+  }
+
+  /**
+   * Guarda o que a IA acabou de ensinar.
+   *
+   * Só chega aqui o que passou pelas três condições: veio da IA, tinha ação e a
+   * ação deu certo. O catálogo do que pode ser guardado é do store.
+   * Ver: learned_commands_delta.md → "Aprender o que a IA resolveu".
+   */
+  private learn(message: string, intent: Intent, result: RouteResult): void {
+    if (!this.learned) return
+
+    const saved = this.learned.record({
+      text: message,
+      intent,
+      ...(result.reply ? { reply: result.reply } : {}),
+      ...(result.provider ? { provider: result.provider } : {}),
+    })
+
+    if (saved) {
+      this.logger.info(
+        { frase: message, acao: intent.type, provider: result.provider },
+        'comando aprendido guardado',
+      )
+    }
+  }
+
+  /**
+   * Esquece o último comando aprendido, se ele acabou de ser usado.
+   *
+   * Fora da janela o `para` volta a ser só "pare o que está fazendo": a criança
+   * que interrompe uma coleta longa minutos depois não está reclamando do
+   * aprendizado.
+   */
+  private unlearnRecent(): void {
+    const last = this.lastLearnedReplay
+    if (!last || !this.learned) return
+
+    if (!shouldUnlearn(last, Date.now(), this.config.learned.unlearnOnStopMs)) {
+      this.lastLearnedReplay = null
+      return
+    }
+
+    this.lastLearnedReplay = null
+    if (this.learned.forget(last.phrase)) {
+      this.logger.info(
+        { frase: last.phrase },
+        'comando aprendido esquecido — o jogador mandou parar logo depois',
+      )
+    }
+  }
+
+  /** Resumo da carga do histórico, para o cartão de startup. */
+  get learnedSummary(): {
+    enabled: boolean
+    count: number
+    shadowed: number
+    error: string | null
+  } {
+    return { enabled: this.learned !== null, ...this.learnedLoad }
   }
 
   // ────────────────────── PERGUNTA DE PAPEL ────────────────────────────
@@ -435,36 +699,50 @@ export class CompanionBot {
 
   // ──────────────────────────── INTENÇÕES ──────────────────────────────
 
-  private async execute(intent: Intent): Promise<void> {
+  /**
+   * Executa a intenção e devolve se ela deu certo.
+   *
+   * O booleano existe por causa do aprendizado: só entra no histórico de
+   * comandos aprendidos o que a criança viu funcionar. Recusa, cancelamento e
+   * falha devolvem `false`.
+   */
+  private async execute(intent: Intent): Promise<boolean> {
     // Emergência recusa qualquer ordem até estar seguro.
     if (this.state.state === 'EMERGENCY') {
       this.say('Peraí! Tô muito machucado, não consigo agora.', 'repertoire')
-      return
+      return false
     }
 
     switch (intent.type) {
       case 'FOLLOW':
-        return this.startFollow()
+        this.startFollow()
+        return true
       case 'STAY':
-        return this.startStay()
+        this.startStay()
+        return true
       case 'STOP':
-        return this.stopEverything()
+        this.stopEverything()
+        return true
       case 'DEFENSE_ON':
         this.defenseEnabled = true
         this.say('Pode deixar, eu te defendo!', 'command')
-        return
+        return true
       case 'DEFENSE_OFF':
         this.defenseEnabled = false
         if (this.state.state === 'DEFEND') this.state.resume()
         this.say('Tá bom, não brigo mais.', 'command')
-        return
+        return true
       case 'PLAY_GAME':
-        return this.startGame(intent.params.game, intent.params.role)
+        await this.startGame(intent.params.game, intent.params.role)
+        // Com as brincadeiras desligadas o bot recusou; nada a aprender.
+        return this.config.games.enabled
       case 'ASK_WHICH_GAME':
         // Perguntar "qual você quer?" com as brincadeiras desligadas seria
         // oferecer o que o bot não pode fazer. Ver project.md → "Público do bot".
         this.sayGame(this.config.games.enabled ? 'jogo_qual_brincadeira' : 'jogo_desligado')
-        return
+        return this.config.games.enabled
+      case 'ATTACK':
+        return this.attackOnCommand(intent.params.target)
       default:
         return this.runWorldAction(intent)
     }
@@ -632,11 +910,17 @@ export class CompanionBot {
     else this.say('Parei!', 'command')
   }
 
-  private async runWorldAction(intent: Intent): Promise<void> {
+  private async runWorldAction(intent: Intent): Promise<boolean> {
     const bot = this.mc.raw
-    if (!bot) return
+    if (!bot) return false
 
     this.state.command('ACTION', { actionLabel: intent.type })
+
+    // Toda ação é registrada do começo ao fim. Antes só a falha catastrófica
+    // aparecia no log, então recusa, desistência e sucesso eram todos silêncio —
+    // e "o bot não fez nada" ficava indistinguível de "o bot se recusou".
+    const startedAt = Date.now()
+    this.logger.info({ acao: intent.type, params: intent.params }, 'ação começou')
 
     try {
       const outcome = await runIntent(
@@ -648,15 +932,37 @@ export class CompanionBot {
         },
         intent,
       )
+      this.logger.info(
+        {
+          acao: intent.type,
+          ok: outcome.ok,
+          resultado: outcome.message,
+          duracaoMs: Date.now() - startedAt,
+        },
+        outcome.ok ? 'ação terminou' : 'ação não deu certo',
+      )
       this.say(outcome.message, 'command')
+      return outcome.ok
     } catch (err) {
-      if (err instanceof ActionAborted) return // já avisou no `dudu, para`
-      if (err instanceof ActionRefused) this.say(`Ahh, ${err.message}.`, 'command')
-      else if (err instanceof NoProgress) this.say('Não consegui chegar lá, desculpa!', 'command')
-      else {
-        this.logger.error({ err: String(err) }, 'ação falhou')
+      const duracaoMs = Date.now() - startedAt
+      if (err instanceof ActionAborted) {
+        this.logger.info({ acao: intent.type, duracaoMs }, 'ação cancelada pelo jogador')
+        return false // já avisou no `dudu, para`
+      }
+      if (err instanceof ActionRefused) {
+        this.logger.warn(
+          { acao: intent.type, motivo: err.message, duracaoMs },
+          'ação recusada',
+        )
+        this.say(`Ahh, ${err.message}.`, 'command')
+      } else if (err instanceof NoProgress) {
+        this.logger.warn({ acao: intent.type, duracaoMs }, 'ação sem progresso')
+        this.say('Não consegui chegar lá, desculpa!', 'command')
+      } else {
+        this.logger.error({ acao: intent.type, err: String(err), duracaoMs }, 'ação falhou')
         this.say('Deu ruim aqui, não consegui.', 'command')
       }
+      return false
     } finally {
       if (this.state.state === 'ACTION') this.state.resume()
     }
@@ -989,7 +1295,21 @@ export class CompanionBot {
     if (this.state.state !== 'DEFEND') {
       if (!this.interruptForDefense('DEFEND', { targets: [entityId] })) return
       this.engagementStartedAt = Date.now()
-      this.sayCombat('combate_inicio', snapshot)
+      // Só na TRANSIÇÃO para DEFEND: o laço de defesa roda a cada 250 ms e um
+      // log por tick afogaria o resto.
+      const alvo = snapshot.nearbyEntities.find((e) => e.id === entityId)
+      const armado = bestWeapon(bot.inventory.items()) !== null
+      this.logger.info(
+        {
+          alvo: alvo?.name ?? entityId,
+          distancia: alvo ? Math.round(alvo.distanceToBot) : null,
+          armado,
+        },
+        'combate começou',
+      )
+      // Encarar de mão merece aviso próprio: a criança precisa entender por que
+      // ele pode apanhar dessa vez.
+      this.sayCombat(armado ? 'combate_inicio' : 'combate_sem_arma_encara', snapshot)
       void equipBestWeapon(bot).catch(() => {})
     }
 
@@ -1033,6 +1353,13 @@ export class CompanionBot {
 
   private finishCombat(): void {
     const snapshot = this.snapshot()
+    this.logger.info(
+      {
+        duracaoMs: this.engagementStartedAt ? Date.now() - this.engagementStartedAt : null,
+        vida: Math.round(snapshot.health),
+      },
+      'combate terminou',
+    )
     this.engagementStartedAt = null
     this.recentAttackers.clear()
 
@@ -1081,6 +1408,9 @@ export class CompanionBot {
 
   stop(): void {
     this.stopThreatWatcher()
+    // Antes do `quit`: o provider Claude Code segura um subprocesso, e ele fica
+    // órfão se ninguém o encerrar.
+    this.ai.stop()
     this.mc.quit()
   }
 }

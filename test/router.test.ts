@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
-import { MessageRouter } from '../src/behaviors/router.js'
+import { MessageRouter, type LearnedLookup } from '../src/behaviors/router.js'
 import { Repertoire } from '../src/dialogue/repertoire.js'
 import { loadCatalog, defaultCatalogPath } from '../src/dialogue/loader.js'
 import { AiLayer } from '../src/ai/index.js'
 import { dialogueSchema, personaSchema, llmSchema } from '../src/config/schema.js'
 import type { WorldSnapshot } from '../src/domain/types.js'
+import type { Intent } from '../src/domain/intent.js'
+import type { LearnedCommand } from '../src/dialogue/learned.js'
 
 const catalog = loadCatalog(defaultCatalogPath()).catalog
 const dialogue = dialogueSchema.parse({})
@@ -26,7 +28,24 @@ const snapshot: WorldSnapshot = {
   state: 'IDLE',
 }
 
-function build(over: { llmProvider?: 'ollama' | 'none' } = {}) {
+/** Histórico falso: casa por frase exata, como o real casaria em 1.00. */
+function fakeLearned(phrase: string, intent: Intent): LearnedLookup {
+  const command: LearnedCommand = {
+    phrase,
+    intent,
+    replies: ['Eba, casa de pedra! Tá escuro aqui, acende uma tocha!'],
+    provider: 'gemini',
+    examples: [phrase],
+    learnedAt: '2026-08-20T10:00:00.000Z',
+    lastUsedAt: '2026-08-20T10:00:00.000Z',
+    hits: 3,
+  }
+  return {
+    find: (text) => (text.toLowerCase().includes(phrase) ? { command, confidence: 1 } : null),
+  }
+}
+
+function build(over: { llmProvider?: 'ollama' | 'none'; learned?: LearnedLookup | null } = {}) {
   const repertoire = new Repertoire({ catalog, dialogue, persona, owner: 'Miguel' })
   const ai = new AiLayer({
     llm: { ...llm, provider: over.llmProvider ?? 'ollama' },
@@ -35,6 +54,7 @@ function build(over: { llmProvider?: 'ollama' | 'none' } = {}) {
   const fillers: string[] = []
   const router = new MessageRouter({
     repertoire,
+    learned: over.learned ?? null,
     ai,
     persona,
     owner: 'Miguel',
@@ -252,5 +272,80 @@ describe('ação junto com a fala', () => {
     const solto = await router.route('será que dava pra juntar umas madeirinhas?', snapshot)
     expect(solto.entryId).toBe('nao_entendi')
     expect(solto.action).toBeNull()
+  })
+})
+
+/**
+ * Nível 1.5: comandos aprendidos da IA.
+ * Ver: learned_commands_delta.md e local_dialogue_delta.md → "Cascata".
+ */
+describe('cascata: nível 1.5 (comando aprendido)', () => {
+  const COLLECT: Intent = { type: 'COLLECT_BLOCK', params: { block: 'madeira', count: 8 } }
+
+  it('aprendido resolve sem consultar repertório nem IA', async () => {
+    const learned = fakeLearned('pega umas madeirinhas', COLLECT)
+    const { router, ai, repertoire } = build({ learned })
+    const aiSpy = vi.spyOn(ai, 'converse')
+    const repSpy = vi.spyOn(repertoire, 'respond')
+
+    const result = await router.route('dudu, pega umas madeirinhas', snapshot)
+
+    expect(result.source).toBe('learned')
+    expect(result.action).toEqual(COLLECT)
+    expect(result.learnedPhrase).toBe('pega umas madeirinhas')
+    expect(repSpy).not.toHaveBeenCalled()
+    expect(aiSpy).not.toHaveBeenCalled()
+  })
+
+  it('parser de regex ganha do aprendido', async () => {
+    // Um aprendizado velho que casaria com um comando que virou regex depois.
+    const learned = fakeLearned('me segue', { type: 'STAY', params: {} })
+    const { router } = build({ learned })
+
+    const result = await router.route('dudu, me segue', snapshot)
+
+    expect(result.source).toBe('command')
+    expect(result.intent?.type).toBe('FOLLOW')
+  })
+
+  it('a fala do replay vem do repertório, não do arquivo', async () => {
+    const learned = fakeLearned('pega umas madeirinhas', COLLECT)
+    const { router } = build({ learned })
+
+    const result = await router.route('pega umas madeirinhas', snapshot)
+
+    expect(result.entryId).toBe('comando_aprendido')
+    expect(result.reply).not.toBeNull()
+    // A fala guardada estava presa ao momento do aprendizado.
+    expect(result.reply).not.toContain('acende uma tocha')
+  })
+
+  it('aprendido declina e o repertório assume', async () => {
+    const learned = fakeLearned('pega umas madeirinhas', COLLECT)
+    const { router } = build({ learned })
+
+    const result = await router.route('dudu, oi', snapshot)
+
+    expect(result.source).toBe('repertoire')
+    expect(result.entryId).toBe('saudacao')
+  })
+
+  it('funciona com a IA fora do ar', async () => {
+    const learned = fakeLearned('pega umas madeirinhas', COLLECT)
+    const { router } = build({ learned, llmProvider: 'none' })
+
+    const result = await router.route('pega umas madeirinhas', snapshot)
+
+    expect(result.source).toBe('learned')
+    expect(result.action).toEqual(COLLECT)
+  })
+
+  it('desligado, a cascata volta a ter três níveis', async () => {
+    const { router } = build({ learned: null })
+
+    const result = await router.route('pega umas madeirinhas', snapshot)
+
+    expect(result.source).not.toBe('learned')
+    expect(result.action).toBeNull()
   })
 })
