@@ -247,3 +247,30 @@ describe('comandos aprendidos no relatório', () => {
     expect(bots.has(BOT)).toBe(true)
   })
 })
+
+/**
+ * O relatório lê só conversa: recado do jogo gravado antes do filtro da borda
+ * existir não pode virar lacuna de repertório.
+ * Ver: conversation_memory_delta.md → "A rotina de manutenção lê só conversa".
+ */
+describe('recado do jogo no histórico antigo', () => {
+  const turns: LoggedTurn[] = [
+    turn({ speaker: 'Miguel', text: 'Set own game mode to Creative Mode]', source: 'command' }),
+    turn({ speaker: 'Dudu', text: 'Eba, modo criativo!', source: 'llm' }),
+    turn({ speaker: 'Miguel', text: 'Teleported Odraude to Miguel]', source: 'command' }),
+    turn({ speaker: 'Dudu', text: 'Cheguei perto de você!', source: 'llm' }),
+    turn({ speaker: 'Miguel', text: 'me conta um segredo do minecraft', source: 'command' }),
+    turn({ speaker: 'Dudu', text: 'não entendi', source: 'repertoire', entryId: 'nao_entendi' }),
+  ]
+
+  it('não vira troca de conversa nenhuma', () => {
+    const exchanges = classifyExchanges(turns)
+    expect(exchanges).toHaveLength(1)
+    expect(exchanges[0]?.playerText).toBe('me conta um segredo do minecraft')
+  })
+
+  it('não aparece como lacuna no relatório', () => {
+    const groups = groupGaps(classifyExchanges(turns), OPTIONS)
+    expect(groups.map((g) => g.normalized)).toEqual(['me conta um segredo do minecraft'])
+  })
+})

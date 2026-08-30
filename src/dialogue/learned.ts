@@ -11,6 +11,7 @@
  */
 import { scorePattern } from './matcher.js'
 import { prepare } from './normalize.js'
+import { isSystemEcho } from '../minecraft/chat.js'
 import type { Intent } from '../domain/intent.js'
 
 export interface LearnedCommand {
@@ -123,19 +124,150 @@ export function mergeReply(replies: readonly string[], reply: string, max: numbe
 }
 
 /**
+ * A entrada nasceu de um recado do jogo, e não de uma fala?
+ *
+ * A checagem é nos **exemplos**, não na frase: a frase está normalizada e a
+ * normalização come a pontuação, então o `]` que denuncia o recado já não está
+ * lá. Os exemplos guardam como a mensagem chegou de verdade.
+ */
+export function isEchoCommand(command: Pick<LearnedCommand, 'examples'>): boolean {
+  return command.examples.some((example) => isSystemEcho(example))
+}
+
+/**
+ * Palavras que abrem pergunta.
+ *
+ * Lista fechada e sintática, como a de negação: nada aqui tenta entender a
+ * frase. A pontuação sozinha não bastaria — criança de 7 anos escreve
+ * "quantos blocos voce tem" sem `?` a maior parte das vezes.
+ */
+const QUESTION_STARTERS = [
+  'qual',
+  'quais',
+  'quem',
+  'como',
+  'quando',
+  'onde',
+  'aonde',
+  'por que',
+  'porque',
+  'quanto',
+  'quantos',
+  'quantas',
+  'o que',
+  'sera que',
+  'voce sabe',
+  'voce consegue',
+] as const
+
+/**
+ * Palavras que amarram o pedido a uma condição.
+ *
+ * O bot não sabe esperar por gatilho: ele age agora. "construa uma casa quando
+ * eu falar já" decorado vira uma casa imediata na próxima vez que a frase
+ * aparecer — que é justamente o contrário do que foi pedido.
+ */
+const CONDITIONAL_MARKERS = [
+  'quando',
+  'se eu',
+  'se voce',
+  'depois que',
+  'toda vez que',
+  'sempre que',
+] as const
+
+/** Por que uma frase não pode virar comando decorado. `null` = pode. */
+export type LearnBlockReason = 'pergunta' | 'condicao'
+
+/**
+ * A frase é pergunta?
+ *
+ * Duas formas: termina em `?` no texto cru, ou começa com palavra
+ * interrogativa no texto normalizado (que é onde o vocativo já saiu, então
+ * "dudu, qual sua llm" também cai aqui).
+ */
+export function isQuestion(text: string, botName: string): boolean {
+  if (text.trim().endsWith('?')) return true
+
+  const normalized = prepare(text, botName)
+  return QUESTION_STARTERS.some(
+    (starter) => normalized === starter || normalized.startsWith(`${starter} `),
+  )
+}
+
+/**
+ * Por que esta frase não vira comando decorado, se for o caso.
+ *
+ * A recusa é por FORMA, não por assunto. Foi escrita a partir de duas entradas
+ * reais que o cache decorou errado: `qual sua llm ?` virou `FOLLOW` (a IA
+ * respondeu conversa e mandou uma ação junto, seguir "deu certo" — sempre dá) e
+ * `construa uma casa quando eu falar ja` virou `STAY`.
+ *
+ * O custo aceito: `sera que da pra pegar madeira?` também deixa de ser
+ * decorado. A ação continua acontecendo pela IA — perder um atalho é barato,
+ * decorar uma pergunta é caro.
+ * Ver: learned_commands_delta.md → "Pergunta nunca vira comando aprendido".
+ */
+export function learnBlockReason(text: string, botName: string): LearnBlockReason | null {
+  if (isQuestion(text, botName)) return 'pergunta'
+
+  const normalized = prepare(text, botName)
+  const words = normalized.split(' ')
+  const conditional = CONDITIONAL_MARKERS.some((marker) =>
+    marker.includes(' ') ? normalized.includes(marker) : words.includes(marker),
+  )
+  return conditional ? 'condicao' : null
+}
+
+/**
  * Condições para guardar um comando aprendido.
  *
- * As três valem juntas: veio da IA, tinha ação, a ação deu certo. Comando de
- * regex não precisa de cache; conversa não é comando; e ação recusada,
- * cancelada ou falha ensinaria o bot a errar mais rápido.
+ * As quatro valem juntas: veio da IA, tinha ação, a ação deu certo, e a frase é
+ * um PEDIDO. Comando de regex não precisa de cache; conversa não é comando;
+ * ação recusada, cancelada ou falha ensinaria o bot a errar mais rápido; e
+ * pergunta respondida com ação junto viraria comando instantâneo para sempre.
  * Ver: learned_commands_delta.md → "Aprender o que a IA resolveu".
  */
 export function shouldLearn(decision: {
   source: string
   hadAction: boolean
   actionOk: boolean
+  text: string
+  botName: string
 }): boolean {
-  return decision.source === 'llm' && decision.hadAction && decision.actionOk
+  if (decision.source !== 'llm' || !decision.hadAction || !decision.actionOk) return false
+  return learnBlockReason(decision.text, decision.botName) === null
+}
+
+/**
+ * Frases com que a criança diz que o bot fez a coisa errada.
+ *
+ * `para` já desfaz, mas não é o que uma criança de 7 anos diz na hora: ela diz
+ * que não era aquilo. Sem estas frases, o único desfazer é uma palavra que ela
+ * não vai usar no momento certo.
+ * Ver: learned_commands_delta.md → "A criança desfaz com a palavra dela".
+ */
+const CORRECTIONS = [
+  'nao era isso',
+  'nao e isso',
+  'nao foi isso',
+  'nao era esse',
+  'nao era essa',
+  'errado',
+  'ta errado',
+  'esta errado',
+  'isso ta errado',
+] as const
+
+/**
+ * A criança está corrigindo o último comando replicado?
+ *
+ * Só a forma — quem decide se há o que desfazer é `shouldUnlearn`. Fora da
+ * janela de um replay, "errado" é conversa comum e desce a cascata inteira.
+ */
+export function isCorrection(text: string, botName: string): boolean {
+  const normalized = prepare(text, botName)
+  return (CORRECTIONS as readonly string[]).includes(normalized)
 }
 
 /**

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { splitMessage, ChatSender, MAX_CHAT_LENGTH } from '../src/minecraft/chat.js'
+import {
+  splitMessage,
+  ChatSender,
+  isSystemEcho,
+  ADMIN_TRANSLATE,
+  MAX_CHAT_LENGTH,
+} from '../src/minecraft/chat.js'
 import { Backoff, shouldReconnect } from '../src/minecraft/reconnect.js'
 import {
   buildSnapshot,
@@ -229,5 +235,51 @@ describe('snapshot do mundo', () => {
 describe('distância euclidiana', () => {
   it('calcula em 3 eixos', () => {
     expect(distance({ x: 0, y: 0, z: 0 }, { x: 3, y: 4, z: 0 })).toBe(5)
+  })
+})
+
+/**
+ * Retorno de comando do jogo não é fala de jogador.
+ * Ver: minecraft_connection_delta.md → "Retorno de comando do jogo não é fala".
+ */
+describe('eco do sistema', () => {
+  // As cinco formas que apareceram no log de 15 a 29 de agosto de 2026.
+  const ECOS = [
+    'Teleported Odraude to FresherRobin90]',
+    'Teleported FresherRobin90 to Odraude]',
+    'Set own game mode to Creative Mode]',
+    'Killed FresherRobin90]',
+    'Removed 3 item(s) from player FresherRobin90]',
+    'Set the time to 1000]',
+  ]
+
+  it('reconhece o retorno de comando pelo colchete que sobrou', () => {
+    for (const eco of ECOS) expect(isSystemEcho(eco)).toBe(true)
+  })
+
+  it('a chave de tradução decide sozinha', () => {
+    // Sem o colchete, só a chave — é o sinal que o protocolo realmente dá.
+    expect(isSystemEcho('Teleported Odraude to FresherRobin90', ADMIN_TRANSLATE)).toBe(true)
+  })
+
+  it('fala de verdade da criança nunca é eco', () => {
+    // Todas tiradas do histórico real.
+    const falas = [
+      'vem auqi',
+      'me conta um segredo do minecraft',
+      'voce gosta de diamante?',
+      'dudu, pega madeira',
+      'construa uma piscina',
+      'te peguei',
+      'oi',
+    ]
+    for (const fala of falas) expect(isSystemEcho(fala)).toBe(false)
+    for (const fala of falas) expect(isSystemEcho(fala, 'chat.type.text')).toBe(false)
+  })
+
+  it('colchete emparelhado é texto, não eco', () => {
+    // Alguém escrevendo com colchete continua sendo alguém escrevendo.
+    expect(isSystemEcho('[dudu]')).toBe(false)
+    expect(isSystemEcho('olha o [bau]')).toBe(false)
   })
 })

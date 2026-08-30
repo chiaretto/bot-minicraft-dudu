@@ -4,6 +4,8 @@ import type { LearnedConfig } from '../config/schema.js'
 import { actionFrom, isLearnable, type Intent } from '../domain/intent.js'
 import {
   findLearned,
+  isEchoCommand,
+  learnBlockReason,
   learnedPhrase,
   mergeReply,
   type LearnedCommand,
@@ -25,6 +27,10 @@ export interface LoadLearnedReport {
   loaded: number
   /** Descartadas por já existirem no parser de regex. */
   shadowed: number
+  /** Descartadas por serem recado do jogo, e não fala de gente. */
+  noise: number
+  /** Descartadas por não serem pedido: pergunta ou pedido com condição. */
+  notRequest: number
   /** Descartadas por idade (`forgetAfterDays`). */
   expired: number
   /** Descartadas por não passarem na validação de intenção. */
@@ -80,6 +86,8 @@ export class LearnedStore {
     const report: LoadLearnedReport = {
       loaded: 0,
       shadowed: 0,
+      noise: 0,
+      notRequest: 0,
       expired: 0,
       invalid: 0,
       error: null,
@@ -123,6 +131,17 @@ export class LearnedStore {
         report.shadowed++
         continue
       }
+      // As duas guardas seguintes valem para TRÁS: entrada decorada antes de a
+      // regra existir sai na carga, como já acontecia com a sombra do parser.
+      // É o que evita editar `learned-commands.json` à mão — ele é cache.
+      if (isEchoCommand(command)) {
+        report.noise++
+        continue
+      }
+      if (learnBlockReason(command.phrase, this.deps.botName) !== null) {
+        report.notRequest++
+        continue
+      }
       if (cutoff !== null && command.lastUsedAt < cutoff) {
         report.expired++
         continue
@@ -132,7 +151,9 @@ export class LearnedStore {
 
     report.loaded = this.commands.length
     // Uma entrada a menos que o arquivo tinha significa arquivo a reescrever.
-    if (report.shadowed + report.expired + report.invalid > 0) this.persist()
+    if (report.shadowed + report.noise + report.notRequest + report.expired + report.invalid > 0) {
+      this.persist()
+    }
 
     return report
   }

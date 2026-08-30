@@ -33,6 +33,8 @@ export interface BannerLearned {
   enabled: boolean
   count: number
   shadowed: number
+  noise: number
+  notRequest: number
   error: string | null
 }
 
@@ -128,13 +130,35 @@ function learnedLines(learned: BannerOptions['learned'], c: Palette): string[] {
     ]
   }
 
-  if (learned.count === 0) {
-    return ['', `   Ainda não aprendi ${c.address('nenhum')} comando com a IA.`]
-  }
+  const head =
+    learned.count === 0
+      ? `   Ainda não aprendi ${c.address('nenhum')} comando com a IA.`
+      : `   Sei repetir ${c.address(String(learned.count))} ` +
+        `${learned.count === 1 ? 'comando aprendido' : 'comandos aprendidos'} sozinho`
 
-  const noun = learned.count === 1 ? 'comando aprendido' : 'comandos aprendidos'
-  const shadowed = learned.shadowed > 0 ? `  (${learned.shadowed} já virou comando no código)` : ''
-  return ['', `   Sei repetir ${c.address(String(learned.count))} ${noun} sozinho${shadowed}`]
+  return ['', head, ...forgottenLine(learned)]
+}
+
+/**
+ * O que saiu na carga, com o motivo separado.
+ *
+ * Um número só, somando tudo, esconderia qual regra está agindo — e são regras
+ * diferentes: a sombra do parser é promoção para código (bom sinal), recado do
+ * jogo é ruído que nem devia ter entrado, e "não era pedido" é pergunta ou
+ * pedido com condição que o cache decorou antes da guarda existir.
+ */
+function forgottenLine(learned: BannerLearned): string[] {
+  const reasons = [
+    { count: learned.shadowed, text: 'já virou comando no código' },
+    { count: learned.noise, text: 'era recado do jogo' },
+    { count: learned.notRequest, text: 'não era pedido' },
+  ].filter((r) => r.count > 0)
+
+  if (reasons.length === 0) return []
+
+  const total = reasons.reduce((sum, r) => sum + r.count, 0)
+  const detail = reasons.map((r) => `${r.count} ${r.text}`).join(', ')
+  return [`   Esqueci ${total}: ${detail}`]
 }
 
 /**

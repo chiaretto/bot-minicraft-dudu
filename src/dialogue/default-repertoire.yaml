@@ -957,3 +957,18 @@ entries:
       - 'Essa eu já sei fazer!'
       - 'Tô indo!'
       - 'Já aprendi essa, olha só!'
+
+  # 2026-08-29: a criança corrigindo um comando que a IA ensinou errado
+  # ("nao era isso", "errado"). O cache guardou a frase errada, ela reclamou e o
+  # bot esqueceu — esta é a resposta do esquecimento. Admite o erro, não se
+  # justifica e convida a ensinar de novo; nenhuma variação pode dizer que ele
+  # "não aprende", porque ele aprende: esqueceu UMA coisa.
+  # Ver: learned_commands_delta.md → "A criança desfaz com a palavra dela".
+  - id: comando_esquecido
+    trigger: fallback
+    responses:
+      - 'Ah, desculpa! Já esqueci essa. Me ensina de novo?'
+      - 'Opa, eu tinha entendido errado! Esqueci, pode pedir de novo?'
+      - 'Foi mal, {owner}! Não faço mais isso. Me fala do seu jeito?'
+      - 'Desculpa! Tirei essa da cabeça. Me ensina direitinho?'
+      - 'Ops, errei feio! Já esqueci. Pede de novo pra eu aprender certo?'

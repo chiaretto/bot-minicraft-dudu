@@ -7,7 +7,7 @@ import { Repertoire } from '../dialogue/repertoire.js'
 import { loadCatalog } from '../dialogue/loader.js'
 import { MemoryStore } from '../memory/store.js'
 import { LearnedStore } from '../memory/learned-store.js'
-import { shouldLearn, shouldUnlearn } from '../dialogue/learned.js'
+import { isCorrection, learnBlockReason, shouldLearn, shouldUnlearn } from '../dialogue/learned.js'
 import { AiLayer } from '../ai/index.js'
 import type { ConversationContext } from '../ai/provider.js'
 import { MessageRouter, type RouteResult } from '../behaviors/router.js'
@@ -94,7 +94,13 @@ export class CompanionBot {
   private readonly memory: MemoryStore
   /** Histórico de comandos aprendidos, ou `null` com o recurso desligado. */
   private readonly learned: LearnedStore | null
-  private readonly learnedLoad: { count: number; shadowed: number; error: string | null }
+  private readonly learnedLoad: {
+    count: number
+    shadowed: number
+    noise: number
+    notRequest: number
+    error: string | null
+  }
   private readonly ai: AiLayer
   private readonly router: MessageRouter
   private readonly state = new StateMachine()
@@ -191,12 +197,16 @@ export class CompanionBot {
       this.learnedLoad = {
         count: report.loaded,
         shadowed: report.shadowed,
+        noise: report.noise,
+        notRequest: report.notRequest,
         error: report.error,
       }
       logger.info(
         {
           aprendidos: report.loaded,
           jaNoParser: report.shadowed,
+          recadoDoJogo: report.noise,
+          naoEraPedido: report.notRequest,
           expirados: report.expired,
           invalidos: report.invalid,
         },
@@ -204,7 +214,7 @@ export class CompanionBot {
       )
     } else {
       this.learned = null
-      this.learnedLoad = { count: 0, shadowed: 0, error: null }
+      this.learnedLoad = { count: 0, shadowed: 0, noise: 0, notRequest: 0, error: null }
     }
 
     this.ai = new AiLayer({
@@ -473,6 +483,11 @@ export class CompanionBot {
       return
     }
 
+    // "não era isso" logo depois de um replay é a criança dizendo que o bot
+    // decorou errado. Vem antes da cascata pelo mesmo motivo do `isGiveUp`: sem
+    // replay recente, "errado" é conversa e desce normalmente.
+    if (this.tryCorrectLearned(message)) return
+
     // Resposta da pergunta de papel. Vem antes da cascata pelo mesmo motivo do
     // `isGiveUp`: `eu` só significa "eu me escondo" enquanto a pergunta está de
     // pé. Sem pendência viva, desce como conversa normal.
@@ -518,9 +533,15 @@ export class CompanionBot {
         this.pendingRole = null
         const ok = await this.execute(result.action)
         // Aprender só o que DEU CERTO: uma ação recusada, cancelada ou falha
-        // ensinaria o bot a errar mais rápido.
-        if (shouldLearn({ source: result.source, hadAction: true, actionOk: ok })) {
+        // ensinaria o bot a errar mais rápido. E só o que É PEDIDO: pergunta
+        // respondida com ação junto viraria comando instantâneo para sempre.
+        const botName = this.config.persona.name
+        const decision = { source: result.source, hadAction: true, actionOk: ok }
+        if (shouldLearn({ ...decision, text: message, botName })) {
           this.learn(message, result.action, result)
+        } else if (result.source === 'llm' && ok) {
+          const reason = learnBlockReason(message, botName)
+          if (reason) this.logger.debug({ frase: message, motivo: reason }, 'não decorei a frase')
         }
         return
       }
@@ -637,11 +658,42 @@ export class CompanionBot {
     }
   }
 
+  /**
+   * A criança corrigiu o último comando replicado?
+   *
+   * Devolve `false` quando a frase não é correção, quando não houve replay
+   * recente ou quando não havia o que esquecer — nesses casos a mensagem segue
+   * o caminho normal.
+   *
+   * Não interrompe a ação em curso: quem faz isso é `para`. São coisas
+   * diferentes e a criança pode querer as duas, uma de cada vez.
+   * Ver: learned_commands_delta.md → "A criança desfaz com a palavra dela".
+   */
+  private tryCorrectLearned(message: string): boolean {
+    if (!this.learned) return false
+    if (!isCorrection(message, this.config.persona.name)) return false
+
+    const last = this.lastLearnedReplay
+    if (!shouldUnlearn(last, Date.now(), this.config.learned.unlearnOnStopMs)) return false
+    this.lastLearnedReplay = null
+    if (!last || !this.learned.forget(last.phrase)) return false
+
+    this.logger.info(
+      { frase: last.phrase, disse: message },
+      'comando aprendido esquecido — a criança disse que não era isso',
+    )
+    const line = this.repertoire.say('comando_esquecido', this.snapshot())
+    if (line) this.say(line.text, 'repertoire', line.entryId)
+    return true
+  }
+
   /** Resumo da carga do histórico, para o cartão de startup. */
   get learnedSummary(): {
     enabled: boolean
     count: number
     shadowed: number
+    noise: number
+    notRequest: number
     error: string | null
   } {
     return { enabled: this.learned !== null, ...this.learnedLoad }

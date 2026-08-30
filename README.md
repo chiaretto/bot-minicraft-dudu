@@ -730,9 +730,17 @@ Dudu:   Peguei 8 de madeira!
 
 ### O que ele aprende
 
-Só com as três condições juntas: a IA **propôs ação**, a ação **executou** e
-**deu certo**. Conversa não vira comando, e ação recusada, cancelada ou falha
-não ensina nada — aprender o que deu errado é ensinar o bot a errar mais rápido.
+Só com as quatro condições juntas: a IA **propôs ação**, a ação **executou**,
+**deu certo** e a frase era um **pedido**. Conversa não vira comando, e ação
+recusada, cancelada ou falha não ensina nada — aprender o que deu errado é
+ensinar o bot a errar mais rápido.
+
+**Pergunta nunca vira comando**, mesmo quando a IA manda uma ação junto:
+`qual sua llm?` chegou a virar "me segue" para sempre, porque seguir o dono
+sempre dá certo. Vale para pergunta com `?` e para pergunta sem, pela palavra
+que abre a frase ("quantos blocos você tem"). **Pedido preso a uma condição**
+também fica de fora — ele não sabe esperar por gatilho, e "constrói uma casa
+quando eu falar já" decorado vira uma casa imediata.
 
 Também não entra intenção cujos parâmetros sejam estado do mundo. `GOTO_COORDS`
 está fora do catálogo por isso: "vem aqui" decorado como `x=104, y=64, z=-233`
@@ -747,17 +755,24 @@ fica guardada no arquivo, mas não é dita: ela pode estar presa àquele momento
 
 ### Quando ele erra
 
-Duas saídas, e a primeira é da criança:
+Três saídas, e as duas primeiras são da criança:
 
-- **`para` logo depois desfaz.** `dudu, para` dentro de 15 segundos de um
-  comando aprendido apaga a entrada, e o pedido volta a passar pela IA. É o
-  jeito mais honesto que uma criança de 7 anos tem de dizer "não era isso" — e
-  ela já sabe esse comando.
+- **`não era isso` desfaz.** Logo depois de um comando aprendido, `nao era
+  isso`, `errado` ou `não é isso` apaga a entrada — o bot pede desculpa e
+  convida a ensinar de novo. É o que uma criança de 7 anos realmente diz quando
+  o bot faz a coisa errada.
+- **`para` logo depois também desfaz**, dentro dos mesmos 15 segundos, e ainda
+  interrompe o que ele estava fazendo. A correção só esquece; `para` faz as
+  duas coisas.
 - **Apagar na mão:** com o bot parado, apague `data/learned-commands.json` (ou
   só a entrada errada, é JSON legível). Na volta ele começa do zero.
 
+Fora da janela de 15 segundos, `errado` é conversa comum e não apaga nada.
+
 Entrada cuja frase virou padrão de regex em `behaviors/commands.ts` é descartada
-no startup — é assim que a promoção pela rotina diária limpa o cache sozinha.
+no startup — junto com as que são recado do jogo e as que não eram pedido. É
+assim que regra nova limpa o cache sozinha, sem ninguém editar JSON à mão: o
+cartão de startup diz quantas saíram e por quê.
 
 ### Onde ver
 
@@ -867,6 +882,12 @@ aparecer na tela.
 **O jogo engasga quando o bot responde**
 O modelo está disputando GPU com o Minecraft. Use um modelo menor, desligue
 shaders, ou rode o Ollama em outra máquina da rede.
+
+**Ele ficou calado quando eu usei `/tp` ou `/gamemode`**
+É de propósito. O jogo devolve o resultado do comando como se fosse fala do
+jogador (`[Miguel: Set own game mode to Creative Mode]`), e o bot chegou a
+responder a isso com entusiasmo, gastando chamada de IA e até decorando a frase
+como comando. Agora ele reconhece o recado do jogo e ignora.
 
 **O bot responde besteira em vez de conversar**
 O repertório está casando padrão demais. Suba `dialogue.minConfidence` para 0.8.

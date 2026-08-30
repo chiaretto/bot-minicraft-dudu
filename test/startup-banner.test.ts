@@ -128,6 +128,8 @@ describe('cartão: comandos aprendidos', () => {
     enabled: true,
     count: 12,
     shadowed: 0,
+    noise: 0,
+    notRequest: 0,
     error: null,
     ...over,
   })
@@ -143,6 +145,27 @@ describe('cartão: comandos aprendidos', () => {
       learned: learned({ shadowed: 3 }),
     })
     expect(card).toContain('3 já virou comando no código')
+  })
+
+  it('separa os motivos de ter esquecido', () => {
+    // Um número só, somando tudo, esconderia qual regra está agindo.
+    const card = renderStartupBanner(config, {
+      color: false,
+      learned: learned({ shadowed: 2, noise: 1, notRequest: 1 }),
+    })
+    expect(card).toContain('Esqueci 4')
+    expect(card).toContain('2 já virou comando no código')
+    expect(card).toContain('1 era recado do jogo')
+    expect(card).toContain('1 não era pedido')
+  })
+
+  it('conta o que saiu na carga mesmo quando não sobrou nada', () => {
+    const card = renderStartupBanner(config, {
+      color: false,
+      learned: learned({ count: 0, noise: 2 }),
+    })
+    expect(card).toContain('nenhum')
+    expect(card).toContain('2 era recado do jogo')
   })
 
   it('histórico vazio não parece erro', () => {

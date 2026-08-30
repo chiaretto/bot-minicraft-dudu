@@ -13,6 +13,7 @@ import { prepare } from '../dialogue/normalize.js'
 import { findBestMatch } from '../dialogue/matcher.js'
 import type { RawEntry } from '../dialogue/schema.js'
 import { parseCommand } from '../behaviors/commands.js'
+import { isSystemEcho } from '../minecraft/chat.js'
 import type { LearnedCommand } from '../dialogue/learned.js'
 
 /** Uma linha do JSONL, reduzida ao que a análise precisa. */
@@ -84,6 +85,9 @@ export function classifyExchanges(
     const turn = turns[i]
     if (!turn || bots.has(turn.speaker)) continue
     if (!turn.text.trim()) continue
+    // Recado do jogo gravado antes do filtro da borda existir. O histórico é
+    // append-only: quem limpa o passado é a leitura, não o arquivo.
+    if (isSystemEcho(turn.text)) continue
 
     let kind: ExchangeKind = 'local'
     let reply: string | null = null

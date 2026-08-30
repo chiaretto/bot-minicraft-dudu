@@ -7,7 +7,7 @@ import { EventEmitter } from 'node:events'
 import type { Config, Secrets } from '../config/schema.js'
 import type { Logger } from '../logging/logger.js'
 import { Backoff, shouldReconnect, type DisconnectReason } from './reconnect.js'
-import { ChatSender } from './chat.js'
+import { ChatSender, isSystemEcho } from './chat.js'
 
 const { pathfinder, Movements, goals } = pathfinderPkg
 
@@ -109,8 +109,15 @@ export class MinecraftClient extends EventEmitter {
       this.emit('spawn')
     })
 
-    bot.on('chat', (username, message) => {
+    bot.on('chat', (username, message, translate) => {
       if (username === bot.username) return
+      // Retorno de comando do jogo chega aqui como se fosse fala do dono. O
+      // corte é na borda de propósito: um filtro só protege a cascata, o
+      // histórico, a chamada de IA e o cache de comandos aprendidos.
+      if (isSystemEcho(message, translate)) {
+        this.logger.debug({ texto: message, translate }, 'recado do jogo ignorado')
+        return
+      }
       this.emit('chat', username, message)
     })
 

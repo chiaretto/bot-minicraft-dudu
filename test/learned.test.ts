@@ -4,6 +4,10 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   findLearned,
+  isCorrection,
+  isEchoCommand,
+  isQuestion,
+  learnBlockReason,
   learnedPhrase,
   mergeReply,
   shouldLearn,
@@ -177,6 +181,63 @@ describe('LearnedStore: carga', () => {
     expect(store.load().error).toBe('formato inesperado')
   })
 
+  // As quatro entradas ruins que estavam no `data/learned-commands.json` real
+  // em 2026-08-29. Duas nasceram do retorno de comando do jogo tratado como
+  // fala; duas do aprendizado não olhar o que a frase É.
+  it('limpa na carga o que foi decorado antes das guardas existirem', () => {
+    writeFileSync(
+      join(dir, 'learned.json'),
+      JSON.stringify({
+        version: 1,
+        commands: [
+          {
+            phrase: 'teleported odraude to fresherrobin90',
+            intent: { type: 'LOOK_AT_OWNER', params: {} },
+            examples: ['Teleported Odraude to FresherRobin90]'],
+          },
+          {
+            phrase: 'removed 3 item s from player fresherrobin90',
+            intent: { type: 'LOOK_AT_OWNER', params: {} },
+            examples: ['Removed 3 item(s) from player FresherRobin90]'],
+          },
+          {
+            phrase: 'qual sua llm',
+            intent: { type: 'FOLLOW', params: {} },
+            examples: ['qual sua llm ?'],
+            hits: 1,
+          },
+          {
+            phrase: 'construa uma casa quando eu falar ja',
+            intent: { type: 'STAY', params: {} },
+            examples: ['construa uma casa quando eu falar ja'],
+          },
+          { phrase: 'pega umas madeirinhas', intent: COLLECT, examples: ['pega umas madeirinhas'] },
+        ],
+      }),
+      'utf8',
+    )
+
+    const report = makeStore().load()
+    expect(report.noise).toBe(2)
+    expect(report.notRequest).toBe(2)
+    expect(report.loaded).toBe(1)
+    // E o arquivo é reescrito: não voltam na carga seguinte.
+    expect(makeStore().load().loaded).toBe(1)
+  })
+
+  it('entrada boa sobrevive à limpeza com o contador de uso intacto', () => {
+    const store = makeStore()
+    store.record({ text: 'pega umas madeirinhas', intent: COLLECT })
+    store.touch('pega umas madeirinhas')
+    store.touch('pega umas madeirinhas')
+
+    const reloaded = makeStore()
+    const report = reloaded.load()
+    expect(report.loaded).toBe(1)
+    expect(report.noise + report.notRequest).toBe(0)
+    expect(reloaded.all()[0]?.hits).toBe(2)
+  })
+
   it('descarta entrada que o parser de regex já resolve', () => {
     const store = makeStore()
     store.record({ text: 'venha aqui', intent: { type: 'FOLLOW', params: {} } })
@@ -345,26 +406,139 @@ describe('LearnedStore: arquivo', () => {
 // ──────────────────── política: aprender e desaprender ─────────────────────
 
 describe('shouldLearn', () => {
+  /** Um pedido de verdade, para o teste falar só da condição que ele testa. */
+  const pedido = { text: 'pega umas madeirinhas', botName: BOT }
+
   it('guarda o que veio da IA, tinha ação e deu certo', () => {
-    expect(shouldLearn({ source: 'llm', hadAction: true, actionOk: true })).toBe(true)
+    expect(shouldLearn({ source: 'llm', hadAction: true, actionOk: true, ...pedido })).toBe(true)
   })
 
   it('não guarda ação que não deu certo', () => {
     // Recusa, cancelamento e falha chegam aqui como actionOk: false.
-    expect(shouldLearn({ source: 'llm', hadAction: true, actionOk: false })).toBe(false)
+    expect(shouldLearn({ source: 'llm', hadAction: true, actionOk: false, ...pedido })).toBe(false)
   })
 
   it('não guarda conversa sem ação', () => {
-    expect(shouldLearn({ source: 'llm', hadAction: false, actionOk: true })).toBe(false)
+    expect(shouldLearn({ source: 'llm', hadAction: false, actionOk: true, ...pedido })).toBe(false)
   })
 
   it('não guarda o que o parser ou o repertório resolveram', () => {
-    expect(shouldLearn({ source: 'command', hadAction: true, actionOk: true })).toBe(false)
-    expect(shouldLearn({ source: 'repertoire', hadAction: true, actionOk: true })).toBe(false)
+    expect(shouldLearn({ source: 'command', hadAction: true, actionOk: true, ...pedido })).toBe(
+      false,
+    )
+    expect(shouldLearn({ source: 'repertoire', hadAction: true, actionOk: true, ...pedido })).toBe(
+      false,
+    )
   })
 
   it('não reaprende o que já é comando aprendido', () => {
-    expect(shouldLearn({ source: 'learned', hadAction: true, actionOk: true })).toBe(false)
+    expect(shouldLearn({ source: 'learned', hadAction: true, actionOk: true, ...pedido })).toBe(
+      false,
+    )
+  })
+
+  // O caso real: `qual sua llm ?` virou FOLLOW porque a IA respondeu conversa e
+  // mandou uma ação junto — e seguir o dono sempre "dá certo".
+  it('não guarda pergunta que a IA respondeu com ação junto', () => {
+    expect(
+      shouldLearn({
+        source: 'llm',
+        hadAction: true,
+        actionOk: true,
+        text: 'qual sua llm ?',
+        botName: BOT,
+      }),
+    ).toBe(false)
+  })
+
+  // O outro caso real: `construa uma casa quando eu falar ja` virou STAY.
+  it('não guarda pedido preso a uma condição', () => {
+    expect(
+      shouldLearn({
+        source: 'llm',
+        hadAction: true,
+        actionOk: true,
+        text: 'construa uma casa quando eu falar ja',
+        botName: BOT,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('isQuestion', () => {
+  it('reconhece pergunta pela interrogação', () => {
+    expect(isQuestion('voce gosta de diamante?', BOT)).toBe(true)
+  })
+
+  it('reconhece pergunta sem interrogação, pela palavra que abre', () => {
+    // Criança de 7 anos quase nunca fecha pergunta com "?".
+    expect(isQuestion('quantos blocos de madeira voce tem', BOT)).toBe(true)
+    expect(isQuestion('o que voce sabe fazer', BOT)).toBe(true)
+  })
+
+  it('enxerga a pergunta atrás do vocativo', () => {
+    expect(isQuestion('dudu, qual sua llm', BOT)).toBe(true)
+  })
+
+  it('pedido não é pergunta', () => {
+    expect(isQuestion('pega umas madeirinhas', BOT)).toBe(false)
+    expect(isQuestion('constroi uma casinha de pedra', BOT)).toBe(false)
+  })
+
+  it('palavra interrogativa no meio da frase não faz pergunta', () => {
+    // "quando" aqui é condição, não pergunta — quem barra é a outra guarda.
+    expect(isQuestion('constroi uma casa quando eu falar ja', BOT)).toBe(false)
+  })
+})
+
+describe('learnBlockReason', () => {
+  it('diz por que a frase não vira comando decorado', () => {
+    expect(learnBlockReason('qual sua llm ?', BOT)).toBe('pergunta')
+    expect(learnBlockReason('construa uma casa quando eu falar ja', BOT)).toBe('condicao')
+    expect(learnBlockReason('se eu falar ja voce constroi', BOT)).toBe('condicao')
+    // Do arquivo real: "faça de concreto, se você não tiver, faz de madeira".
+    expect(
+      learnBlockReason('faca uma casa grande com concreto se voce nao tiver fas de madeira', BOT),
+    ).toBe('condicao')
+  })
+
+  it('pedido direto passa', () => {
+    expect(learnBlockReason('pega umas madeirinhas', BOT)).toBeNull()
+    expect(learnBlockReason('me segue', BOT)).toBeNull()
+  })
+
+  // O custo aceito, escrito como teste para ninguém "consertar" sem querer.
+  it('pedido em forma de pergunta perde o atalho, e isso é de propósito', () => {
+    expect(learnBlockReason('sera que da pra pegar madeira?', BOT)).toBe('pergunta')
+  })
+})
+
+describe('isEchoCommand', () => {
+  it('reconhece entrada que nasceu de recado do jogo', () => {
+    // A frase guardada já perdeu o "]" na normalização; quem denuncia é o
+    // exemplo, que guarda como a mensagem chegou de verdade.
+    expect(
+      isEchoCommand({ examples: ['Teleported Odraude to FresherRobin90]'] }),
+    ).toBe(true)
+  })
+
+  it('entrada de fala de verdade não é recado', () => {
+    expect(isEchoCommand({ examples: ['pega umas madeirinhas'] })).toBe(false)
+  })
+})
+
+describe('isCorrection', () => {
+  it('reconhece a criança dizendo que não era aquilo', () => {
+    expect(isCorrection('nao era isso', BOT)).toBe(true)
+    expect(isCorrection('Não era isso!', BOT)).toBe(true)
+    expect(isCorrection('errado', BOT)).toBe(true)
+    expect(isCorrection('dudu, ta errado', BOT)).toBe(true)
+  })
+
+  it('não confunde com conversa parecida', () => {
+    expect(isCorrection('nao era isso que eu queria construir', BOT)).toBe(false)
+    expect(isCorrection('errado nada', BOT)).toBe(false)
+    expect(isCorrection('para', BOT)).toBe(false)
   })
 })
 
