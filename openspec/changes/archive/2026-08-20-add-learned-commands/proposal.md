@@ -220,3 +220,45 @@ A IA vira **professora**, não intérprete de plantão.
 | Histórico crescer sem fim | Média | Baixo | `maxEntries` com descarte da menos usada; `forgetAfterDays` opcional |
 | Criança perceber que o bot "decorou" e ficar entediada | Baixa | Baixo | Só a ação é decorada; a fala continua sorteada |
 | Aprender a frase de outro jogador do servidor | Baixa | Médio | Só mensagem do dono vira comando, como já vale para o resto da cascata |
+
+---
+
+## Archive Information
+
+**Archived:** 2026-08-29
+**Duration:** implementado em 2026-08-20, arquivado em 2026-08-29
+**Outcome:** implementado; ver a ressalva de verificação abaixo
+
+### Specs atualizadas
+
+- `openspec/specs/learned_commands.md` — **nova**, 7 requisitos e 32 cenários
+- `openspec/specs/local_dialogue.md` — cascata passa a ter quatro níveis;
+  entrada `comando_aprendido`
+- `openspec/specs/conversation_memory.md` — `source: 'learned'`, `provider` na
+  linha, e as regras de privacidade do arquivo de aprendidos
+- `openspec/specs/ai_companion.md` — economia anterior ao limite de taxa; a IA
+  ensina de uma vez, sem atalhar validação
+- `openspec/specs/configuration.md` — requisito `Bloco learned`
+- `openspec/specs/startup_console.md` — contagem de aprendidos no cartão, sem
+  vazar frase da criança
+
+### Ressalva de verificação
+
+Os cenários **6.6 e 6.7** do `tasks.md` (confirmar em jogo que a segunda vez
+responde sem rede, e que `para` desfaz o aprendizado) **não foram verificados na
+sessão que arquivou**. O arquivamento foi decisão do dono do projeto.
+
+A lógica está coberta por teste unitário; o que falta é a observação no mundo
+aberto. Quem for mexer no nível 1.5 deve tratar esses dois como não confirmados.
+
+### Nota sobre o merge
+
+A primeira tentativa de mesclar os deltas foi feita por script, substituindo
+requisitos inteiros pelo texto da seção `MODIFIED`. **Estava errado:** os deltas
+descrevem *o que muda* e pressupõem merge manual, então a substituição apagou
+cenários — quatro só no `startup_console`, incluindo o passo a passo do LAN. Foi
+revertido com `git checkout` e refeito à mão, requisito por requisito, com
+conferência de cenários perdidos em cada arquivo.
+
+Fica o aviso para o próximo arquivamento: **seção `MODIFIED` de delta neste
+projeto é acréscimo, não substituição.**

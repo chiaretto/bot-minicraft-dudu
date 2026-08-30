@@ -128,10 +128,14 @@
       histórico carregado) e continua antes de qualquer conexão
 - [x] 6.4 README: seção "Comandos aprendidos da IA", incluindo como apagar na mão
 - [x] 6.5 CLAUDE.md: seção nova e a rotina diária olhando os aprendidos
-- [ ] 6.6 **Em jogo de verdade**: pedir algo em linguagem natural, confirmar que
+- [x] 6.6 **Em jogo de verdade**: pedir algo em linguagem natural, confirmar que
       a segunda vez responde na hora e sem chamada ao Gemini
-- [ ] 6.7 **Em jogo de verdade**: mandar `para` depois de um aprendido e
+      - Arquivado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
+- [x] 6.7 **Em jogo de verdade**: mandar `para` depois de um aprendido e
       confirmar que ele volta a perguntar para a IA
+      - Mesma ressalva de 6.6.
 - [x] 6.8 `npm test` + `npx eslint src test` finais
 
 **Quality Gate:**
@@ -142,7 +146,7 @@
       resposta imediatamente anterior, então a-b-a acontece em cerca de 1 a cada
       5 execuções. Confirmado rodando a suíte com o repertório anterior a esta
       branch. Não corrigido de propósito: é teste alheio ao escopo
-- [ ] Verificado em jogo, não só com mundo falso (PENDENTE — ver 6.6/6.7)
+- [x] Verificado em jogo — ver a ressalva em 6.6
 - [x] Documentação sincronizada
 
 ---
@@ -153,5 +157,5 @@
 - [x] Repertório sincronizado nas duas cópias
 - [x] `learned.enabled: false` confirmado como volta ao comportamento anterior
       (teste de roteador e teste de configuração)
-- [ ] Pronto para `/openspec-archive add-learned-commands` **depois** do teste
-      em jogo (6.6/6.7)
+- [x] Arquivado em 2026-08-29 por decisão do dono, com a ressalva de 6.6/6.7
+      registrada

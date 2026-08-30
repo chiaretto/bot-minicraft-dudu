@@ -76,6 +76,10 @@ O histórico é particionado por data local, em JSONL append-only.
 
 ### Requirement: Formato do registro
 
+> Desde `add-learned-commands`, `source` aceita `learned`. Sem esse valor um
+> comando replicado do histórico seria indistinguível de um resolvido pela IA, e
+> a rotina diária não conseguiria medir o que foi economizado.
+
 Cada linha é um objeto JSON autocontido.
 
 #### Scenario: Campos obrigatórios de uma linha
@@ -89,6 +93,18 @@ Cada linha é um objeto JSON autocontido.
 - **WHEN** a linha é gravada
 - **THEN** ela pode conter `entryId` (se veio do repertório), `latencyMs`,
   `botHealth` e `dimension`
+
+#### Scenario: Valores possíveis de `source`
+- **GIVEN** uma fala do bot gravada
+- **WHEN** o campo `source` é lido
+- **THEN** ele é um de `command`, `repertoire`, `learned`, `llm` ou `spontaneous`
+- **AND** `learned` significa comando replicado do histórico, sem chamada de rede
+
+#### Scenario: Comando aprendido guarda quem ensinou
+- **GIVEN** uma fala com `source: 'learned'`
+- **WHEN** a linha é gravada
+- **THEN** ela pode conter `provider` — o provider que ensinou aquele comando
+- **AND** dá para saber depois se o aprendizado veio do Gemini ou do modelo local
 
 #### Scenario: Uma linha por objeto, sem quebra
 - **GIVEN** a resposta do bot contém quebra de linha
@@ -171,6 +187,11 @@ O histórico não pode ser perdido por queda do processo.
 
 ### Requirement: Privacidade e retenção do histórico
 
+> O histórico de comandos aprendidos é dado derivado das frases da criança e
+> segue as mesmas regras: fica em `data/`, que está inteiro no `.gitignore`, e
+> nunca é enviado para fora. O aprendizado **reduz** o que sai da máquina — cada
+> acerto do histórico é uma frase que deixa de ir para o provider de nuvem.
+
 O histórico é um arquivo local com conversas de uma criança — tratado como tal.
 
 #### Scenario: O histórico nunca sai da máquina
@@ -197,6 +218,29 @@ O histórico é um arquivo local com conversas de uma criança — tratado como 
 - **WHEN** o bot inicializa
 - **THEN** arquivos de conversa com mais de 90 dias são apagados
 - **AND** cada exclusão é registrada no log
+
+#### Scenario: Arquivo de aprendidos fora do controle de versão
+- **GIVEN** `data/learned-commands.json` existe
+- **WHEN** `git status` é consultado
+- **THEN** o arquivo não aparece como candidato a commit
+- **AND** a razão é a mesma das conversas: é fala de criança
+
+#### Scenario: Histórico aprendido não vai para o provider
+- **GIVEN** uma mensagem desce até o nível 3
+- **WHEN** o contexto é montado para o provider
+- **THEN** ele leva a janela curta de conversa, como já levava
+- **AND** **não** leva o conteúdo do histórico de comandos aprendidos
+
+#### Scenario: Menos frases saindo da máquina
+- **GIVEN** um pedido já aprendido é repetido
+- **WHEN** o bot atende pelo histórico
+- **THEN** nenhuma frase da criança é enviada ao provider naquela troca
+
+#### Scenario: Apagar o aprendizado é apagar um arquivo
+- **GIVEN** um adulto quer remover tudo o que o bot aprendeu
+- **WHEN** `data/learned-commands.json` é apagado com o bot parado
+- **THEN** o bot volta ao estado de quem nunca aprendeu nada
+- **AND** o histórico de conversa em `data/conversations/` não é afetado
 
 #### Scenario: Retenção infinita
 - **GIVEN** `memory.retentionDays` é `null`

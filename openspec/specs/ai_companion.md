@@ -73,6 +73,11 @@ O bot lembra das últimas trocas dentro da sessão, com janela limitada.
 Quando o parser determinístico não reconhece a mensagem do dono, o provider a
 traduz em uma intenção estruturada, validada contra um catálogo fechado.
 
+Desde `add-learned-commands` a IA **ensina de uma vez**: traduzida com sucesso
+uma vez, aquela frase passa a ser atendida pelo nível 1.5 nas vezes seguintes.
+Isso não afrouxa nada — a intenção continua passando pela validação do catálogo
+fechado antes de virar efeito, tanto na primeira vez quanto no replay.
+
 #### Scenario: Pedido livre interpretado com sucesso
 - **GIVEN** o dono digita `dudu, pega umas madeiras pra mim`
 - **AND** o parser determinístico não reconhece o padrão
@@ -99,6 +104,18 @@ traduz em uma intenção estruturada, validada contra um catálogo fechado.
 - **WHEN** a mensagem é roteada
 - **THEN** ela é tratada como conversa, não como comando
 - **AND** nenhuma intenção de ação é gerada
+
+#### Scenario: Mesmo pedido, segunda vez
+- **GIVEN** a mesma frase já foi traduzida com sucesso antes
+- **WHEN** o dono a repete
+- **THEN** a ação é executada sem chamada ao provider
+- **AND** a intenção replicada passa pela mesma validação de sempre
+
+#### Scenario: A validação não é atalhada no replay
+- **GIVEN** uma entrada do histórico ficou com parâmetro que a validação recusa
+- **WHEN** ela é replicada
+- **THEN** a intenção é descartada e nenhum efeito de mundo acontece
+- **AND** a mensagem segue na cascata como se o histórico não tivesse casado
 
 ---
 
@@ -145,11 +162,28 @@ Chamadas ao provider de IA são limitadas por taxa. Com provider de nuvem isso
 contém custo; com provider local, contém a carga na máquina que também está
 rodando o Minecraft. Em ambos, evita spam.
 
+Desde `add-learned-commands` existe uma segunda economia, **anterior** ao limite
+de taxa: pedido repetido não chega ao provider. O nível 1.5 atende pelo histórico
+de comandos aprendidos, e o limite passa a ser gasto só com o que é novo.
+
 #### Scenario: Rajada de mensagens do jogador
 - **GIVEN** o limite é de 10 chamadas por minuto
 - **WHEN** o dono manda 20 mensagens em um minuto
 - **THEN** no máximo 10 vão para o provider
 - **AND** o excedente recebe uma resposta de fallback pedindo calma
+
+#### Scenario: Pedido repetido não consome o limite
+- **GIVEN** o limite é de 10 chamadas por minuto
+- **AND** um pedido já foi aprendido
+- **WHEN** o dono repete esse pedido cinco vezes
+- **THEN** nenhuma dessas cinco vezes conta para o limite
+- **AND** o orçamento de chamadas continua disponível para pedido novo
+
+#### Scenario: Uma criança repetindo custa uma chamada, não dez
+- **GIVEN** a criança pede a mesma casa em cinco sessões diferentes
+- **WHEN** o histórico está ligado
+- **THEN** só a primeira vez custa chamada ao provider
+- **AND** as outras quatro são atendidas na máquina
 
 ---
 
