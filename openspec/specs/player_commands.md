@@ -155,6 +155,20 @@ recebe a informação de que o caminho é o comando; não recebe a ação.
 - **GIVEN** o bot tem `oak_log` no inventário e o dono está a 5 blocos
 - **WHEN** a intenção `DROP_ITEM_TO_OWNER{item: "oak_log"}` é executada
 - **THEN** o bot caminha até o dono e larga o item perto dele
+- **AND** a fala usa o nome em português, nunca o id do jogo
+
+#### Scenario: Nenhuma fala de item mostra o id do jogo
+- **GIVEN** as falas de entregar e de equipar, e as recusas das duas
+- **WHEN** elas são ditas
+- **THEN** o item aparece com o nome que a criança entende
+- **AND** o defeito de origem era este: até 2026-08-30 o bot dizia
+  "Toma aí o cooked_beef!" e "Equipei torch!" para uma criança de 7 anos
+
+#### Scenario: O verbo também é de criança
+- **GIVEN** a confirmação de `EQUIP_ITEM`
+- **WHEN** ela é dita
+- **THEN** ela não usa "equipei", que é palavra de adulto
+- **AND** a regra número um vale para o verbo, não só para o substantivo
 
 #### Scenario: Ir até uma coordenada
 - **GIVEN** o bot está em `IDLE`
@@ -1019,3 +1033,38 @@ quantos blocos foram quebrados.
 - **WHEN** o item cai no chão
 - **THEN** ele anda em cima do lugar para recolher
 - **AND** falhar em recolher não derruba a coleta inteira
+
+---
+
+### Requirement: Catálogo de nomes de item em português
+
+`domain/item-names.ts` traduz o id do jogo para a palavra que a criança usa —
+`cooked_beef` → "carne assada", `torch` → "tocha", `iron_sword` → "espada".
+
+Catálogo **fechado**, como o de bicho, planta, jogo e material, cobrindo o que o
+bot realmente manuseia: bloco de obra e de coleta, a comida de `FOOD_ITEMS`,
+tocha, as 16 camas, ferramenta, arma e balde.
+
+#### Scenario: O nome técnico não chega à criança
+- **GIVEN** o bot carrega `cooked_beef`
+- **WHEN** ele fala sobre esse item
+- **THEN** ele diz "carne assada"
+
+#### Scenario: Item desconhecido aparece como está
+- **GIVEN** um item que o catálogo não conhece
+- **WHEN** ele precisa ser nomeado
+- **THEN** o id aparece, sem tradução
+- **AND** ele **não** é escondido: esconder faria a conta da mochila mentir
+
+#### Scenario: A cobertura é cobrada por teste
+- **GIVEN** o cardápio dos instintos, a allowlist de obra e a de coleta
+- **WHEN** o catálogo é validado
+- **THEN** todo item dessas três listas tem nome em português
+- **AND** nenhum nome traduzido contém `_`, que é a marca de id do jogo
+
+#### Scenario: A mochila é agrupada pelo nome que ela lê
+- **GIVEN** três pilhas de `oak_log` e uma de `birch_log`
+- **WHEN** a mochila é agrupada
+- **THEN** sai uma linha só de "madeira", com a soma
+- **AND** a razão é que a mochila do jogo vem por slot, e `oak_log` e
+  `birch_log` são a mesma coisa para quem está jogando

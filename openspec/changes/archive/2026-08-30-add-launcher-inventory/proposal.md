@@ -166,3 +166,85 @@ pior que painel vazio: a criança pediria um bloco que ninguém está carregando
 | Mochila comprida estourar a janela | Média | Baixo | Ordenada por quantidade, cortada, com "e mais N" |
 | Duplicar vocabulário nos dois pacotes | Média | Alto | O nome vai **traduzido** na linha; o launcher nunca traduz |
 | Painel virar tentação de mexer no jogo | Baixa | Médio | Fora de escopo, explicitamente: a janela mostra, não age |
+
+---
+
+## Archive Information
+
+**Archived:** 2026-08-30
+**Duration:** proposto, implementado e arquivado no mesmo dia
+**Outcome:** implementado; ver a ressalva de verificação abaixo
+
+### Arquivos modificados
+
+| Arquivo | O quê |
+|---|---|
+| `src/domain/item-names.ts` | **Novo** — catálogo fechado, ~90 itens, e `groupItems()` |
+| `src/behaviors/actions/index.ts` | As quatro falas de item deixam de dizer o id |
+| `src/app/status-channel.ts` | `INVENTORY_PREFIX`, `formatInventory`, `sendInventory` com dedup |
+| `src/app/bot.ts` | `onInventory()`, na carona do laço dos instintos |
+| `src/app/main.ts` | Liga o bot ao canal |
+| `launcher/src/inventory.ts` | **Novo** — a política de tela, pura |
+| `launcher/src/status.ts` | Reconhece a linha; item malformado é descartado |
+| `launcher/src/runner.ts`, `main.ts`, `preload.ts` | Repasse até a janela; limpa no `onExit` |
+| `launcher/ui/index.html`, `renderer.js` | O painel |
+| `test/item-names.test.ts`, `test/item-speech.test.ts` | **Novos** |
+| `launcher/test/inventory.test.ts` | **Novo** |
+| `README.md`, `CLAUDE.md` | O painel e a tabela dos três canais |
+
+### Specs atualizadas
+
+- `openspec/specs/desktop_launcher.md` — dois requisitos **novos**: "A mochila do
+  bot na janela" e "Canais do protocolo com o supervisor" (30 → 44 cenários)
+- `openspec/specs/player_commands.md` — requisito **novo** "Catálogo de nomes de
+  item em português"; três cenários a mais em "Catálogo de ações executáveis"
+  (123 → 129 cenários)
+
+### Duas divergências entre o delta e a spec, corrigidas no merge
+
+Os dois deltas traziam seções `MODIFIED` para requisitos que **não existiam**
+com aquele nome. Foram escritos do ponto de vista da feature, não do índice da
+spec:
+
+- **"Protocolo com o supervisor"** nunca foi requisito do `desktop_launcher`. O
+  protocolo só aparecia de passagem, dentro de "Desligar o bot com saída limpa"
+  e nas armadilhas de plataforma. O conteúdo entrou como requisito **novo**
+  ("Canais do protocolo com o supervisor"), que é o que ele sempre foi.
+- **"Entregar item na mão do jogador"** também não existe: entregar item é um
+  **cenário** dentro de "Catálogo de ações executáveis". Os cenários de nome
+  foram para lá, ao lado do cenário que já existia.
+
+Fica o aviso para o próximo delta: **conferir o índice da spec antes de escrever
+uma seção `MODIFIED`.** Um `MODIFIED` que não acha o alvo vira, no melhor caso,
+uma decisão de merge; no pior, um requisito duplicado.
+
+### Dependência de ordem com `add-launcher-voice`
+
+O requisito "Canais do protocolo" descreve os **três** canais, e um deles é o
+`@dudu-fala`, cuja regra de comportamento está no change `add-launcher-voice`,
+**ainda não arquivado**. O requisito traz uma nota apontando para lá.
+
+Arquivar o `add-launcher-voice` fecha essa ponta. Enquanto isso, a spec descreve
+o protocolo inteiro e é honesta sobre onde está o resto.
+
+### Ressalva de verificação
+
+As tarefas **7.2 a 7.5** — ver o painel mudar ao pegar madeira, conferir a fala
+em português no chat, ver o painel limpar ao parar o bot, e confirmar que uma
+casa de 52 blocos não enche o canal — **não foram verificadas**. Exigem o jogo e
+a janela do Electron abertos, e o arquivamento foi decisão do dono do projeto.
+
+O que existe é teste unitário dos dois lados (981 no bot, 88 no launcher) e a
+prova de que os módulos novos carregam em Node real sobre o `dist/`.
+
+### Consertos de fora do escopo, feitos porque bloqueavam a verificação
+
+- **`dist/` estava de 20/08.** O `module-loading.test.ts` sobe um Node de verdade
+  sobre o `dist/` para pegar erro de ESM que o vitest esconde, e estava
+  validando código de dez dias atrás. Depois do `npm run build`, os módulos
+  criados em 29 e 30/08 (`item-names`, `digging`, `survival`, `sleeping`,
+  `hot-cold`) passaram a ser carregados de verdade — e carregam.
+- **Dois testes instáveis sob carga**, falhando ~1 em 3 rodadas completas:
+  `log-file.test.ts` dormia 50 ms fixos esperando o pino, e
+  `module-loading.test.ts` usava o prazo padrão de 5 s do vitest para testes que
+  sobem processo. Viraram espera ativa com prazo e prazo próprio de 30 s.
