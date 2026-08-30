@@ -354,6 +354,24 @@ export const behaviorSchema = z.object({
   escapeStuckMs: z.number().int().positive().default(6_000),
   /** Buscar material sozinho quando faltar, em vez de só recusar. */
   buildAutoGather: z.boolean().default(true),
+  /**
+   * Comer sozinho quando a fome apertar.
+   *
+   * Instinto, não comando: como a defesa, não passa por IA nem por pedido.
+   */
+  autoEat: z.boolean().default(true),
+  /** Fome (0 a 20) a partir da qual ele come. 20 é barriga cheia. */
+  eatBelowFood: z.number().int().min(0).max(20).default(14),
+  /** Acender tocha sozinho quando estiver escuro. */
+  autoTorch: z.boolean().default(true),
+  /** Luz (0 a 15) abaixo da qual o lugar merece uma tocha. */
+  torchBelowLight: z.number().int().min(0).max(15).default(7),
+  /** Espera mínima entre duas tochas, para ele não virar fábrica de tocha. */
+  torchMinIntervalMs: z.number().int().positive().default(20_000),
+  /** Distância mínima da última tocha acesa. */
+  torchMinDistance: z.number().int().positive().default(5),
+  /** De quanto em quanto tempo ele checa fome e escuro. */
+  survivalTickMs: z.number().int().positive().default(3_000),
 })
 
 export const configSchema = z.object({

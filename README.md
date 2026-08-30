@@ -617,6 +617,30 @@ avisa no chat e sugere ir para um lugar aberto, em vez de ficar mudo.
 
 ---
 
+## Instintos: ele se cuida sozinho
+
+Duas coisas acontecem **sem** você pedir, e sem passar por IA — como a defesa:
+
+| Instinto | Quando | Chave |
+| --- | --- | --- |
+| Come | fome ≤ 14 (de 20) e tem comida no catálogo | `autoEat` |
+| Acende tocha | luz < 7 (de 15) e tem tocha | `autoTorch` |
+
+Ele **só** faz isso quando está calmo: parado, te seguindo ou de guarda. No meio
+de uma briga, de uma brincadeira ou machucado, aguenta a fome — comer trava ele
+por quase dois segundos, e é o pior momento possível.
+
+E ele avisa quando faz, porque bot que trava sem explicar parece bug.
+
+> **A maçã dourada é sua.** O cardápio é uma lista fechada de comida comum. Item
+> raro que você pediu para ele guardar não vira lanche dele.
+
+Uma tocha por vez: depois de acender, ele espera `torchMinIntervalMs` e se
+afastar `torchMinDistance` antes da próxima. Sem isso ele viraria uma fábrica de
+tochas andando.
+
+---
+
 ## Defesa
 
 Se um monstro atacar você, o bot revida sozinho. Sem comando, sem IA.

@@ -135,7 +135,7 @@ respondeu *"isso eu não sei ver"* — mas o `WorldSnapshot` **já carrega**
 
 **Custo.** Baixo.
 
-### 7. Comer quando está com fome
+### 7. ~~Comer quando está com fome~~ ✅ (2026-08-30, `add-survival-instincts`)
 
 Não existe nada de `eat` no código. Sobrevivência básica, sem pedido e sem IA —
 igual à defesa, é comportamento determinístico.
@@ -176,7 +176,7 @@ mais assusta criança.
 
 **Custo.** Médio.
 
-### 11. Tocha quando escurece
+### 11. ~~Tocha quando escurece~~ ✅ (2026-08-30, `add-survival-instincts`)
 
 A própria IA já sugeriu isso sozinha no log (*"tá muito escuro aqui, acende uma
 tocha aí!"*) sem o bot ter como fazer.

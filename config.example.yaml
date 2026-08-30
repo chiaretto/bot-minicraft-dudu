@@ -268,4 +268,25 @@ behavior:
   # Quanto tempo parado seguindo você antes de suspeitar que está preso.
   escapeStuckMs: 6000
 
+  # ── Instintos de sobrevivência ────────────────────────────────────────────
+  # Comer e acender tocha são INSTINTO, não comando: como a defesa, acontecem
+  # sozinhos e nunca passam pela IA. Ele só faz isso quando está calmo
+  # (parado, seguindo você ou de guarda) — no meio de uma briga ou de uma
+  # brincadeira, não para.
+
+  # Comer sozinho quando a fome apertar.
+  autoEat: true
+  # Fome (0 a 20) a partir da qual ele come. 20 é barriga cheia.
+  eatBelowFood: 14
+  # Acender tocha sozinho quando o lugar estiver escuro.
+  autoTorch: true
+  # Luz (0 a 15) abaixo da qual o lugar merece uma tocha. Monstro nasce em 0.
+  torchBelowLight: 7
+  # Espera mínima entre duas tochas, para ele não virar fábrica de tocha.
+  torchMinIntervalMs: 20000
+  # E distância mínima da última tocha, pelo mesmo motivo.
+  torchMinDistance: 5
+  # De quanto em quanto tempo ele olha para a fome e para o escuro.
+  survivalTickMs: 3000
+
 logLevel: 'info'

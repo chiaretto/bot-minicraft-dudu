@@ -233,6 +233,32 @@ entries:
       - 'Amanheceu! Bora explorar?'
       - 'Dia claro de novo. Agora tá mais seguro!'
 
+  # ──────────────── 16b. EVENTO: COMEU PORQUE ESTAVA COM FOME ─────────
+  # 2026-08-30: comer virou instinto (autoEat). A fala existe para a criança
+  # entender por que ele parou de repente — bot que trava sem explicar parece
+  # bug. Curta: ele volta a fazer o que fazia logo em seguida.
+  - id: evento_fome
+    trigger: spontaneous
+    responses:
+      - 'Tava com fome! Comi rapidinho, já volto.'
+      - 'Peraí que eu tava morrendo de fome, {owner}.'
+      - 'Comi um lanchinho! Agora sim.'
+      - 'Fominha! Já comi, pode continuar.'
+      - 'Só um bocadinho e eu já tô de volta!'
+
+  # ──────────────── 16c. EVENTO: ACENDEU UMA TOCHA ────────────────────
+  # 2026-08-30: acender tocha no escuro virou instinto (autoTorch). A própria
+  # IA já sugeria isso sozinha no log de 2026-08-15 ("tá muito escuro aqui,
+  # acende uma tocha aí!") sem o bot ter como fazer.
+  - id: evento_tocha
+    trigger: spontaneous
+    responses:
+      - 'Tava escuro demais! Acendi uma tocha aqui.'
+      - 'Pronto, agora dá pra enxergar! Monstro não nasce na luz.'
+      - 'Acendi uma tochinha pra gente não tomar susto.'
+      - 'Escuro assim nasce zumbi! Já acendi.'
+      - 'Deixa eu acender aqui... pronto, {owner}!'
+
   # ─────────────────── 17. EVENTO: DONO MORREU ───────────────────────
   - id: evento_dono_morreu
     trigger: spontaneous

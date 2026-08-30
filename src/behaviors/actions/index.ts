@@ -5,6 +5,7 @@ import type { BehaviorConfig } from '../../config/schema.js'
 import type { Intent } from '../../domain/intent.js'
 import { bestWeapon } from '../../domain/mobs.js'
 import { canHarvestWith, friendlyName, resolveBlockCandidates } from '../../domain/materials.js'
+import { chooseFood } from '../../domain/survival.js'
 import { buildStructure, BuildAborted, BuildRefused, type BuildWorld } from './build.js'
 import { escapeHole, EscapeAborted, EscapeRefused, type EscapeWorld } from './escape.js'
 import {
@@ -274,6 +275,57 @@ export async function countItem(deps: ActionDeps, item: string): Promise<ActionO
     return { ok: true, message: `Não tenho ${nome} nenhuma agora. Quer que eu busque?` }
   }
   return { ok: true, message: `Tenho ${total} de ${nome} aqui comigo!` }
+}
+
+/**
+ * Come, se tiver o que comer.
+ *
+ * Devolve o nome do que comeu, ou `null` quando não deu. Nunca lança: fome é
+ * instinto de fundo, e uma falha aqui não pode derrubar o que o bot estava
+ * fazendo.
+ * Ver: player_defense_delta.md → "Instintos de sobrevivência".
+ */
+export async function eatSomething(deps: ActionDeps): Promise<string | null> {
+  const escolha = chooseFood(deps.bot.inventory.items())
+  if (!escolha) return null
+
+  const item = deps.bot.inventory.items().find((i) => i.name === escolha)
+  if (!item) return null
+
+  try {
+    await deps.bot.equip(item, 'hand')
+    await withGuards(deps.bot.consume(), deps.signal, deps.behavior.actionTimeoutMs)
+    return escolha
+  } catch {
+    // Comer é opcional: se o servidor recusou, ele tenta de novo no próximo
+    // tick, com a barriga um pouco mais vazia.
+    return null
+  }
+}
+
+/**
+ * Acende uma tocha onde está, se tiver tocha.
+ *
+ * Devolve `true` quando a tocha ficou de pé. Como a comida, nunca lança: o
+ * escuro não pode derrubar a ação que o bot já estava fazendo.
+ */
+export async function placeTorch(deps: ActionDeps): Promise<boolean> {
+  const { bot } = deps
+  const tocha = bot.inventory.items().find((i) => i.name === 'torch')
+  if (!tocha) return false
+
+  // A tocha vai no chão, encostada no bloco de baixo — o apoio que sempre
+  // existe quando o bot está de pé em algum lugar.
+  const chao = bot.blockAt(bot.entity.position.offset(0, -1, 0))
+  if (!chao || chao.boundingBox !== 'block') return false
+
+  try {
+    await bot.equip(tocha, 'hand')
+    await withGuards(bot.placeBlock(chao, new Vec3(0, 1, 0)), deps.signal, 5_000)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** Quantos pulos saem de um `pula`. Três é a graça inteira. */

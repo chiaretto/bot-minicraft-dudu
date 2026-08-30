@@ -41,6 +41,8 @@ import { distance } from '../minecraft/snapshot.js'
 import pathfinderPkg from 'mineflayer-pathfinder'
 import {
   equipBestWeapon,
+  eatSomething,
+  placeTorch,
   runIntent,
   escape,
   openDoor,
@@ -50,9 +52,10 @@ import {
   NoProgress,
 } from '../behaviors/actions/index.js'
 import { needsEscape } from '../domain/escape.js'
+import { chooseFood, shouldEat, shouldPlaceTorch } from '../domain/survival.js'
 import { bestWeapon } from '../domain/mobs.js'
 import type { Intent } from '../domain/intent.js'
-import type { Vec3Like, WorldSnapshot } from '../domain/types.js'
+import type { BotState, Vec3Like, WorldSnapshot } from '../domain/types.js'
 import type { BotStatus } from './status-channel.js'
 
 const { goals } = pathfinderPkg
@@ -115,6 +118,11 @@ export class CompanionBot {
   private defenseEnabled: boolean
   private readonly recentAttackers = new Set<number>()
   private threatTimer: ReturnType<typeof setInterval> | null = null
+  private survivalTimer: ReturnType<typeof setInterval> | null = null
+  /** Uma coisa de cada vez: comer trava o bot, e dois ticks juntos brigariam. */
+  private survivalBusy = false
+  /** Onde e quando ele acendeu a última tocha. */
+  private lastTorch: { pos: Vec3Like; at: number } | null = null
   private engagementStartedAt: number | null = null
   private wasNight: boolean | null = null
   /** Rodada em andamento, ou `null`. */
@@ -1260,11 +1268,96 @@ export class CompanionBot {
       this.tickDefense()
       this.tickStuck()
     }, THREAT_TICK_MS)
+
+    // Fome e escuro mudam devagar; olhar para eles quatro vezes por segundo
+    // seria desperdício. Laço próprio, com o passo da configuração.
+    this.survivalTimer = setInterval(() => {
+      void this.tickSurvival()
+    }, this.config.behavior.survivalTickMs)
   }
 
   private stopThreatWatcher(): void {
     if (this.threatTimer) clearInterval(this.threatTimer)
     this.threatTimer = null
+    if (this.survivalTimer) clearInterval(this.survivalTimer)
+    this.survivalTimer = null
+  }
+
+  /**
+   * Instintos de sobrevivência: comer com fome e acender tocha no escuro.
+   *
+   * Determinístico e sem IA, como a defesa — fome e escuro são estado do mundo,
+   * não assunto de conversa. Uma coisa por tick: comer trava o bot por quase
+   * dois segundos, e fazer as duas juntas deixaria a criança falando sozinha.
+   * Ver: player_defense_delta.md → "Instintos de sobrevivência".
+   */
+  private async tickSurvival(): Promise<void> {
+    const bot = this.mc.raw
+    if (!bot || this.survivalBusy) return
+
+    this.survivalBusy = true
+    try {
+      const snapshot = this.snapshot()
+      const { behavior } = this.config
+
+      if (
+        behavior.autoEat &&
+        shouldEat({
+          food: snapshot.food,
+          hasFood: chooseFood(bot.inventory.items()) !== null,
+          state: this.state.state,
+          threshold: behavior.eatBelowFood,
+        })
+      ) {
+        const comeu = await eatSomething(this.actionDeps(bot))
+        if (comeu) {
+          this.logger.info({ comida: comeu, fome: snapshot.food }, 'comeu porque estava com fome')
+          this.saySpontaneous('evento_fome')
+        }
+        return
+      }
+
+      if (behavior.autoTorch && this.wantsTorch(bot, snapshot.state)) {
+        const pos = bot.entity.position
+        if (await placeTorch(this.actionDeps(bot))) {
+          this.lastTorch = { pos: { x: pos.x, y: pos.y, z: pos.z }, at: Date.now() }
+          this.logger.info({ luz: this.lightHere(bot) }, 'acendeu uma tocha')
+          this.saySpontaneous('evento_tocha')
+        }
+      }
+    } catch (err) {
+      // Instinto nunca derruba o bot: no pior caso ele passa fome mais um tick.
+      this.logger.debug({ err: err instanceof Error ? err.message : String(err) }, 'instinto falhou')
+    } finally {
+      this.survivalBusy = false
+    }
+  }
+
+  /** Luz onde o bot está. 0 é breu, 15 é sol a pino. */
+  private lightHere(bot: NonNullable<typeof this.mc.raw>): number {
+    const bloco = bot.blockAt(bot.entity.position) as { light?: number } | null
+    return bloco?.light ?? 15
+  }
+
+  private wantsTorch(bot: NonNullable<typeof this.mc.raw>, state: BotState): boolean {
+    const pos = bot.entity.position
+    const agora = Date.now()
+    return shouldPlaceTorch({
+      light: this.lightHere(bot),
+      hasTorch: bot.inventory.items().some((i) => i.name === 'torch'),
+      state,
+      threshold: this.config.behavior.torchBelowLight,
+      msSinceLast: this.lastTorch ? agora - this.lastTorch.at : Number.MAX_SAFE_INTEGER,
+      minIntervalMs: this.config.behavior.torchMinIntervalMs,
+      distanceFromLast: this.lastTorch ? distance(pos, this.lastTorch.pos) : Number.MAX_SAFE_INTEGER,
+      minDistance: this.config.behavior.torchMinDistance,
+    })
+  }
+
+  /** Fala de evento, quando existe entrada para ele. */
+  private saySpontaneous(entryId: string): void {
+    const line = this.repertoire.spontaneous(entryId, this.snapshot())
+    if (line) this.say(line.text, 'spontaneous', line.entryId)
   }
 
   /**
