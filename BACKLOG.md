@@ -145,7 +145,7 @@ chave de ligar/desligar em `config.yaml → behavior`.
 
 **Custo.** Baixo/médio.
 
-### 8. `PLACE_BLOCK` — "põe um bloco aqui"
+### 8. ~~`PLACE_BLOCK` — "põe um bloco aqui"~~ ✅ (2026-08-30, `add-place-and-dig`)
 
 **Evidência.** Entrada `pedido_soltar_item`, criada depois de a IA dizer que
 tinha soltado o bloco — e não ter soltado.
@@ -155,7 +155,7 @@ sobre colocar bloco.
 
 **Custo.** Médio.
 
-### 9. `DIG` — cavar buraco ou túnel
+### 9. ~~`DIG` — cavar buraco ou túnel~~ ✅ (2026-08-30, `add-place-and-dig`)
 
 **Evidência.** Entrada `pedido_cavar`, com 9 padrões — é assunto recorrente.
 

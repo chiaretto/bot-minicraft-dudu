@@ -777,20 +777,6 @@ entries:
       - 'Hmm, isso eu não vejo. Fala o que é que eu chuto!'
       - 'Não dá pra ver daqui! Mas eu vejo você :D'
 
-  # ──────────── 31. PEDIDO DE CAVAR (ainda não sei fazer) ─────────────
-  # 2026-08-19: 'cave um buraco' e 'cave um buraco de 10 blocos pra baixo'
-  # caíram na IA, que respondeu certo — mas não existe intenção de cavar.
-  - id: pedido_cavar
-    specificity: 5
-    patterns: ['cave um buraco', 'cava um buraco', 'faz um buraco', 'cava aqui', 'cava pra baixo',
-       'cava um tunel', 'cavar um buraco', 'cave', 'cava']
-    responses:
-      - 'Cavar buraco eu ainda não sei, {owner}. Mas sei pegar madeira e terra!'
-      - 'Essa eu não aprendi ainda! Fala "pega terra" que eu vou correndo.'
-      - 'Não sei cavar não. Mas se você cair num buraco eu faço escadinha e subo!'
-      - 'Buraco eu não faço ainda. Mas sei fazer piscina, que é quase! Quer?'
-      - 'Ainda não sei cavar. Seu pai talvez me ensine depois!'
-
   # ──────────── 33. DORMIR / CAMA (ainda não sei fazer) ───────────────
   # 2026-08-19: 'deite na cama', 'vamos dormir' e 'queria ver se voce conseguia
   # dormir' — três jeitos do mesmo assunto, todos na IA.
@@ -919,20 +905,19 @@ entries:
       - 'Brigo só pra te defender! Fica perto de mim.'
       - { when: { targetIsPlayer: true }, text: 'Eu nunca vou atacar outro jogador, {owner}. Isso eu não faço.' }
 
-  # ─────────── 43. LARGAR / COLOCAR BLOCO (não sei fazer) ─────────────
-  # 2026-08-19: 'jogue esse item no chao' e 'bote um bloco no chao' foram pra
-  # IA, que disse ter feito — não fez. Ele levanta as plantas do catálogo, não
-  # solta bloco solto.
+  # ─────────── 43. LARGAR ITEM NO CHÃO (não sei fazer) ────────────────
+  # 2026-08-19: 'jogue esse item no chao' foi pra IA, que disse ter feito.
+  # 2026-08-30: PÔR BLOCO virou comando (PLACE_BLOCK) e saiu daqui. Largar item
+  # solto continua fora: ele entrega na mão ("me da madeira"), não joga no chão.
   - id: pedido_soltar_item
     specificity: 5
-    patterns: ['jogue esse item no chao', 'joga o item no chao', 'bote um bloco no chao',
-       'bota um bloco no chao', 'joga no chao', 'larga o bloco', 'solta o bloco',
-       'poe um bloco aqui', 'coloca um bloco aqui']
+    patterns: ['jogue esse item no chao', 'joga o item no chao', 'joga no chao',
+       'larga tudo no chao', 'joga tudo no chao']
     responses:
-      - 'Largar coisa no chão eu ainda não sei fazer, desculpa!'
-      - 'Essa eu não sei. Mas sei fazer casinha e escada, quer ver?'
-      - 'Não sei soltar bloco ainda. Fala "pega madeira" que eu vou buscar!'
-      - 'Ainda não aprendi isso. Seu pai talvez me ensine depois!'
+      - 'Largar coisa no chão eu não sei, mas eu te entrego na mão! Fala "me da madeira".'
+      - 'Essa eu não sei. Mas sei pôr um bloco: fala "poe um bloco aqui".'
+      - 'Jogar no chão eu não faço. Prefiro te entregar direitinho!'
+      - 'Ainda não aprendi isso. Mas se quiser um bloco no chão eu ponho, é só pedir!'
 
   # ─────────────────────── 44. AONDE A GENTE VAI ──────────────────────
   # 2026-08-19: 'aonda vamos?' foi pra IA. É pergunta de plano, não de lugar —

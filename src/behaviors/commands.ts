@@ -297,6 +297,52 @@ const COMMANDS: CommandPattern[] = [
       /^cercadinho$/,
     ],
   },
+  // ── Pôr bloco e cavar ───────────────────────────────────────────────────
+  // 2026-08-30: os padrões vieram das entradas `pedido_cavar` e
+  // `pedido_soltar_item`, que existiam só para dizer "não sei fazer".
+  {
+    intent: { type: 'PLACE_BLOCK', params: {} },
+    patterns: [
+      /^poe um bloco aqui$/,
+      /^poe um bloco$/,
+      /^poem um bloco aqui$/,
+      /^coloca um bloco aqui$/,
+      /^coloca um bloco$/,
+      /^bota um bloco aqui$/,
+      /^bota um bloco no chao$/,
+      /^bote um bloco no chao$/,
+      /^poe um bloco no chao$/,
+      /^coloca um bloco no chao$/,
+      /^larga um bloco aqui$/,
+    ],
+  },
+  // Cavar para baixo cai no BURACO, que é um poço à frente: cavar embaixo dos
+  // próprios pés derruba o bot no buraco que ele acabou de abrir, e sair de lá
+  // é outro comando.
+  {
+    intent: { type: 'DIG', params: { shape: 'buraco' } },
+    patterns: [
+      /^cava um buraco$/,
+      /^cave um buraco$/,
+      /^cavar um buraco$/,
+      /^faz um buraco$/,
+      /^faca um buraco$/,
+      /^cava aqui$/,
+      /^cava pra baixo$/,
+      /^cava$/,
+      /^cave$/,
+    ],
+  },
+  {
+    intent: { type: 'DIG', params: { shape: 'tunel' } },
+    patterns: [
+      /^cava um tunel$/,
+      /^cave um tunel$/,
+      /^cavar um tunel$/,
+      /^faz um tunel$/,
+      /^faca um tunel$/,
+    ],
+  },
   // ── Graça: pular e dancinha ─────────────────────────────────────────────
   // 2026-08-30: os 18 padrões vieram inteiros das entradas `pedido_pular` e
   // `pedido_truque`, que existiam só para dizer "ainda não aprendi". As duas

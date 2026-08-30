@@ -372,6 +372,8 @@ export const behaviorSchema = z.object({
   torchMinDistance: z.number().int().positive().default(5),
   /** De quanto em quanto tempo ele checa fome e escuro. */
   survivalTickMs: z.number().int().positive().default(3_000),
+  /** Teto de blocos numa escavação pedida. O buraco tem 8 e o túnel 8. */
+  digMaxBlocks: z.number().int().positive().default(16),
 })
 
 export const configSchema = z.object({

@@ -65,6 +65,9 @@ export const ACTION_DESCRIPTIONS: Record<Exclude<IntentType, 'CHAT' | 'UNKNOWN'>
   DROP_ITEM_TO_OWNER: 'entregar um item para o jogador — precisa de "item"',
   LOOK_AT_OWNER: 'virar e olhar para o jogador',
   COUNT_ITEM: 'dizer quanto ele tem de um material — "item" é madeira, pedra, terra, areia ou cascalho',
+  PLACE_BLOCK:
+    'pôr UM bloco no chão à frente dele — "material" é opcional (madeira, pedra…)',
+  DIG: 'cavar à frente dele — "shape" é "buraco" (poço 2x2) ou "tunel" (4 de comprimento)',
   JUMP: 'dar uns pulinhos no lugar, de brincadeira',
   TRICK: 'fazer graça: girar no lugar e terminar com um pulo',
   EQUIP_ITEM: 'pegar um item na mão — precisa de "item"',

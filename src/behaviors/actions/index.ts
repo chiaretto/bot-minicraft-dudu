@@ -6,7 +6,15 @@ import type { Intent } from '../../domain/intent.js'
 import { bestWeapon } from '../../domain/mobs.js'
 import { canHarvestWith, friendlyName, resolveBlockCandidates } from '../../domain/materials.js'
 import { chooseFood } from '../../domain/survival.js'
-import { buildStructure, BuildAborted, BuildRefused, type BuildWorld } from './build.js'
+import { facingFromYaw, type DigShape } from '../../domain/digging.js'
+import { digShape, DigAborted, DigRefused, type DigWorld } from './dig.js'
+import {
+  buildStructure,
+  chooseMaterial,
+  BuildAborted,
+  BuildRefused,
+  type BuildWorld,
+} from './build.js'
 import { escapeHole, EscapeAborted, EscapeRefused, type EscapeWorld } from './escape.js'
 import {
   openNearestDoor,
@@ -496,6 +504,103 @@ export async function build(
 }
 
 /**
+ * Põe UM bloco no chão à frente do bot.
+ *
+ * Um, e à frente: a criança pede "põe um bloco aqui" para marcar um lugar ou
+ * fazer degrau, não para o bot despejar a mochila. Reusa o adaptador da obra —
+ * é a mesma operação, com uma posição só.
+ * Ver: player_commands_delta.md → "Pôr um bloco".
+ */
+export async function placeBlockAhead(
+  deps: ActionDeps,
+  material?: string,
+): Promise<ActionOutcome> {
+  const world = buildWorldFrom(deps)
+  const pos = deps.bot.entity.position
+  const facing = facingFromYaw(deps.bot.entity.yaw)
+
+  const alvo = {
+    x: Math.floor(pos.x) + facing.dx,
+    y: Math.floor(pos.y),
+    z: Math.floor(pos.z) + facing.dz,
+  }
+  if (world.isSolid(alvo)) throw new ActionRefused('já tem bloco bem aí')
+
+  const apoio = { x: alvo.x, y: alvo.y - 1, z: alvo.z }
+  if (!world.isSolid(apoio)) throw new ActionRefused('não tem em que encostar o bloco aqui')
+
+  const naMochila = new Set(deps.bot.inventory.items().map((i) => i.name))
+  const viaveis = deps.behavior.buildAllowlist.filter((nome) => naMochila.has(nome))
+  const escolhido = chooseMaterial(world.inventoryCounts(), viaveis, material)
+  if (escolhido === null) {
+    throw new ActionRefused(
+      material ? `não tenho ${friendlyName(material)} aqui` : 'não tenho bloco nenhum pra pôr',
+    )
+  }
+
+  await world.walkNear(alvo, 2)
+  checkAborted(deps.signal)
+  await world.equipBlock(escolhido)
+  await world.placeBlock(apoio, { x: 0, y: 1, z: 0 })
+
+  return { ok: true, message: `Pronto, pus um bloco de ${friendlyName(escolhido)} aí!` }
+}
+
+/** Adapta o mundo real para a interface estreita da escavação. */
+export function digWorldFrom(deps: ActionDeps): DigWorld {
+  const { bot } = deps
+  const at = (p: Vec3Like) => bot.blockAt(new Vec3(p.x, p.y, p.z))
+
+  return {
+    botPosition: () => bot.entity.position,
+    facing: () => facingFromYaw(bot.entity.yaw),
+    blockNameAt: (pos) => {
+      const block = at(pos)
+      if (!block || block.name === 'air' || block.name === 'cave_air') return null
+      return block.name
+    },
+    canHarvest: (pos) => {
+      const block = at(pos)
+      return block !== null && canHarvestNow(bot, block.name)
+    },
+    walkNear: async (pos, range) => {
+      await withGuards(
+        bot.pathfinder.goto(new goals.GoalNear(pos.x, pos.y, pos.z, range)),
+        deps.signal,
+        deps.behavior.actionTimeoutMs,
+      )
+    },
+    digBlock: async (pos) => {
+      const block = at(pos)
+      if (!block) return
+      const tool = bot.pathfinder.bestHarvestTool(block)
+      if (tool && bot.heldItem?.type !== tool.type) await bot.equip(tool, 'hand')
+      await withGuards(bot.dig(block), deps.signal, deps.behavior.actionTimeoutMs)
+    },
+  }
+}
+
+/** Cava um buraco ou um túnel à frente. */
+export async function dig(deps: ActionDeps, shape: DigShape): Promise<ActionOutcome> {
+  try {
+    const outcome = await digShape(
+      {
+        world: digWorldFrom(deps),
+        signal: deps.signal,
+        allowlist: deps.behavior.collectAllowlist,
+        maxBlocks: deps.behavior.digMaxBlocks,
+      },
+      shape,
+    )
+    return { ok: outcome.ok, message: outcome.message }
+  } catch (err) {
+    if (err instanceof DigAborted) throw new ActionAborted(err.message)
+    if (err instanceof DigRefused) throw new ActionRefused(err.message)
+    throw err
+  }
+}
+
+/**
  * Adapta o mundo real para a interface estreita da subida.
  *
  * `pillarUp` é a única parte deste projeto que depende de TEMPO de física: o
@@ -712,6 +817,10 @@ export async function runIntent(deps: ActionDeps, intent: Intent): Promise<Actio
       return equipItem(deps, intent.params.item)
     case 'COUNT_ITEM':
       return countItem(deps, intent.params.item)
+    case 'PLACE_BLOCK':
+      return placeBlockAhead(deps, intent.params.material)
+    case 'DIG':
+      return dig(deps, intent.params.shape)
     case 'JUMP':
       return jump(deps)
     case 'TRICK':

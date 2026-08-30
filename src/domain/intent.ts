@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { GAME_ROLES } from './games.js'
 import { STRUCTURE_NAMES } from './blueprints.js'
+import { DIG_SHAPES } from './digging.js'
 
 /**
  * Catálogo FECHADO de intenções. A IA só pode propor o que está aqui.
@@ -27,6 +28,8 @@ export const INTENT_TYPES = [
   'JUMP',
   'TRICK',
   'COUNT_ITEM',
+  'PLACE_BLOCK',
+  'DIG',
   'CHAT',
   'UNKNOWN',
 ] as const
@@ -80,6 +83,8 @@ export const LEARNABLE_INTENTS = [
   'JUMP',
   'TRICK',
   'COUNT_ITEM',
+  'PLACE_BLOCK',
+  'DIG',
 ] as const
 
 export type LearnableIntentType = (typeof LEARNABLE_INTENTS)[number]
@@ -139,6 +144,16 @@ export const intentSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('COUNT_ITEM'),
     params: z.object({ item: z.string().min(1) }),
+  }),
+  // Pôr um bloco à frente. O material é opcional, como na obra.
+  z.object({
+    type: z.literal('PLACE_BLOCK'),
+    params: z.object({ material: z.string().min(1).optional() }).default({}),
+  }),
+  // Cavar. `shape` é catálogo fechado: buraco ou túnel, e nada mais.
+  z.object({
+    type: z.literal('DIG'),
+    params: z.object({ shape: z.enum(DIG_SHAPES) }),
   }),
   z.object({ type: z.literal('JUMP'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('TRICK'), params: z.object({}).default({}) }),
@@ -206,6 +221,7 @@ export const INTENT_JSON_SCHEMA = {
         game: { type: 'string' },
         role: { type: 'string', enum: [...GAME_ROLES] },
         structure: { type: 'string', enum: [...STRUCTURE_NAMES] },
+        shape: { type: 'string', enum: [...DIG_SHAPES] },
         material: { type: 'string' },
         target: { type: 'string' },
       },
