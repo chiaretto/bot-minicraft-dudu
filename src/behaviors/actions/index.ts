@@ -6,6 +6,7 @@ import type { Intent } from '../../domain/intent.js'
 import { bestWeapon } from '../../domain/mobs.js'
 import { canHarvestWith, friendlyName, resolveBlockCandidates } from '../../domain/materials.js'
 import { chooseFood } from '../../domain/survival.js'
+import { friendlyItemName } from '../../domain/item-names.js'
 import { facingFromYaw, type DigShape } from '../../domain/digging.js'
 import {
   isBedName,
@@ -230,7 +231,9 @@ export async function dropItemToOwner(
   count?: number,
 ): Promise<ActionOutcome> {
   const item = deps.bot.inventory.items().find((i) => i.name === itemName)
-  if (!item) throw new ActionRefused(`não tenho ${itemName} comigo`)
+  // O nome do jogo é inglês e com underscore: `cooked_beef` não é palavra que
+  // uma criança de 7 anos leia. Ver: regra número um.
+  if (!item) throw new ActionRefused(`não tenho ${friendlyItemName(itemName)} comigo`)
 
   const owner = deps.bot.players[deps.ownerName]?.entity
   if (!owner) throw new ActionRefused('não tô te vendo pra te entregar')
@@ -249,7 +252,7 @@ export async function dropItemToOwner(
     deps.behavior.actionTimeoutMs,
   )
 
-  return { ok: true, message: `Toma aí o ${itemName}!` }
+  return { ok: true, message: `Toma aí, ${friendlyItemName(itemName)}!` }
 }
 
 /**
@@ -467,9 +470,10 @@ export async function lookAtOwner(deps: ActionDeps): Promise<ActionOutcome> {
 
 export async function equipItem(deps: ActionDeps, itemName: string): Promise<ActionOutcome> {
   const item = deps.bot.inventory.items().find((i) => i.name === itemName)
-  if (!item) throw new ActionRefused(`não tenho ${itemName}`)
+  const nome = friendlyItemName(itemName)
+  if (!item) throw new ActionRefused(`não tenho ${nome}`)
   await deps.bot.equip(item, 'hand')
-  return { ok: true, message: `Equipei ${itemName}!` }
+  return { ok: true, message: `Peguei ${nome}, tá na minha mão!` }
 }
 
 /**

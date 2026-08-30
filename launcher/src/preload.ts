@@ -37,4 +37,7 @@ contextBridge.exposeInMainWorld('dudu', {
   aoReceberFala: (fn: (texto: string) => void) => {
     ipcRenderer.on('fala', (_event, texto: string) => fn(texto))
   },
+  aoReceberMochila: (fn: (painel: unknown) => void) => {
+    ipcRenderer.on('mochila', (_event, painel: unknown) => fn(painel))
+  },
 })

@@ -1,14 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
+  INVENTORY_PREFIX,
   SPEECH_PREFIX,
   STATUS_PREFIX,
   createStatusChannel,
+  formatInventory,
   formatSpeech,
   formatStatus,
   isLauncherMode,
   listenForStop,
   type StopSource,
 } from '../src/app/status-channel.js'
+import { groupItems } from '../src/domain/item-names.js'
 
 const LAUNCHER = { DUDU_LAUNCHER: '1' } as NodeJS.ProcessEnv
 const TERMINAL = {} as NodeJS.ProcessEnv
@@ -223,5 +226,117 @@ describe('canal de fala', () => {
   it('o prefixo da fala é diferente do de status', () => {
     // Um canal só faria o supervisor ter que adivinhar qual é qual.
     expect(SPEECH_PREFIX).not.toBe(STATUS_PREFIX)
+  })
+})
+
+/**
+ * O canal da mochila: o terceiro do protocolo.
+ * Ver: desktop_launcher_delta.md → "Canal da mochila no protocolo".
+ */
+describe('canal da mochila', () => {
+  const madeira = { id: 'oak_log', nome: 'madeira', qtd: 12 }
+  const pedra = { id: 'cobblestone', nome: 'pedra', qtd: 3 }
+
+  const canalComSupervisor = (linhas: string[]) =>
+    createStatusChannel({ env: { DUDU_LAUNCHER: '1' }, write: (l) => linhas.push(l) })
+
+  it('a linha carrega id, nome e quantidade', () => {
+    const linha = formatInventory([madeira])
+    expect(linha).toContain(INVENTORY_PREFIX)
+    expect(linha).toContain('oak_log')
+    expect(linha).toContain('madeira')
+    expect(linha).toContain('12')
+  })
+
+  it('a linha traz o total somado', () => {
+    expect(formatInventory([madeira, pedra])).toContain('"total":15')
+  })
+
+  it('sem supervisor, mochila nenhuma sai no stdout', () => {
+    const linhas: string[] = []
+    const canal = createStatusChannel({ env: {}, write: (l) => linhas.push(l) })
+    canal.sendInventory([madeira])
+    expect(linhas).toEqual([])
+  })
+
+  /**
+   * A guarda que importa: uma casa de 52 blocos encheria o canal de dezenas de
+   * linhas se cada passada mandasse a mochila de novo.
+   */
+  it('mochila igual à última NÃO vira linha', () => {
+    const linhas: string[] = []
+    const canal = canalComSupervisor(linhas)
+    canal.sendInventory([madeira])
+    canal.sendInventory([madeira])
+    canal.sendInventory([{ ...madeira }])
+    expect(linhas).toHaveLength(1)
+  })
+
+  it('mochila que mudou vira linha nova', () => {
+    const linhas: string[] = []
+    const canal = canalComSupervisor(linhas)
+    canal.sendInventory([madeira])
+    canal.sendInventory([{ ...madeira, qtd: 20 }])
+    expect(linhas).toHaveLength(2)
+    expect(linhas[1]).toContain('20')
+  })
+
+  it('mochila vazia é anunciada, não escondida', () => {
+    const linhas: string[] = []
+    const canal = canalComSupervisor(linhas)
+    canal.sendInventory([])
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0]).toContain('"total":0')
+  })
+
+  it('os três prefixos são diferentes entre si', () => {
+    // Um canal só faria o supervisor ter que adivinhar qual é qual.
+    expect(new Set([STATUS_PREFIX, SPEECH_PREFIX, INVENTORY_PREFIX]).size).toBe(3)
+  })
+})
+
+/**
+ * Juntar a mochila pelo nome que a criança lê.
+ * Ver: player_commands_delta.md → "Catálogo de nomes de item em português".
+ */
+describe('agrupar a mochila', () => {
+  it('soma as pilhas do mesmo item', () => {
+    const saida = groupItems([
+      { name: 'oak_log', count: 64 },
+      { name: 'oak_log', count: 32 },
+    ])
+    expect(saida).toEqual([{ id: 'oak_log', nome: 'madeira', qtd: 96 }])
+  })
+
+  /** `oak_log` e `birch_log` são "madeira" para quem está jogando. */
+  it('junta o que tem o mesmo nome na boca da criança', () => {
+    const saida = groupItems([
+      { name: 'oak_log', count: 10 },
+      { name: 'birch_log', count: 5 },
+    ])
+    expect(saida).toHaveLength(1)
+    expect(saida[0]!.qtd).toBe(15)
+  })
+
+  it('ordena do que ele tem mais para o que tem menos', () => {
+    const saida = groupItems([
+      { name: 'cobblestone', count: 3 },
+      { name: 'oak_log', count: 64 },
+      { name: 'bread', count: 8 },
+    ])
+    expect(saida.map((i) => i.nome)).toEqual(['madeira', 'pão', 'pedra'])
+  })
+
+  it('pilha zerada não entra', () => {
+    expect(groupItems([{ name: 'bread', count: 0 }])).toEqual([])
+  })
+
+  it('mochila vazia dá lista vazia', () => {
+    expect(groupItems([])).toEqual([])
+  })
+
+  it('item fora do catálogo aparece com o id', () => {
+    const saida = groupItems([{ name: 'elytra', count: 1 }])
+    expect(saida[0]!.nome).toBe('elytra')
   })
 })

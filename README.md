@@ -162,6 +162,22 @@ npm run launcher:dev    # abre a janela a partir do código
 npm run launcher:test   # testes das partes puras
 ```
 
+### A mochila dele na tela
+
+Com o bot no mundo, a janela mostra **o que ele está carregando** — nome em
+português e quantidade, do que ele tem mais para o que tem menos:
+
+```
+O que ele tá carregando
+  64 madeira    12 pedra    3 pão    1 tocha
+  e mais 2 coisas
+```
+
+Some quando ele não está no mundo: mochila de fantasma faria você pedir um bloco
+que ninguém está carregando. E mochila vazia é **dita**, não escondida.
+
+O painel só mostra. O que ele faz continua vindo do chat.
+
 ### Ele lê em voz alta
 
 Com o aplicativo aberto, tudo o que o Dudu fala no chat sai **pela caixa de

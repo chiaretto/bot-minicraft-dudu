@@ -179,18 +179,32 @@ Três coisas que quebram se alguém mexer sem saber:
 As duas ações **nunca lançam**: instinto que derruba a ação em curso é pior que
 instinto nenhum.
 
-## O aplicativo lê em voz alta
+## O protocolo com o supervisor tem três canais
 
-Desde 2026-08-30 o protocolo com o supervisor tem **dois** prefixos:
-`@dudu-status` (ciclo de vida) e `@dudu-fala` (o que o bot disse no chat).
+Desde 2026-08-30:
 
-Separados de propósito, e com uma diferença que importa: o canal de status
-**engole repetição** (dois `procurando` seguidos não são transição); o de fala
-**não pode** — o bot repete "quente!" numa rodada de quente e frio, e a criança
-precisa ouvir cada uma.
+| Prefixo | O que carrega | Ritmo | Repete? |
+|---|---|---|---|
+| `@dudu-status` | ciclo de vida | meia dúzia de vezes por sessão | não |
+| `@dudu-fala` | o que ele disse no chat | o tempo todo | **sim** |
+| `@dudu-mochila` | o que ele carrega | periódico, só quando muda | não |
 
-A política do que vale a pena ouvir mora em `launcher/src/voice.ts`, puro e
-testável. A janela só faz o que exige navegador: `speechSynthesis`.
+**A coluna que mais custa esquecer é a última.** Status e mochila engolem
+repetição; fala **não pode** — o bot repete "quente!" numa rodada de quente e
+frio, e a criança precisa ouvir cada uma. A dedup da mochila é o que impede uma
+casa de 52 blocos de virar dezenas de linhas no canal, e ela mora no **emissor**:
+quem sabe se a mochila mudou é quem tem a mochila.
+
+Duas regras que valem para os três:
+
+- **A constante do prefixo é repetida nos dois lados**, nunca importada.
+  Vocabulário, ao contrário, **não** é repetido: a mochila vai com o nome já
+  traduzido (`domain/item-names.ts`), e o launcher nunca traduz nada.
+- **Prefixo desconhecido vira log.** É o que deixa o protocolo crescer por soma
+  sem quebrar launcher antigo.
+
+A política de tela mora em módulo puro do launcher (`voice.ts`, `inventory.ts`);
+a janela só faz o que exige navegador — `speechSynthesis` e desenhar.
 
 ## Atacar é comando, nunca intenção da IA
 

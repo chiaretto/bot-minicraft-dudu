@@ -18,6 +18,9 @@ const recado = $('recado')
 const pasta = $('pasta')
 const log = $('log')
 const caixaVoz = $('voz')
+const mochila = $('mochila')
+const itens = $('itens')
+const resto = $('resto')
 
 /** Teto de linhas na tela, igual ao do processo principal. */
 const MAX_LINHAS = 500
@@ -101,6 +104,46 @@ btEscolher.addEventListener('click', async () => {
     dizer('Pasta do bot atualizada.', 'ok')
     void carregarPorta()
   }
+})
+
+// ── Mochila ──────────────────────────────────────────────────────────────────
+/*
+  Só desenha. Quantos itens cabem e o que dizer do resto é decisão do módulo
+  puro `src/inventory.ts`; os nomes já chegam em português do próprio bot.
+*/
+
+window.dudu.aoReceberMochila((painel) => {
+  // `null` é o bot fora do mundo: painel de fantasma faria a criança pedir um
+  // bloco que ninguém está carregando.
+  if (!painel) {
+    mochila.style.display = 'none'
+    itens.replaceChildren()
+    resto.textContent = ''
+    return
+  }
+
+  mochila.style.display = 'block'
+  itens.replaceChildren()
+
+  if (painel.vazio) {
+    const vazio = document.createElement('span')
+    vazio.className = 'item'
+    vazio.textContent = painel.vazio
+    itens.append(vazio)
+    resto.textContent = ''
+    return
+  }
+
+  for (const item of painel.itens) {
+    const chip = document.createElement('span')
+    chip.className = 'item'
+    const qtd = document.createElement('b')
+    qtd.textContent = String(item.qtd)
+    chip.append(qtd, ` ${item.nome}`)
+    itens.append(chip)
+  }
+
+  resto.textContent = painel.resto || ''
 })
 
 // ── Voz ──────────────────────────────────────────────────────────────────────

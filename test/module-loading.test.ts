@@ -37,6 +37,16 @@ function importInRealNode(specifier: string): { ok: boolean; error: string } {
   }
 }
 
+/**
+ * Prazo por teste, generoso de propósito.
+ *
+ * Cada `it` daqui SOBE UM PROCESSO NODE e importa `mineflayer` de verdade —
+ * ~0,5 s sozinho, e mais que isso com a suíte inteira rodando em paralelo. Com
+ * o prazo padrão de 5 s do vitest, um deles falhava sozinho mais ou menos uma
+ * vez a cada três rodadas completas, sem nada de errado no código.
+ */
+const PRAZO_SPAWN_MS = 30_000
+
 describe.skipIf(!DIST_READY)('carregamento em ESM nativo (sobre o dist/)', () => {
   beforeAll(() => {
     if (!DIST_READY) console.warn('dist/ ausente — rode `npm run build` antes')
@@ -46,26 +56,26 @@ describe.skipIf(!DIST_READY)('carregamento em ESM nativo (sobre o dist/)', () =>
     const result = importInRealNode('mineflayer-pathfinder')
     expect(result.error).toBe('')
     expect(result.ok).toBe(true)
-  })
+  }, PRAZO_SPAWN_MS)
 
   it('dist/minecraft/client.js carrega', () => {
     const result = importInRealNode('./dist/minecraft/client.js')
     // Se o interop quebrar, a mensagem é "does not provide an export named".
     expect(result.error).not.toMatch(/does not provide an export named/)
     expect(result.ok).toBe(true)
-  })
+  }, PRAZO_SPAWN_MS)
 
   it('dist/behaviors/actions/index.js carrega', () => {
     const result = importInRealNode('./dist/behaviors/actions/index.js')
     expect(result.error).not.toMatch(/does not provide an export named/)
     expect(result.ok).toBe(true)
-  })
+  }, PRAZO_SPAWN_MS)
 
   it('dist/app/bot.js carrega — o composition root inteiro', () => {
     const result = importInRealNode('./dist/app/bot.js')
     expect(result.error).not.toMatch(/does not provide an export named/)
     expect(result.ok).toBe(true)
-  })
+  }, PRAZO_SPAWN_MS)
 
   // `vec3` também é CommonJS: `import { Vec3 } from 'vec3'` é a mesma armadilha
   // do `goals` do pathfinder. Funciona porque o pacote faz `v.Vec3 = Vec3`, que
@@ -74,26 +84,26 @@ describe.skipIf(!DIST_READY)('carregamento em ESM nativo (sobre o dist/)', () =>
     const result = importInRealNode('vec3')
     expect(result.error).toBe('')
     expect(result.ok).toBe(true)
-  })
+  }, PRAZO_SPAWN_MS)
 
   it('dist/minecraft/visibility.js carrega com o Vec3 de verdade', () => {
     const result = importInRealNode('./dist/minecraft/visibility.js')
     expect(result.error).not.toMatch(/does not provide an export named/)
     expect(result.ok).toBe(true)
-  })
+  }, PRAZO_SPAWN_MS)
 
   it('dist/behaviors/games/index.js carrega', () => {
     const result = importInRealNode('./dist/behaviors/games/index.js')
     expect(result.error).not.toMatch(/does not provide an export named/)
     expect(result.ok).toBe(true)
-  })
+  }, PRAZO_SPAWN_MS)
 
   it('os providers de IA carregam suas bibliotecas', () => {
     for (const mod of ['./dist/ai/providers/ollama.js', './dist/ai/providers/gemini.js']) {
       const result = importInRealNode(mod)
       expect(result.error, mod).toBe('')
     }
-  })
+  }, PRAZO_SPAWN_MS)
 })
 
 describe('superfície dos módulos (transpilado)', () => {
@@ -101,20 +111,20 @@ describe('superfície dos módulos (transpilado)', () => {
     const mod = await import('../src/minecraft/client.js')
     expect(typeof mod.MinecraftClient).toBe('function')
     expect(typeof mod.VersionMismatchError).toBe('function')
-  })
+  }, PRAZO_SPAWN_MS)
 
   it('actions expõe o despachante de intenções', async () => {
     const mod = await import('../src/behaviors/actions/index.js')
     expect(typeof mod.runIntent).toBe('function')
     expect(typeof mod.equipBestWeapon).toBe('function')
-  })
+  }, PRAZO_SPAWN_MS)
 
   it('games expõe o registro e a sessão', async () => {
     const mod = await import('../src/behaviors/games/index.js')
     expect(typeof mod.createSession).toBe('function')
     expect(typeof mod.resolveGame).toBe('function')
     expect(typeof mod.HideAndSeekSession).toBe('function')
-  })
+  }, PRAZO_SPAWN_MS)
 
   it('o adaptador de raycast produz um Vec3 usável de verdade', async () => {
     const { raycastWorldFrom } = await import('../src/minecraft/visibility.js')
@@ -133,7 +143,7 @@ describe('superfície dos módulos (transpilado)', () => {
     const vec = origin as { minus: (other: unknown) => { x: number } }
     expect(typeof vec.minus).toBe('function')
     expect(vec.minus({ x: 1, y: 0, z: 0 }).x).toBe(0)
-  })
+  }, PRAZO_SPAWN_MS)
 
   it('instanciar os providers não faz rede', async () => {
     const { OllamaProvider } = await import('../src/ai/providers/ollama.js')
@@ -151,5 +161,5 @@ describe('superfície dos módulos (transpilado)', () => {
 
     expect(ollama.name).toBe('ollama')
     expect(gemini.name).toBe('gemini')
-  })
+  }, PRAZO_SPAWN_MS)
 })

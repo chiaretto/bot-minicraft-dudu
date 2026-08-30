@@ -54,6 +54,7 @@ import {
 } from '../behaviors/actions/index.js'
 import { needsEscape } from '../domain/escape.js'
 import { chooseFood, shouldEat, shouldPlaceTorch } from '../domain/survival.js'
+import { groupItems, type GroupedItem } from '../domain/item-names.js'
 import { bestWeapon } from '../domain/mobs.js'
 import type { Intent } from '../domain/intent.js'
 import type { BotState, Vec3Like, WorldSnapshot } from '../domain/types.js'
@@ -131,6 +132,7 @@ export class CompanionBot {
   private defenseEnabled: boolean
   private readonly recentAttackers = new Set<number>()
   private speechListener: ((text: string) => void) | null = null
+  private inventoryListener: ((items: GroupedItem[]) => void) | null = null
   private threatTimer: ReturnType<typeof setInterval> | null = null
   private survivalTimer: ReturnType<typeof setInterval> | null = null
   /** Uma coisa de cada vez: comer trava o bot, e dois ticks juntos brigariam. */
@@ -288,6 +290,18 @@ export class CompanionBot {
    */
   onSpeech(listener: (text: string) => void): void {
     this.speechListener = listener
+  }
+
+  /**
+   * Registra quem quer acompanhar a mochila.
+   *
+   * Existe para o aplicativo de desktop mostrar o que ele carrega. Quem decide
+   * se vale a pena mandar (a mochila mudou?) é o canal — aqui a mochila é
+   * oferecida a cada passada.
+   * Ver: desktop_launcher_delta.md → "A mochila do bot na janela".
+   */
+  onInventory(listener: (items: GroupedItem[]) => void): void {
+    this.inventoryListener = listener
   }
 
   async start(): Promise<void> {
@@ -1377,7 +1391,11 @@ export class CompanionBot {
 
     // Fome e escuro mudam devagar; olhar para eles quatro vezes por segundo
     // seria desperdício. Laço próprio, com o passo da configuração.
+    //
+    // A mochila pega carona no mesmo passo: ela muda no mesmo ritmo das coisas
+    // lentas, e um terceiro relógio para ela seria relógio a mais.
     this.survivalTimer = setInterval(() => {
+      this.pushInventory()
       void this.tickSurvival()
     }, this.config.behavior.survivalTickMs)
   }
@@ -1437,6 +1455,14 @@ export class CompanionBot {
     } finally {
       this.survivalBusy = false
     }
+  }
+
+  /** Oferece a mochila a quem estiver acompanhando. */
+  private pushInventory(): void {
+    if (!this.inventoryListener) return
+    const bot = this.mc.raw
+    if (!bot) return
+    this.inventoryListener(groupItems(bot.inventory?.items() ?? []))
   }
 
   /** Luz onde o bot está. 0 é breu, 15 é sol a pino. */

@@ -9,7 +9,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { createLineSplitter, parseLine, type BotStatus } from './status'
+import { createLineSplitter, parseLine, type BotStatus, type ItemDaMochila } from './status'
 
 /**
  * Quanto tempo esperar o bot sair sozinho depois do pedido de parada.
@@ -30,6 +30,8 @@ export interface RunnerEvents {
   onLog(line: string): void
   /** O bot falou no chat. O supervisor decide se lê em voz alta. */
   onSpeech?(text: string): void
+  /** A mochila mudou. Só chega quando muda: o bot engole a repetição. */
+  onInventory?(itens: ItemDaMochila[]): void
   onExit(): void
   onSpawnError(message: string): void
 }
@@ -96,6 +98,7 @@ export class BotRunner {
         const parsed = parseLine(line)
         if (parsed.kind === 'status') this.events.onStatus(parsed.status)
         else if (parsed.kind === 'speech') this.events.onSpeech?.(parsed.text)
+        else if (parsed.kind === 'inventory') this.events.onInventory?.(parsed.itens)
         else this.events.onLog(parsed.text)
       }
     })

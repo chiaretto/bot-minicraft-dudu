@@ -20,11 +20,22 @@ export const STATUS_PREFIX = '@dudu-status'
  */
 export const SPEECH_PREFIX = '@dudu-fala'
 
+/** Prefixo da mochila. O terceiro do protocolo, repetido pelo mesmo motivo. */
+export const INVENTORY_PREFIX = '@dudu-mochila'
+
 const KNOWN: readonly BotStatus[] = ['ligando', 'procurando', 'no_mundo', 'desistiu']
+
+/** Um item da mochila, como chega na linha do protocolo. */
+export interface ItemDaMochila {
+  id: string
+  nome: string
+  qtd: number
+}
 
 export type ChildLine =
   | { kind: 'status'; status: BotStatus }
   | { kind: 'speech'; text: string }
+  | { kind: 'inventory'; itens: ItemDaMochila[] }
   | { kind: 'log'; text: string }
 
 /**
@@ -49,6 +60,21 @@ export function parseLine(line: string): ChildLine {
     return { kind: 'log', text: line }
   }
 
+  if (line.startsWith(`${INVENTORY_PREFIX} `)) {
+    const payload = line.slice(INVENTORY_PREFIX.length + 1)
+    try {
+      const parsed: unknown = JSON.parse(payload)
+      const itens = (parsed as { itens?: unknown } | null)?.itens
+      if (Array.isArray(itens)) {
+        // Mochila vazia é uma lista vazia, e é informação: "ele não tem nada".
+        return { kind: 'inventory', itens: itens.filter(ehItem) }
+      }
+    } catch {
+      // Mochila com JSON quebrado cai como log, igual às outras duas.
+    }
+    return { kind: 'log', text: line }
+  }
+
   if (!line.startsWith(`${STATUS_PREFIX} `)) return { kind: 'log', text: line }
 
   const payload = line.slice(STATUS_PREFIX.length + 1)
@@ -62,6 +88,17 @@ export function parseLine(line: string): ChildLine {
     // JSON quebrado não derruba o supervisor: cai como log, abaixo.
   }
   return { kind: 'log', text: line }
+}
+
+/** Item bem formado? Linha de versão nova com campo faltando não vira lixo. */
+function ehItem(raw: unknown): raw is ItemDaMochila {
+  const item = raw as { id?: unknown; nome?: unknown; qtd?: unknown } | null
+  return (
+    typeof item?.id === 'string' &&
+    typeof item.nome === 'string' &&
+    typeof item.qtd === 'number' &&
+    item.qtd > 0
+  )
 }
 
 /**

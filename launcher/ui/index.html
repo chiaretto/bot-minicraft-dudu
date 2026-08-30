@@ -232,6 +232,45 @@
         user-select: text;
       }
 
+      /* A mochila fica na tela da criança, e não em "Coisas de adulto":
+         espiar o que o amigo carrega é o tipo de coisa que ela quer ver.
+         Discreta de propósito — quem tem que saltar são os botões. */
+      #mochila {
+        margin-top: 14px;
+        display: none;
+      }
+
+      #mochila h2 {
+        margin: 0 0 6px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        opacity: 0.75;
+      }
+
+      #itens {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: center;
+      }
+
+      .item {
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.07);
+        font-size: 0.85rem;
+      }
+
+      .item b {
+        font-weight: 700;
+      }
+
+      #resto {
+        margin: 6px 0 0;
+        font-size: 0.8rem;
+        opacity: 0.6;
+      }
+
       #pasta {
         font-size: 11px;
         word-break: break-all;
@@ -257,6 +296,12 @@
         <span>Ler o que ele fala em voz alta</span>
       </label>
     </div>
+
+    <section id="mochila">
+      <h2>O que ele tá carregando</h2>
+      <div id="itens"></div>
+      <p id="resto"></p>
+    </section>
 
     <details>
       <summary>Coisas de adulto</summary>

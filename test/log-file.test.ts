@@ -21,6 +21,26 @@ function flush(stream: DailyFileStream): Promise<void> {
 }
 
 /**
+ * Espera o arquivo do dia ter conteúdo.
+ *
+ * Dormir um tanto fixo (50 ms) parecia bastar e falhava com a suíte inteira
+ * rodando junto: o `multistream` do pino escreve quando o laço de eventos
+ * deixa, e numa máquina ocupada isso demora mais. Espera ativa com prazo é
+ * rápida quando dá certo e honesta quando não dá.
+ */
+async function esperarConteudo(caminho: string, prazoMs = 3_000): Promise<string> {
+  const limite = Date.now() + prazoMs
+  while (Date.now() < limite) {
+    if (existsSync(caminho)) {
+      const conteudo = readFileSync(caminho, 'utf8')
+      if (conteudo.length > 0) return conteudo
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  return existsSync(caminho) ? readFileSync(caminho, 'utf8') : ''
+}
+
+/**
  * Log da aplicação em arquivo.
  *
  * O log ia só para o stdout: quando o bot sobe pelo aplicativo de desktop,
@@ -118,10 +138,7 @@ describe('o logger', () => {
     const logger = createLogger({ level: 'info', fileDir: dir })
     logger.info({ teste: true }, 'mensagem de teste')
 
-    // O multistream é assíncrono; uma volta no laço de eventos basta.
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
-    const conteudo = readFileSync(logFilePath(dir, new Date()), 'utf8')
+    const conteudo = await esperarConteudo(logFilePath(dir, new Date()))
     expect(conteudo).toContain('mensagem de teste')
   })
 
@@ -130,9 +147,7 @@ describe('o logger', () => {
     const logger = createLogger({ level: 'info', fileDir: dir })
     logger.info({ apiKey: 'segredo-que-nao-pode-vazar' }, 'conectando')
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
-    const conteudo = readFileSync(logFilePath(dir, new Date()), 'utf8')
+    const conteudo = await esperarConteudo(logFilePath(dir, new Date()))
     expect(conteudo).not.toContain('segredo-que-nao-pode-vazar')
     expect(conteudo).toContain('[REDACTED]')
     expect(REDACT_PATHS).toContain('apiKey')

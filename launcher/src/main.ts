@@ -14,6 +14,7 @@ import { phraseFor, buttonLabels, NOME_PADRAO, RECADO_SEM_BOT } from './phrases'
 import { readConfigFile, readPort, readPersonaName, savePort, isValidPort } from './config-port'
 import { resolveRepoRoot, readSavedRoot, saveRoot, looksLikeBotRepo } from './repo-path'
 import { prepareSpeech } from './voice'
+import { montarPainel } from './inventory'
 
 /** Teto de linhas de log guardadas. Sessão longa não pode comer a memória. */
 const MAX_LOG_LINES = 500
@@ -111,6 +112,11 @@ function ensureRunner(): BotRunner | null {
   runner = new BotRunner(repoRoot, {
     onStatus: (status) => apply({ type: 'status', status }),
     onLog: (line) => pushLog(line),
+    onInventory: (itens) => {
+      // A POLÍTICA de tela (quantos cabem, o que dizer do resto) mora no módulo
+      // puro; a janela só desenha o que chega pronto.
+      window?.webContents.send('mochila', montarPainel(itens))
+    },
     onSpeech: (text) => {
       // A POLÍTICA (o que vale a pena ouvir, cortado onde) mora no módulo puro;
       // a janela só fala, porque `speechSynthesis` é coisa de navegador e o
@@ -118,7 +124,12 @@ function ensureRunner(): BotRunner | null {
       const fala = prepareSpeech(text)
       if (fala) window?.webContents.send('fala', fala)
     },
-    onExit: () => apply({ type: 'saiu' }),
+    onExit: () => {
+      // Mochila de fantasma é pior que painel vazio: a criança pediria um bloco
+      // que ninguém está carregando.
+      window?.webContents.send('mochila', null)
+      apply({ type: 'saiu' })
+    },
     onSpawnError: (message) => {
       pushLog(`falha ao iniciar o bot: ${message}`)
       apply({ type: 'falhou_ao_subir' })
