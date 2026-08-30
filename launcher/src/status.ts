@@ -14,10 +14,17 @@ export type BotStatus = 'ligando' | 'procurando' | 'no_mundo' | 'desistiu'
 
 export const STATUS_PREFIX = '@dudu-status'
 
+/**
+ * Prefixo das falas do bot. O mesmo declarado em `src/app/status-channel.ts`,
+ * repetido aqui pelo mesmo motivo do outro: são processos separados.
+ */
+export const SPEECH_PREFIX = '@dudu-fala'
+
 const KNOWN: readonly BotStatus[] = ['ligando', 'procurando', 'no_mundo', 'desistiu']
 
 export type ChildLine =
   | { kind: 'status'; status: BotStatus }
+  | { kind: 'speech'; text: string }
   | { kind: 'log'; text: string }
 
 /**
@@ -28,6 +35,20 @@ export type ChildLine =
  * bot falando com launcher velho) também vira log, pelo mesmo motivo.
  */
 export function parseLine(line: string): ChildLine {
+  if (line.startsWith(`${SPEECH_PREFIX} `)) {
+    const payload = line.slice(SPEECH_PREFIX.length + 1)
+    try {
+      const parsed: unknown = JSON.parse(payload)
+      const text = (parsed as { text?: unknown } | null)?.text
+      if (typeof text === 'string' && text.trim().length > 0) {
+        return { kind: 'speech', text: text.trim() }
+      }
+    } catch {
+      // Fala com JSON quebrado cai como log, igual ao status.
+    }
+    return { kind: 'log', text: line }
+  }
+
   if (!line.startsWith(`${STATUS_PREFIX} `)) return { kind: 'log', text: line }
 
   const payload = line.slice(STATUS_PREFIX.length + 1)

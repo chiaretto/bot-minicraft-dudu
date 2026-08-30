@@ -162,6 +162,21 @@ npm run launcher:dev    # abre a janela a partir do código
 npm run launcher:test   # testes das partes puras
 ```
 
+### Ele lê em voz alta
+
+Com o aplicativo aberto, tudo o que o Dudu fala no chat sai **pela caixa de
+som**. Existe uma caixinha na tela para ligar e desligar, e ela vem **ligada**.
+
+Por que isso importa mais do que parece: uma criança de 7 anos lê devagar, e o
+chat do Minecraft rola rápido — um monstro, outro jogador, uma mensagem do jogo,
+e a fala do Dudu já subiu. Ouvir resolve isso na origem.
+
+Fala nova corta a anterior, de propósito: numa rodada de quente e frio ele fala
+a cada dois segundos, e uma fila comprida deixaria a voz meio minuto atrás do
+jogo.
+
+Pelo terminal (`npm run dev`) nada disso acontece — falar é coisa do aplicativo.
+
 ---
 
 ## IA: local, nuvem ou nenhuma

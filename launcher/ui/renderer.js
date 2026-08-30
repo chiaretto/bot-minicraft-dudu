@@ -17,6 +17,7 @@ const btEscolher = $('escolher')
 const recado = $('recado')
 const pasta = $('pasta')
 const log = $('log')
+const caixaVoz = $('voz')
 
 /** Teto de linhas na tela, igual ao do processo principal. */
 const MAX_LINHAS = 500
@@ -100,6 +101,60 @@ btEscolher.addEventListener('click', async () => {
     dizer('Pasta do bot atualizada.', 'ok')
     void carregarPorta()
   }
+})
+
+// ── Voz ──────────────────────────────────────────────────────────────────────
+/*
+  A dona do bot tem 7 anos e lê devagar; o chat do Minecraft rola rápido. Ouvir
+  é o que faz ela acompanhar a conversa.
+
+  A POLÍTICA (o que vale a pena ouvir, cortado onde, quantas falas cabem na
+  fila) mora no módulo puro `src/voice.ts`, testada sem abrir janela. Aqui só
+  sobra o que precisa de navegador: falar.
+*/
+
+const CHAVE_VOZ = 'dudu:voz'
+
+function vozLigada() {
+  try {
+    return localStorage.getItem(CHAVE_VOZ) !== 'off'
+  } catch {
+    // Sem armazenamento, o padrão é ligado: é para a criança que a voz existe.
+    return true
+  }
+}
+
+caixaVoz.checked = vozLigada()
+
+caixaVoz.addEventListener('change', () => {
+  try {
+    localStorage.setItem(CHAVE_VOZ, caixaVoz.checked ? 'on' : 'off')
+  } catch {
+    // Não deu para lembrar a escolha: ela vale nesta sessão mesmo assim.
+  }
+  if (!caixaVoz.checked) window.speechSynthesis?.cancel()
+})
+
+/** A voz em português mais parecida com gente, se o sistema tiver alguma. */
+function vozPtBr() {
+  const vozes = window.speechSynthesis?.getVoices?.() || []
+  return vozes.find((v) => v.lang === 'pt-BR') || vozes.find((v) => v.lang?.startsWith('pt')) || null
+}
+
+window.dudu.aoReceberFala((texto) => {
+  if (!caixaVoz.checked || !window.speechSynthesis) return
+
+  // Fala nova cancela a anterior: numa rodada de quente e frio o bot fala a
+  // cada dois segundos, e uma fila comprida faria a voz ficar meio minuto
+  // atrás do jogo. O que importa é o que ele acabou de dizer.
+  window.speechSynthesis.cancel()
+
+  const fala = new SpeechSynthesisUtterance(texto)
+  fala.lang = 'pt-BR'
+  fala.rate = 1
+  const voz = vozPtBr()
+  if (voz) fala.voice = voz
+  window.speechSynthesis.speak(fala)
 })
 
 // ── Partida ──────────────────────────────────────────────────────────────────

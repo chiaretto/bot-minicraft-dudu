@@ -28,6 +28,8 @@ export class BotNotFoundError extends Error {
 export interface RunnerEvents {
   onStatus(status: BotStatus): void
   onLog(line: string): void
+  /** O bot falou no chat. O supervisor decide se lê em voz alta. */
+  onSpeech?(text: string): void
   onExit(): void
   onSpawnError(message: string): void
 }
@@ -93,6 +95,7 @@ export class BotRunner {
       for (const line of splitOut(chunk)) {
         const parsed = parseLine(line)
         if (parsed.kind === 'status') this.events.onStatus(parsed.status)
+        else if (parsed.kind === 'speech') this.events.onSpeech?.(parsed.text)
         else this.events.onLog(parsed.text)
       }
     })

@@ -1,10 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-  createStatusChannel,
-  formatStatus,
-  listenForStop,
+  SPEECH_PREFIX,
   STATUS_PREFIX,
+  createStatusChannel,
+  formatSpeech,
+  formatStatus,
   isLauncherMode,
+  listenForStop,
   type StopSource,
 } from '../src/app/status-channel.js'
 
@@ -162,5 +164,64 @@ describe('canal de parada', () => {
     input.send('parar\nparar\n')
 
     expect(encerramentos).toBe(1)
+  })
+})
+
+/**
+ * O canal de fala: o supervisor lê em voz alta o que o bot diz no chat.
+ * Ver: desktop_launcher_delta.md → "Ler as falas em voz alta".
+ */
+describe('canal de fala', () => {
+  it('a linha carrega o texto, em JSON', () => {
+    expect(formatSpeech('Tô indo!')).toBe(`${SPEECH_PREFIX} {"text":"Tô indo!"}`)
+  })
+
+  it('sem supervisor, ninguém fala nada no stdout', () => {
+    const linhas: string[] = []
+    const canal = createStatusChannel({ env: {}, write: (l) => linhas.push(l) })
+    canal.speak('Tô indo!')
+    expect(linhas).toEqual([])
+  })
+
+  it('com supervisor, cada fala vira uma linha', () => {
+    const linhas: string[] = []
+    const canal = createStatusChannel({
+      env: { DUDU_LAUNCHER: '1' },
+      write: (l) => linhas.push(l),
+    })
+    canal.speak('Deixa comigo!')
+    canal.speak('Peguei 8 de madeira!')
+    expect(linhas).toHaveLength(2)
+    expect(linhas[0]).toContain('Deixa comigo!')
+  })
+
+  /**
+   * Diferente do status, repetição AQUI é de propósito: o bot repete "quente!"
+   * numa rodada de quente e frio, e a criança precisa ouvir cada uma.
+   */
+  it('fala repetida sai de novo', () => {
+    const linhas: string[] = []
+    const canal = createStatusChannel({
+      env: { DUDU_LAUNCHER: '1' },
+      write: (l) => linhas.push(l),
+    })
+    canal.speak('Tá esquentando!')
+    canal.speak('Tá esquentando!')
+    expect(linhas).toHaveLength(2)
+  })
+
+  it('fala vazia não vira linha', () => {
+    const linhas: string[] = []
+    const canal = createStatusChannel({
+      env: { DUDU_LAUNCHER: '1' },
+      write: (l) => linhas.push(l),
+    })
+    canal.speak('   ')
+    expect(linhas).toEqual([])
+  })
+
+  it('o prefixo da fala é diferente do de status', () => {
+    // Um canal só faria o supervisor ter que adivinhar qual é qual.
+    expect(SPEECH_PREFIX).not.toBe(STATUS_PREFIX)
   })
 })

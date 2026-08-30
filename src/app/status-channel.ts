@@ -36,6 +36,19 @@ export type BotStatus = 'ligando' | 'procurando' | 'no_mundo' | 'desistiu'
  */
 export const STATUS_PREFIX = '@dudu-status'
 
+/**
+ * Prefixo das falas do bot, para o supervisor poder LER EM VOZ ALTA.
+ *
+ * Separado do status de propósito: status é ciclo de vida e muda meia dúzia de
+ * vezes por sessão; fala acontece o tempo todo. Um canal só faria o supervisor
+ * ter que adivinhar qual é qual.
+ *
+ * A dona do bot tem 7 anos e lê devagar, e o chat do Minecraft rola rápido:
+ * ouvir é o que faz ela acompanhar a conversa.
+ * Ver: desktop_launcher_delta.md → "Ler as falas em voz alta".
+ */
+export const SPEECH_PREFIX = '@dudu-fala'
+
 /** Linha do `stdin` que vale por `SIGINT`. */
 export const STOP_COMMAND = 'parar'
 
@@ -51,12 +64,19 @@ export function formatStatus(status: BotStatus, at: Date = new Date()): string {
   return `${STATUS_PREFIX} ${JSON.stringify({ status, at: at.toISOString() })}`
 }
 
+/** Monta a linha de fala. Pura, como a de status. */
+export function formatSpeech(text: string): string {
+  return `${SPEECH_PREFIX} ${JSON.stringify({ text })}`
+}
+
 export interface StatusChannel {
   emit(status: BotStatus): void
+  /** Anuncia o que o bot acabou de falar no chat. */
+  speak(text: string): void
 }
 
 /** Canal mudo, para quando ninguém está supervisionando. */
-const SILENT: StatusChannel = { emit: () => {} }
+const SILENT: StatusChannel = { emit: () => {}, speak: () => {} }
 
 export interface StatusChannelOptions {
   env?: NodeJS.ProcessEnv
@@ -76,6 +96,12 @@ export function createStatusChannel(options: StatusChannelOptions = {}): StatusC
       if (status === last) return
       last = status
       write(formatStatus(status))
+    },
+    speak(text) {
+      const limpo = text.trim()
+      // Fala vazia não é fala. E repetição É: o bot repete "quente!" de
+      // propósito, e a criança precisa ouvir cada uma.
+      if (limpo) write(formatSpeech(limpo))
     },
   }
 }

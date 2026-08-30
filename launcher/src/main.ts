@@ -13,6 +13,7 @@ import { next, canStart, canStop, canRestart, INITIAL, type UiState } from './su
 import { phraseFor, buttonLabels, NOME_PADRAO, RECADO_SEM_BOT } from './phrases'
 import { readConfigFile, readPort, readPersonaName, savePort, isValidPort } from './config-port'
 import { resolveRepoRoot, readSavedRoot, saveRoot, looksLikeBotRepo } from './repo-path'
+import { prepareSpeech } from './voice'
 
 /** Teto de linhas de log guardadas. Sessão longa não pode comer a memória. */
 const MAX_LOG_LINES = 500
@@ -110,6 +111,13 @@ function ensureRunner(): BotRunner | null {
   runner = new BotRunner(repoRoot, {
     onStatus: (status) => apply({ type: 'status', status }),
     onLog: (line) => pushLog(line),
+    onSpeech: (text) => {
+      // A POLÍTICA (o que vale a pena ouvir, cortado onde) mora no módulo puro;
+      // a janela só fala, porque `speechSynthesis` é coisa de navegador e o
+      // processo principal não tem um.
+      const fala = prepareSpeech(text)
+      if (fala) window?.webContents.send('fala', fala)
+    },
     onExit: () => apply({ type: 'saiu' }),
     onSpawnError: (message) => {
       pushLog(`falha ao iniciar o bot: ${message}`)

@@ -216,7 +216,7 @@ distância, que o snapshot já dá.
 
 **Custo.** Médio.
 
-### 14. Voz no launcher
+### 14. ~~Voz no launcher~~ ✅ (2026-08-30, `add-launcher-voice`)
 
 A dona do bot tem 7 anos e lê devagar; o chat do Minecraft rola rápido. Ler as
 falas do bot em voz alta é a mudança de maior impacto do projeto inteiro.

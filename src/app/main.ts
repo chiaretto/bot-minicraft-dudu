@@ -52,6 +52,8 @@ async function main(): Promise<void> {
   }
 
   bot.onLifecycle((state) => status.emit(state))
+  // O supervisor lê as falas em voz alta quando o adulto deixa.
+  bot.onSpeech((text) => status.speak(text))
 
   // Encerramento gracioso: desconecta limpo e fecha o arquivo do dia.
   let shuttingDown = false

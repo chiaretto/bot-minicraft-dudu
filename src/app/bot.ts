@@ -130,6 +130,7 @@ export class CompanionBot {
 
   private defenseEnabled: boolean
   private readonly recentAttackers = new Set<number>()
+  private speechListener: ((text: string) => void) | null = null
   private threatTimer: ReturnType<typeof setInterval> | null = null
   private survivalTimer: ReturnType<typeof setInterval> | null = null
   /** Uma coisa de cada vez: comer trava o bot, e dois ticks juntos brigariam. */
@@ -278,6 +279,17 @@ export class CompanionBot {
     this.lifecycle = listener
   }
 
+  /**
+   * Registra quem quer ouvir o que o bot fala.
+   *
+   * Existe para o aplicativo de desktop poder LER EM VOZ ALTA: a dona do bot
+   * tem 7 anos e lê devagar, e o chat do Minecraft rola rápido.
+   * Ver: desktop_launcher_delta.md → "Ler as falas em voz alta".
+   */
+  onSpeech(listener: (text: string) => void): void {
+    this.speechListener = listener
+  }
+
   async start(): Promise<void> {
     this.memory.init()
 
@@ -416,6 +428,7 @@ export class CompanionBot {
     provider?: string,
   ): void {
     this.mc.say(text)
+    this.speechListener?.(text)
 
     // Ponto único de saída de fala: tudo que o bot diz passa por aqui, venha do
     // repertório, da IA, de uma ação ou de um evento espontâneo. Por isso o log

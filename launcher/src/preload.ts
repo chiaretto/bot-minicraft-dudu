@@ -34,4 +34,7 @@ contextBridge.exposeInMainWorld('dudu', {
   aoReceberLog: (fn: (linha: string) => void) => {
     ipcRenderer.on('log', (_event, linha: string) => fn(linha))
   },
+  aoReceberFala: (fn: (texto: string) => void) => {
+    ipcRenderer.on('fala', (_event, texto: string) => fn(texto))
+  },
 })
