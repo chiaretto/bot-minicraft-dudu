@@ -1,5 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { MAX_CHARS, MAX_QUEUE, enqueueSpeech, prepareSpeech } from '../src/voice'
+import {
+  AJUSTES_PADRAO,
+  FALA_DE_TESTE,
+  LIMITES,
+  MAX_CHARS,
+  MAX_QUEUE,
+  enqueueSpeech,
+  escolherVoz,
+  normalizarAjustes,
+  prepareSpeech,
+  vozesEmPortugues,
+} from '../src/voice'
 import { parseLine, SPEECH_PREFIX } from '../src/status'
 
 /**
@@ -105,5 +116,91 @@ describe('a linha de fala no stdout', () => {
       kind: 'status',
       status: 'no_mundo',
     })
+  })
+})
+
+/**
+ * Escolher a voz, e ajustar velocidade e tom.
+ * Ver: desktop_launcher_delta.md → "Escolher a voz do bot".
+ */
+describe('quais vozes servem', () => {
+  const vozes = [
+    { name: 'Microsoft David', lang: 'en-US' },
+    { name: 'Microsoft Maria', lang: 'pt-BR' },
+    { name: 'Microsoft Helia', lang: 'pt-PT' },
+    { name: 'Microsoft Daniel', lang: 'pt-BR' },
+  ]
+
+  it('só português: voz em inglês lendo "tá esquentando" não serve', () => {
+    expect(vozesEmPortugues(vozes).map((v) => v.name)).not.toContain('Microsoft David')
+  })
+
+  it('pt-BR antes de pt-PT, porque é o português dela', () => {
+    const ordem = vozesEmPortugues(vozes).map((v) => v.lang)
+    expect(ordem[0]).toBe('pt-BR')
+    expect(ordem[ordem.length - 1]).toBe('pt-PT')
+  })
+
+  it('sistema sem voz em português devolve lista vazia', () => {
+    expect(vozesEmPortugues([{ name: 'David', lang: 'en-US' }])).toEqual([])
+  })
+})
+
+describe('qual voz usar', () => {
+  const vozes = [
+    { name: 'Maria', lang: 'pt-BR' },
+    { name: 'Daniel', lang: 'pt-BR' },
+  ]
+
+  it('a escolhida, quando ela existe', () => {
+    expect(escolherVoz(vozes, 'Daniel')?.name).toBe('Daniel')
+  })
+
+  it('sem escolha, a primeira em português', () => {
+    expect(escolherVoz(vozes, null)?.name).toBe('Daniel')
+  })
+
+  /**
+   * Voz desinstalada, ou o mesmo perfil noutro computador. Isso não pode calar
+   * o bot: ele volta para a melhor disponível, em silêncio.
+   */
+  it('voz salva que sumiu do sistema não cala o bot', () => {
+    expect(escolherVoz(vozes, 'Voz Que Nao Existe')?.name).toBe('Daniel')
+  })
+
+  it('sem voz nenhuma em português, devolve null e o sistema decide', () => {
+    expect(escolherVoz([{ name: 'David', lang: 'en-US' }], null)).toBeNull()
+  })
+})
+
+describe('velocidade e tom', () => {
+  it('o padrão é o que já era — mudar sozinho seria surpresa', () => {
+    expect(AJUSTES_PADRAO).toEqual({ rate: 1, pitch: 1 })
+    expect(normalizarAjustes(null)).toEqual(AJUSTES_PADRAO)
+  })
+
+  it('guarda o que foi escolhido', () => {
+    expect(normalizarAjustes({ rate: 0.9, pitch: 1.2 })).toEqual({ rate: 0.9, pitch: 1.2 })
+  })
+
+  /**
+   * Valor fora da faixa faz o `speechSynthesis` ignorar a fala INTEIRA em vez
+   * de reclamar: o sintoma seria o bot emudecer sem motivo aparente.
+   */
+  it('valor absurdo é trazido para dentro da faixa', () => {
+    expect(normalizarAjustes({ rate: 99, pitch: -5 })).toEqual({
+      rate: LIMITES.rate.max,
+      pitch: LIMITES.pitch.min,
+    })
+  })
+
+  it('lixo vindo do armazenamento vira o padrão', () => {
+    expect(normalizarAjustes({ rate: NaN, pitch: undefined })).toEqual(AJUSTES_PADRAO)
+    expect(normalizarAjustes({ rate: 'rápido' } as never)).toEqual(AJUSTES_PADRAO)
+  })
+
+  it('a fala de teste é curta e do jeito que ele fala', () => {
+    expect(FALA_DE_TESTE.length).toBeLessThan(60)
+    expect(prepareSpeech(FALA_DE_TESTE)).toBe(FALA_DE_TESTE)
   })
 })

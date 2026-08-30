@@ -191,6 +191,14 @@ Fala nova corta a anterior, de propósito: numa rodada de quente e frio ele fala
 a cada dois segundos, e uma fila comprida deixaria a voz meio minuto atrás do
 jogo.
 
+**Para trocar a voz**, abra "Coisas de adulto": tem a lista das vozes em
+português instaladas no Windows, mais velocidade e tom, e um botão **Ouvir** para
+testar antes de decidir. A escolha fica guardada.
+
+Se não aparecer nenhuma voz na lista, o Windows não tem voz em português
+instalada — dá para instalar em **Configurações → Hora e Idioma → Fala**. Sem
+nenhuma, ele ainda fala, com a voz padrão do sistema.
+
 Pelo terminal (`npm run dev`) nada disso acontece — falar é coisa do aplicativo.
 
 ---

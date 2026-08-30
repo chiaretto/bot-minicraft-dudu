@@ -271,6 +271,39 @@
         opacity: 0.6;
       }
 
+      /* Controles da voz: ficam em "Coisas de adulto" porque quem ajusta
+         timbre e velocidade é quem instalou o bot, não a criança. A caixa de
+         ligar/desligar continua lá em cima, ao alcance dela. */
+      .campo-voz {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-size: 12px;
+      }
+
+      .campo-voz label {
+        min-width: 82px;
+        opacity: 0.75;
+      }
+
+      .campo-voz select {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .campo-voz input[type='range'] {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .campo-voz output {
+        min-width: 28px;
+        text-align: right;
+        opacity: 0.75;
+        font-variant-numeric: tabular-nums;
+      }
+
       #pasta {
         font-size: 11px;
         word-break: break-all;
@@ -311,6 +344,22 @@
           <input id="porta" type="number" min="1" max="65535" step="1" />
           <button id="salvar-porta" class="miudo" type="button">Salvar</button>
         </div>
+        <div class="campo-voz">
+          <label for="lista-vozes">Voz</label>
+          <select id="lista-vozes"></select>
+          <button id="testar-voz" class="miudo" type="button">Ouvir</button>
+        </div>
+        <div class="campo-voz">
+          <label for="velocidade">Velocidade</label>
+          <input id="velocidade" type="range" min="0.5" max="1.5" step="0.05" />
+          <output id="velocidade-valor"></output>
+        </div>
+        <div class="campo-voz">
+          <label for="tom">Tom</label>
+          <input id="tom" type="range" min="0.5" max="2" step="0.05" />
+          <output id="tom-valor"></output>
+        </div>
+
         <p id="recado"></p>
         <div class="campo">
           <span id="pasta"></span>

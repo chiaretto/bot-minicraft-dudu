@@ -8,6 +8,16 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron'
+import {
+  escolherVoz,
+  normalizarAjustes,
+  vozesEmPortugues,
+  AJUSTES_PADRAO,
+  FALA_DE_TESTE,
+  LIMITES,
+  type AjustesDeVoz,
+  type VozDisponivel,
+} from './voice'
 
 export interface EstadoDaJanela {
   state: string
@@ -39,5 +49,21 @@ contextBridge.exposeInMainWorld('dudu', {
   },
   aoReceberMochila: (fn: (painel: unknown) => void) => {
     ipcRenderer.on('mochila', (_event, painel: unknown) => fn(painel))
+  },
+  /**
+   * A política da voz, emprestada à janela.
+   *
+   * Quem enxerga as vozes do sistema é o renderer; quem carrega o módulo puro é
+   * a ponte. Sem isto, a escolha teria que ser duplicada em `renderer.js` —
+   * duas listas para manter, que é justamente o que o projeto evita.
+   */
+  voz: {
+    emPortugues: (vozes: VozDisponivel[]) => vozesEmPortugues(vozes),
+    escolher: (vozes: VozDisponivel[], nomeSalvo: string | null) =>
+      escolherVoz(vozes, nomeSalvo),
+    normalizar: (bruto: Partial<AjustesDeVoz> | null) => normalizarAjustes(bruto),
+    padrao: AJUSTES_PADRAO,
+    limites: LIMITES,
+    falaDeTeste: FALA_DE_TESTE,
   },
 })

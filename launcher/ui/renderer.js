@@ -19,6 +19,12 @@ const pasta = $('pasta')
 const log = $('log')
 const caixaVoz = $('voz')
 const mochila = $('mochila')
+const listaVozes = $('lista-vozes')
+const btTestarVoz = $('testar-voz')
+const campoVelocidade = $('velocidade')
+const campoTom = $('tom')
+const valorVelocidade = $('velocidade-valor')
+const valorTom = $('tom-valor')
 const itens = $('itens')
 const resto = $('resto')
 
@@ -178,26 +184,136 @@ caixaVoz.addEventListener('change', () => {
   if (!caixaVoz.checked) window.speechSynthesis?.cancel()
 })
 
-/** A voz em português mais parecida com gente, se o sistema tiver alguma. */
-function vozPtBr() {
-  const vozes = window.speechSynthesis?.getVoices?.() || []
-  return vozes.find((v) => v.lang === 'pt-BR') || vozes.find((v) => v.lang?.startsWith('pt')) || null
+/*
+  Escolha da voz e ajuste de velocidade e tom.
+
+  A POLÍTICA (quais vozes servem, em que ordem, o que fazer quando a salva
+  sumiu, o que é valor aceitável) vem de `src/voice.ts` pela ponte: só o
+  renderer enxerga as vozes do sistema, e só a ponte carrega o módulo puro.
+  Aqui sobra escolher na lista e falar.
+*/
+
+const CHAVE_VOZ_NOME = 'dudu:voz-nome'
+const CHAVE_VOZ_AJUSTES = 'dudu:voz-ajustes'
+
+function lerGuardado(chave, padrao) {
+  try {
+    const cru = localStorage.getItem(chave)
+    return cru === null ? padrao : JSON.parse(cru)
+  } catch {
+    return padrao
+  }
 }
 
-window.dudu.aoReceberFala((texto) => {
-  if (!caixaVoz.checked || !window.speechSynthesis) return
+function guardar(chave, valor) {
+  try {
+    localStorage.setItem(chave, JSON.stringify(valor))
+  } catch {
+    // Sem armazenamento, a escolha vale nesta sessão mesmo assim.
+  }
+}
 
-  // Fala nova cancela a anterior: numa rodada de quente e frio o bot fala a
-  // cada dois segundos, e uma fila comprida faria a voz ficar meio minuto
-  // atrás do jogo. O que importa é o que ele acabou de dizer.
+let nomeDaVoz = lerGuardado(CHAVE_VOZ_NOME, null)
+let ajustes = window.dudu.voz.normalizar(lerGuardado(CHAVE_VOZ_AJUSTES, null))
+
+/** As vozes do sistema, no formato simples que a política entende. */
+function vozesDoSistema() {
+  const vozes = window.speechSynthesis?.getVoices?.() || []
+  return vozes.map((v) => ({ name: v.name, lang: v.lang }))
+}
+
+/** A voz de verdade do navegador, a partir do nome que a política escolheu. */
+function vozAtual() {
+  const escolhida = window.dudu.voz.escolher(vozesDoSistema(), nomeDaVoz)
+  if (!escolhida) return null
+  return (window.speechSynthesis?.getVoices?.() || []).find((v) => v.name === escolhida.name) || null
+}
+
+function desenharListaDeVozes() {
+  const candidatas = window.dudu.voz.emPortugues(vozesDoSistema())
+  const escolhida = window.dudu.voz.escolher(vozesDoSistema(), nomeDaVoz)
+
+  listaVozes.replaceChildren()
+
+  if (candidatas.length === 0) {
+    // Sem voz em português o bot ainda fala, com a voz padrão do sistema —
+    // some com a lista, não com a voz.
+    const vazio = document.createElement('option')
+    vazio.textContent = 'nenhuma voz em português instalada'
+    listaVozes.append(vazio)
+    listaVozes.disabled = true
+    return
+  }
+
+  listaVozes.disabled = false
+  for (const voz of candidatas) {
+    const item = document.createElement('option')
+    item.value = voz.name
+    item.textContent = `${voz.name} (${voz.lang})`
+    item.selected = escolhida !== null && voz.name === escolhida.name
+    listaVozes.append(item)
+  }
+}
+
+function desenharAjustes() {
+  campoVelocidade.value = String(ajustes.rate)
+  campoTom.value = String(ajustes.pitch)
+  valorVelocidade.textContent = ajustes.rate.toFixed(2)
+  valorTom.textContent = ajustes.pitch.toFixed(2)
+}
+
+/** Fala agora, com a voz e os ajustes de agora. */
+function falar(texto) {
+  if (!window.speechSynthesis) return
   window.speechSynthesis.cancel()
 
   const fala = new SpeechSynthesisUtterance(texto)
   fala.lang = 'pt-BR'
-  fala.rate = 1
-  const voz = vozPtBr()
+  fala.rate = ajustes.rate
+  fala.pitch = ajustes.pitch
+  const voz = vozAtual()
   if (voz) fala.voice = voz
   window.speechSynthesis.speak(fala)
+}
+
+listaVozes.addEventListener('change', () => {
+  nomeDaVoz = listaVozes.value
+  guardar(CHAVE_VOZ_NOME, nomeDaVoz)
+  // Trocar a voz e ouvir na hora é o que faz a escolha ter sentido: nome de
+  // voz do Windows não diz nada sobre como ela soa.
+  falar(window.dudu.voz.falaDeTeste)
+})
+
+for (const [campo, chave, saida] of [
+  [campoVelocidade, 'rate', valorVelocidade],
+  [campoTom, 'pitch', valorTom],
+]) {
+  campo.addEventListener('input', () => {
+    ajustes = window.dudu.voz.normalizar({ ...ajustes, [chave]: Number(campo.value) })
+    saida.textContent = ajustes[chave].toFixed(2)
+    guardar(CHAVE_VOZ_AJUSTES, ajustes)
+  })
+  // Só fala quando o dedo sai do controle: falar a cada pixel arrastado
+  // cortaria a própria fala o tempo todo.
+  campo.addEventListener('change', () => falar(window.dudu.voz.falaDeTeste))
+}
+
+btTestarVoz.addEventListener('click', () => falar(window.dudu.voz.falaDeTeste))
+
+// A lista chega vazia na primeira chamada em quase todo Chromium: ela é
+// preenchida depois, e o evento é o único aviso de que ficou pronta.
+if (window.speechSynthesis) {
+  window.speechSynthesis.addEventListener('voiceschanged', desenharListaDeVozes)
+}
+desenharListaDeVozes()
+desenharAjustes()
+
+window.dudu.aoReceberFala((texto) => {
+  if (!caixaVoz.checked) return
+  // Fala nova cancela a anterior: numa rodada de quente e frio o bot fala a
+  // cada dois segundos, e uma fila comprida faria a voz ficar meio minuto
+  // atrás do jogo. O que importa é o que ele acabou de dizer.
+  falar(texto)
 })
 
 // ── Partida ──────────────────────────────────────────────────────────────────
