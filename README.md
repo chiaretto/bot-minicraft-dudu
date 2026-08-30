@@ -312,6 +312,7 @@ llm:
 | `dudu, me leva onde eu morri`        | volta ao lugar da sua última morte |
 | `dudu, esconde esconde`              | pergunta quem se esconde           |
 | `dudu, pega pega`                    | pergunta quem corre                |
+| `dudu, quente e frio`                | esconde um lugar e te guia         |
 | `dudu, se esconde`                   | esconde-esconde: ele se esconde    |
 | `dudu, eu vou me esconder` / `conta até 10` | esconde-esconde: ele procura |
 | `dudu, me pega` / `corre atrás de mim` | pega-pega: ele corre atrás       |
@@ -487,12 +488,43 @@ Ajuste em `behavior`: `buildAllowlist` (o que pode virar parede),
 
 ## Brincadeiras
 
-O bot sabe **duas**: esconde-esconde e pega-pega. Nos dois papéis de cada uma, e
-sem precisar de IA nenhuma ligada.
+O bot sabe **três**: esconde-esconde, pega-pega e quente e frio. Nos dois papéis
+de cada uma das duas primeiras, e sem precisar de IA nenhuma ligada.
 
 Fale `dudu, vamos brincar` sem dizer qual e ele **pergunta** qual você quer — com
 duas brincadeiras, escolher por você seria decidir no seu lugar. Responder
 `esconde esconde` ou `pega pega` leva à pergunta de papel, logo abaixo.
+
+---
+
+## Quente e frio
+
+Ele escolhe um lugar secreto perto de você e vai dizendo se você está chegando
+perto:
+
+```
+Você:  dudu, quente e frio
+Dudu:  Escondi um lugar secreto aqui pertinho! Anda que eu falo quente ou frio.
+Dudu:  Frio! Tá indo pro lado errado.
+Dudu:  Tá esquentando!
+Dudu:  PELANDO! Tá quase em cima!
+Dudu:  ACHOU! Era bem aí! Você é bom nisso!
+```
+
+**Ele não pergunta quem faz o quê**: neste jogo quem esconde é sempre ele, e uma
+pergunta de uma resposta só é pior do que nenhuma.
+
+Três coisas pensadas para uma criança de 7 anos:
+
+- **"Morno" existe** porque criança para de andar para pensar. Dizer "frio"
+  nessa hora seria mentira: ela não se afastou, só ficou parada.
+- **"Pelando" é sobre distância**, não sobre movimento: perto é perto mesmo que
+  ela tenha acabado de dar um passo para trás.
+- **Ele não repete a mesma palavra toda vez.** Mudança de temperatura sempre
+  sai; repetição sai a cada `repeatEvery` passos, só para ela saber que ele
+  continua ali.
+
+Desistiu ou acabou o tempo? Ele **te leva até o lugar** para mostrar onde era.
 
 ---
 

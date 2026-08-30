@@ -211,6 +211,39 @@ export const tagSchema = z
     }
   })
 
+/**
+ * Quente e frio.
+ *
+ * O jogo mais barato do registro em movimento — ninguém persegue ninguém — e o
+ * mais generoso em conversa: o bot fala a cada passo.
+ */
+export const hotColdSchema = z
+  .object({
+    /** O tesouro nunca fica colado no jogador. */
+    hideMinDistance: z.number().positive().default(8),
+    /** Nem tão longe que a brincadeira vire caminhada. */
+    hideMaxDistance: z.number().positive().default(30),
+    /** Pontos avaliados ao escolher onde esconder. */
+    candidateSamples: z.number().int().positive().default(24),
+    /** Chegou a esta distância, achou. */
+    foundRadius: z.number().positive().default(3),
+    /** De quanto em quanto tempo ele fala a temperatura. */
+    tickMs: z.number().int().positive().default(2_000),
+    /**
+     * De quantos em quantos passos ele repete a MESMA temperatura.
+     *
+     * Repetir "frio" oito vezes seguidas enche o chat e a criança para de ler.
+     * Mudança sempre sai; repetição sai de vez em quando, para ela saber que o
+     * bot continua ali.
+     */
+    repeatEvery: z.number().int().positive().default(3),
+    /** Rede de segurança: rodada que não acaba sozinha acaba aqui. */
+    roundTimeoutMs: z.number().int().positive().default(180_000),
+  })
+  .default({})
+
+export type HotColdConfig = z.infer<typeof hotColdSchema>
+
 export const gamesSchema = z.object({
   enabled: z.boolean().default(true),
   /**
@@ -220,6 +253,7 @@ export const gamesSchema = z.object({
   roleQuestionTimeoutMs: z.number().int().positive().default(45_000),
   hideAndSeek: hideAndSeekSchema.default({}),
   tag: tagSchema.default({}),
+  hotCold: hotColdSchema.default({}),
 })
 
 export const ollamaSchema = z.object({

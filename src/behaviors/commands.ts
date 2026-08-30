@@ -433,6 +433,23 @@ const COMMANDS: CommandPattern[] = [
     ],
   },
   // ── Brincadeiras ────────────────────────────────────────────────────────
+  // 2026-08-30: quente e frio, o terceiro jogo. Vem antes dos outros convites
+  // porque "quente e frio" não colide com nada, e sem papel de propósito: o
+  // jogo tem um papel só e a pergunta nunca é feita.
+  {
+    intent: { type: 'PLAY_GAME', params: { game: 'quente_frio' } },
+    patterns: [
+      /^quente e frio$/,
+      /^quente ou frio$/,
+      /^quente frio$/,
+      /^vamos brincar de quente e frio$/,
+      /^brincar de quente e frio$/,
+      /^vamos de quente e frio$/,
+      /^bora quente e frio$/,
+      /^esconde alguma coisa$/,
+      /^esconde um tesouro$/,
+    ],
+  },
   // Vêm antes do convite genérico: "eu vou me esconder" também casaria com
   // "vou me esconder" de um convite qualquer, e o papel ficaria trocado.
   {
@@ -647,6 +664,9 @@ export function isGiveUp(text: string, botName: string): boolean {
  * Ver: bot_games_delta.md → "Papel ausente é pergunta, não padrão".
  */
 const ROLE_ANSWERS: Record<GameName, Record<RoleChoice, RegExp[]>> = {
+  // Quente e frio tem um papel só e nunca faz a pergunta — as listas ficam
+  // vazias porque o tipo cobra a chave, não porque exista resposta a dar.
+  quente_frio: { jogador: [], bot: [] },
   esconde_esconde: {
     jogador: [
       /^eu$/,

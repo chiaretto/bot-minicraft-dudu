@@ -26,7 +26,7 @@ import {
   type GameSession,
   type GameWorld,
 } from '../behaviors/games/index.js'
-import type { GameName, GameRole } from '../domain/games.js'
+import { ROLES_BY_GAME, type GameName, type GameRole } from '../domain/games.js'
 import { isGiveUp, parseCommand, parseRoleAnswer } from '../behaviors/commands.js'
 import {
   blockSourceFrom,
@@ -86,10 +86,16 @@ const REFUSAL_ENTRY: Record<AttackRefusal, string> = {
   'longe-demais': 'ataque_longe',
 }
 
-/** Entrada do repertório que faz a pergunta de papel de cada jogo. */
-const ROLE_QUESTION_ENTRY: Record<GameName, string> = {
+/**
+ * Entrada do repertório que faz a pergunta de papel de cada jogo.
+ *
+ * `null` para jogo de um papel só: não há o que perguntar, e uma pergunta de
+ * uma resposta só é pior do que nenhuma.
+ */
+const ROLE_QUESTION_ENTRY: Record<GameName, string | null> = {
   esconde_esconde: 'jogo_quem_esconde',
   pega_pega: 'jogo_quem_corre',
+  quente_frio: null,
 }
 
 /**
@@ -810,17 +816,26 @@ export class CompanionBot {
     }
 
     pending.reasked = true
-    this.sayGame(ROLE_QUESTION_ENTRY[pending.game])
+    const pergunta = ROLE_QUESTION_ENTRY[pending.game]
+    if (pergunta) this.sayGame(pergunta)
   }
 
-  /** Pergunta quem faz o quê e passa a esperar a resposta. */
+  /**
+   * Pergunta quem faz o quê e passa a esperar a resposta.
+   *
+   * Só faz sentido em jogo de dois papéis: quem chama já conferiu isso, e um
+   * jogo de um papel só nem chega aqui.
+   */
   private askRole(game: GameName): void {
+    const pergunta = ROLE_QUESTION_ENTRY[game]
+    if (!pergunta) return
+
     this.pendingRole = {
       game,
       expiresAt: Date.now() + this.config.games.roleQuestionTimeoutMs,
       reasked: false,
     }
-    this.sayGame(ROLE_QUESTION_ENTRY[game])
+    this.sayGame(pergunta)
   }
 
   // ──────────────────────────── INTENÇÕES ──────────────────────────────
@@ -1137,10 +1152,15 @@ export class CompanionBot {
     // Convite que não diz quem faz o quê não escolhe pela criança: pergunta.
     // Nada de sessão nem de estado `GAME` enquanto não houver resposta.
     // Ver: bot_games_delta.md → "Papel ausente é pergunta, não padrão".
-    if (!role) {
+    //
+    // Jogo de um papel só é a exceção: perguntar seria fazer uma pergunta de
+    // uma resposta só, e a criança que pediu quente e frio já disse tudo.
+    const papeis = ROLES_BY_GAME[known]
+    if (!role && papeis.length > 1) {
       this.askRole(known)
       return
     }
+    const papel = role ?? papeis[0]!
 
     this.pendingRole = null
 
@@ -1149,11 +1169,12 @@ export class CompanionBot {
     this.state.command('GAME', { actionLabel: game })
 
     const session = createSession(
-      { game, role },
+      { game, role: papel },
       {
         world: this.gameWorld(),
         hideAndSeek: this.config.games.hideAndSeek,
         tag: this.config.games.tag,
+        hotCold: this.config.games.hotCold,
         signal: this.state.signal,
       },
     )

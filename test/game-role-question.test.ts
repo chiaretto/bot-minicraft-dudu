@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseCommand, parseRoleAnswer } from '../src/behaviors/commands.js'
-import { botRoleForChoice, BOT_ROLE_BY_CHOICE } from '../src/domain/games.js'
+import { ROLES_BY_GAME, botRoleForChoice, BOT_ROLE_BY_CHOICE } from '../src/domain/games.js'
 import { resolveRole } from '../src/behaviors/games/index.js'
 import { gamesSchema } from '../src/config/schema.js'
 import { loadCatalog, defaultCatalogPath } from '../src/dialogue/loader.js'
@@ -33,9 +33,26 @@ describe('mapa de escolha → papel do bot', () => {
     }
   })
 
-  it('as duas escolhas de um jogo dão papéis diferentes', () => {
-    for (const choices of Object.values(BOT_ROLE_BY_CHOICE)) {
-      expect(choices.jogador).not.toBe(choices.bot)
+  /**
+   * Vale para jogo de DOIS papéis, que é onde a pergunta existe. O quente e
+   * frio tem um papel só — quem esconde é sempre o bot — e por isso as duas
+   * escolhas dão no mesmo: a pergunta nem chega a ser feita.
+   */
+  it('num jogo de dois papéis, as escolhas dão papéis diferentes', () => {
+    for (const [game, choices] of Object.entries(BOT_ROLE_BY_CHOICE)) {
+      const papeis = ROLES_BY_GAME[game as keyof typeof ROLES_BY_GAME]
+      if (papeis.length < 2) continue
+      expect(choices.jogador, game).not.toBe(choices.bot)
+    }
+  })
+
+  it('jogo de um papel só nunca faz pergunta de papel', () => {
+    for (const [game, papeis] of Object.entries(ROLES_BY_GAME)) {
+      if (papeis.length > 1) continue
+      const choices = BOT_ROLE_BY_CHOICE[game as keyof typeof BOT_ROLE_BY_CHOICE]
+      // As duas entradas existem só porque o tipo cobra a chave.
+      expect(choices.jogador, game).toBe(choices.bot)
+      expect(papeis[0], game).toBe(choices.jogador)
     }
   })
 })

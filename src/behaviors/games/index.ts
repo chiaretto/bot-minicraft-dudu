@@ -1,7 +1,8 @@
-import type { HideAndSeekConfig, TagConfig } from '../../config/schema.js'
+import type { HideAndSeekConfig, HotColdConfig, TagConfig } from '../../config/schema.js'
 import { isGameName, isRoleValidForGame, type GameName, type GameRole } from '../../domain/games.js'
 import { HideAndSeekSession } from './hide-and-seek.js'
 import { TagSession } from './tag.js'
+import { HotColdSession } from './hot-cold.js'
 import type { GameWorld } from './world.js'
 
 export { GameAborted, type GameWorld } from './world.js'
@@ -9,6 +10,8 @@ export { HideAndSeekSession } from './hide-and-seek.js'
 export type { HideAndSeekDeps } from './hide-and-seek.js'
 export { TagSession } from './tag.js'
 export type { TagDeps } from './tag.js'
+export { HotColdSession } from './hot-cold.js'
+export type { HotColdDeps } from './hot-cold.js'
 
 /**
  * Registro dos jogos que o bot conhece.
@@ -29,6 +32,7 @@ export interface GameSessionDeps {
   world: GameWorld
   hideAndSeek: HideAndSeekConfig
   tag: TagConfig
+  hotCold: HotColdConfig
   signal: AbortSignal | null
   random?: () => number
 }
@@ -85,6 +89,15 @@ export function createSession(
       return new TagSession({
         world: deps.world,
         config: deps.tag,
+        role,
+        signal: deps.signal,
+        ...(deps.random ? { random: deps.random } : {}),
+      })
+
+    case 'quente_frio':
+      return new HotColdSession({
+        world: deps.world,
+        config: deps.hotCold,
         role,
         signal: deps.signal,
         ...(deps.random ? { random: deps.random } : {}),

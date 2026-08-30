@@ -205,7 +205,7 @@ nunca pode ser decorado no cache de comandos aprendidos. É a mesma razão de
 
 ## Tier 3 — apostas maiores
 
-### 13. Terceiro jogo: quente e frio
+### 13. ~~Terceiro jogo: quente e frio~~ ✅ (2026-08-30, `add-hot-and-cold`)
 
 O registro de jogos (`src/domain/games.ts`, `src/behaviors/games/`) já é
 extensível e já tem toda a máquina de papéis e a pergunta "quem faz o quê".

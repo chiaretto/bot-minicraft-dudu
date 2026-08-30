@@ -5,11 +5,17 @@
  */
 
 /** Catálogo FECHADO de jogos. Pedido fora da lista nunca inicia rodada. */
-export const GAME_NAMES = ['esconde_esconde', 'pega_pega'] as const
+export const GAME_NAMES = ['esconde_esconde', 'pega_pega', 'quente_frio'] as const
 
 export type GameName = (typeof GAME_NAMES)[number]
 
-export const GAME_ROLES = ['bot_esconde', 'bot_procura', 'bot_pega', 'bot_foge'] as const
+export const GAME_ROLES = [
+  'bot_esconde',
+  'bot_procura',
+  'bot_pega',
+  'bot_foge',
+  'bot_esconde_ponto',
+] as const
 
 export type GameRole = (typeof GAME_ROLES)[number]
 
@@ -17,6 +23,9 @@ export type GameRole = (typeof GAME_ROLES)[number]
 export const ROLES_BY_GAME: Record<GameName, readonly GameRole[]> = {
   esconde_esconde: ['bot_esconde', 'bot_procura'],
   pega_pega: ['bot_pega', 'bot_foge'],
+  // Um papel só: quem esconde o ponto é sempre o bot. Não há o que perguntar,
+  // e perguntar por perguntar seria uma pergunta de uma resposta só.
+  quente_frio: ['bot_esconde_ponto'],
 }
 
 /**
@@ -39,6 +48,9 @@ export type RoleChoice = 'jogador' | 'bot'
 export const BOT_ROLE_BY_CHOICE: Record<GameName, Record<RoleChoice, GameRole>> = {
   esconde_esconde: { jogador: 'bot_procura', bot: 'bot_esconde' },
   pega_pega: { jogador: 'bot_pega', bot: 'bot_foge' },
+  // As duas respostas dão no mesmo: no quente e frio quem esconde é o bot, e a
+  // criança procura. A pergunta nem chega a ser feita.
+  quente_frio: { jogador: 'bot_esconde_ponto', bot: 'bot_esconde_ponto' },
 }
 
 export function botRoleForChoice(game: GameName, choice: RoleChoice): GameRole {
@@ -67,6 +79,9 @@ export const GAME_PHASES = [
   'busca_falsa',
   'busca_real',
   'indo_ate_jogador',
+  // Quente e frio.
+  'escondendo_tesouro',
+  'esquentando',
   // Pega-pega.
   'perseguindo',
   'fugindo',

@@ -92,7 +92,8 @@ entries:
       - "Meu forte: te acompanhar, te proteger e brincar. Manda 'vamos brincar' que eu escolho com você!"
       - "Fala 'vem', 'fica aqui' ou 'para' que eu obedeço. E se um monstro te atacar eu já parto pra cima!"
       # 2026-08-16: o pega-pega entrou aqui junto com o esconde-esconde.
-      - "Sei brincar de esconde-esconde e de pega-pega! Fala 'esconde esconde' ou 'pega pega'."
+      - "Sei brincar de esconde-esconde, pega-pega e quente e frio! Fala qual você quer."
+      - "No quente e frio eu escondo um lugar e vou falando se você tá chegando perto!"
       - "No pega-pega eu conto até 5 e corro atrás de você! Fala 'me pega' que eu já vou."
       # 2026-08-19: pegar bloco e construir entraram aqui.
       - "Sei pegar bloco pra você! Fala 'pega madeira' ou 'pega pedra'."
@@ -574,18 +575,104 @@ entries:
       - 'Não sei jogar isso não. Bora de esconde-esconde ou de pega-pega?'
       - 'Ainda não aprendi essa! As que eu sei são esconde-esconde e pega-pega.'
       - 'Essa aí eu não sei. Mas me chama pro esconde-esconde ou pro pega-pega!'
-      - 'Não conheço essa! Sei brincar de esconde-esconde e de pega-pega.'
+      - 'Não conheço essa! Sei brincar de esconde-esconde, pega-pega e quente e frio.'
 
   # Convite sem dizer qual brincadeira. Com duas no registro, escolher pela
   # criança seria decidir por ela — ele pergunta. Ver 2026-08-16.
   - id: jogo_qual_brincadeira
     trigger: fallback
     responses:
-      - 'Oba! Você quer esconde-esconde ou pega-pega?'
-      - 'Bora! Escolhe: esconde-esconde ou pega-pega?'
-      - 'Eu sei duas: esconde-esconde e pega-pega. Qual você quer?'
-      - 'Vamos sim! Fala qual: esconde-esconde ou pega-pega?'
-      - 'Aêê! Prefere esconde-esconde ou pega-pega hoje?'
+      # 2026-08-30: entrou o terceiro jogo, o quente e frio.
+      - 'Oba! Quer esconde-esconde, pega-pega ou quente e frio?'
+      - 'Bora! Escolhe: esconde-esconde, pega-pega ou quente e frio?'
+      - 'Eu sei três: esconde-esconde, pega-pega e quente e frio. Qual você quer?'
+      - 'Vamos sim! Fala qual: esconde-esconde, pega-pega ou quente e frio?'
+      - 'Aêê! Hoje tem esconde-esconde, pega-pega e quente e frio. Escolhe!'
+
+  # ─────────────── QUENTE E FRIO (2026-08-30) ─────────────────────────
+  # O terceiro jogo. O bot esconde um ponto e vai dizendo se a criança está
+  # esquentando ou esfriando. Fala MUITO por rodada — por isso cada
+  # temperatura tem 5 variações: repetir a mesma palavra oito vezes seguidas
+  # faria a criança parar de ler.
+  - id: qf_comecou
+    trigger: fallback
+    responses:
+      - 'Escondi um lugar secreto aqui pertinho! Anda que eu falo quente ou frio.'
+      - 'Pronto, já escolhi o lugar! Sai andando que eu te ajudo.'
+      - 'Tá escondido! Vai andando e eu vou falando se tá perto.'
+      - 'Escolhi um cantinho secreto! Procura que eu te guio.'
+      - 'Já sei onde é! Anda por aí que eu falo se você tá chegando.'
+
+  - id: qf_pelando
+    trigger: fallback
+    responses:
+      - 'PELANDO! Tá quase em cima!'
+      - 'Tá fervendo! É bem aí, olha em volta!'
+      - 'Queimando!! Chegou quase!'
+      - 'Pelando, pelando! Procura aí do seu lado!'
+      - 'Nossa, que quente! Tá coladinho!'
+
+  - id: qf_quente
+    trigger: fallback
+    responses:
+      - 'Tá esquentando!'
+      - 'Quente! Continua por aí.'
+      - 'Isso, tá chegando perto!'
+      - 'Mais quente! Não para não.'
+      - 'Boa, tá indo pro lado certo!'
+
+  - id: qf_morno
+    trigger: fallback
+    responses:
+      - 'Morno... anda mais um pouco pra eu ver.'
+      - 'Parou? Assim eu não sei dizer!'
+      - 'Tá igual. Dá uns passos pra qualquer lado.'
+      - 'Nem quente nem frio! Se mexe aí.'
+      - 'Preciso que você ande pra eu falar.'
+
+  - id: qf_frio
+    trigger: fallback
+    responses:
+      - 'Frio! Tá indo pro lado errado.'
+      - 'Esfriou... volta um pouquinho.'
+      - 'Frio, frio! Tenta outro caminho.'
+      - 'Opa, esfriando. Muda de direção!'
+      - 'Tá se afastando, {owner}!'
+
+  - id: qf_gelado
+    trigger: fallback
+    responses:
+      - 'GELADO! Tá longe demais!'
+      - 'Congelando! Volta pra cá!'
+      - 'Muito longe! Tá geladinho.'
+      - 'Ó o gelo! Vem mais pro meu lado.'
+      - 'Gelado total! Faz o caminho de volta.'
+
+  - id: qf_achou
+    trigger: fallback
+    responses:
+      - 'ACHOU! Era bem aí! Você é bom nisso!'
+      - 'Isso! Achou o lugar! Ebaaa!'
+      - 'Achou, achou! Que rápido, {owner}!'
+      - 'É aí mesmo! Parabéns!'
+      - 'Você achou! Bora de novo?'
+
+  - id: qf_revela
+    trigger: fallback
+    responses:
+      - 'Acabou o tempo! Vem que eu te mostro onde era.'
+      - 'Deixa eu te mostrar o lugar! Vem atrás de mim.'
+      - 'Era aqui ó! Vem ver.'
+      - 'Não achou dessa vez! Olha onde era.'
+      - 'Vou te levar lá pra você ver!'
+
+  - id: qf_sem_lugar
+    trigger: fallback
+    responses:
+      - 'Não achei lugar bom pra esconder aqui, {owner}. Vamos pra um lugar mais aberto?'
+      - 'Aqui não dá pra esconder nada! Bora pra outro canto?'
+      - 'Não tem onde esconder por aqui. Me leva pra outro lugar?'
+      - 'Esse lugar é apertado demais pra brincadeira! Vamos ali?'
 
   # Pergunta de papel: convite que não diz quem faz o quê não escolhe pela
   # criança. Antes, quem digitava o nome do jogo levava sempre o mesmo papel,

@@ -137,6 +137,25 @@ games:
     # tempo de correr e a espera de quem já se entregou.
     roundTimeoutMs: 180000
 
+  hotCold:
+    # Quente e frio. O bot escolhe um lugar secreto perto de você e vai dizendo
+    # se você está esquentando ou esfriando. Quem esconde é sempre ele — o jogo
+    # tem um papel só, então ele não pergunta "quem faz o quê".
+    # O lugar nunca fica colado em você, nem tão longe que vire caminhada.
+    hideMinDistance: 8
+    hideMaxDistance: 30
+    # Quantos lugares ele avalia antes de escolher.
+    candidateSamples: 24
+    # Chegar a esta distância conta como "achou".
+    foundRadius: 3
+    # De quanto em quanto tempo ele fala a temperatura.
+    tickMs: 2000
+    # De quantos em quantos passos ele REPETE a mesma palavra. Falar "frio" a
+    # cada dois segundos encheria o chat e você pararia de ler.
+    repeatEvery: 3
+    # Rede de segurança: rodada que não acaba sozinha acaba aqui.
+    roundTimeoutMs: 180000
+
 # Nível 3 da cascata: só recebe o que comando e repertório não resolveram.
 llm:
   # 'ollama' = modelo local (padrão, sem custo, sem internet)
