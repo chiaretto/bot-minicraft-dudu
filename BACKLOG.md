@@ -120,7 +120,7 @@ aparecer 3x e a IA responder que tinha pulado — mentira.
 **Custo.** ~20 linhas, e é o item com melhor retorno por linha para uma criança
 de 7 anos.
 
-### 6. Inventário que ele sabe contar
+### 6. ~~Inventário que ele sabe contar~~ ✅ (2026-08-30, `add-inventory-count`)
 
 **Evidência.** `"quantos blocos de madeira voce tem?"` foi para a IA, que
 respondeu *"isso eu não sei ver"* — mas o `WorldSnapshot` **já carrega**

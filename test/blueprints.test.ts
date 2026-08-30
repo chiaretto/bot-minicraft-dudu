@@ -12,6 +12,7 @@ import {
   isMaterialGroup,
   friendlyName,
   canHarvestWith,
+  materialFromSpokenName,
 } from '../src/domain/materials.js'
 
 const key = (b: BlueprintBlock) => `${b.x},${b.y},${b.z}`
@@ -341,6 +342,31 @@ describe('materiais como a criança fala', () => {
  * A regra que faltava em 2026-08-19: cavar não é o mesmo que conseguir.
  * Pedra quebrada sem picareta some, e o bot volta de mãos vazias.
  */
+describe('nome de material como a criança fala', () => {
+  it('reconhece o material, no singular e no plural', () => {
+    expect(materialFromSpokenName('madeira')).toBe('madeira')
+    expect(materialFromSpokenName('madeiras')).toBe('madeira')
+    expect(materialFromSpokenName('pedras')).toBe('pedra')
+    expect(materialFromSpokenName('troncos')).toBe('madeira')
+  })
+
+  it('tolera o "blocos de" que a criança põe na frente', () => {
+    expect(materialFromSpokenName('blocos de pedra')).toBe('pedra')
+    expect(materialFromSpokenName('bloco de terra')).toBe('terra')
+  })
+
+  it('nome técnico do bloco vale pelo grupo', () => {
+    expect(materialFromSpokenName('oak_log')).toBe('madeira')
+    expect(materialFromSpokenName('cobblestone')).toBe('pedra')
+  })
+
+  it('o que não é material devolve null — e não vira comando', () => {
+    expect(materialFromSpokenName('amigos')).toBeNull()
+    expect(materialFromSpokenName('anos')).toBeNull()
+    expect(materialFromSpokenName('saudade')).toBeNull()
+  })
+})
+
 describe('consigo levar este bloco?', () => {
   const PICARETA_MADEIRA = 878
   const PICARETA_PEDRA = 883

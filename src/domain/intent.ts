@@ -26,6 +26,7 @@ export const INTENT_TYPES = [
   'ATTACK',
   'JUMP',
   'TRICK',
+  'COUNT_ITEM',
   'CHAT',
   'UNKNOWN',
 ] as const
@@ -78,6 +79,7 @@ export const LEARNABLE_INTENTS = [
   'ASK_WHICH_GAME',
   'JUMP',
   'TRICK',
+  'COUNT_ITEM',
 ] as const
 
 export type LearnableIntentType = (typeof LEARNABLE_INTENTS)[number]
@@ -132,6 +134,12 @@ export const intentSchema = z.discriminatedUnion('type', [
   // Pular e fazer graça. Sem parâmetro de propósito: "pula" não tem
   // quantidade, e número no pedido viraria parâmetro a validar por uma graça
   // de dois segundos.
+  // Contar o que tem na mochila. `item` é vocabulário (nome de material), não
+  // estado do mundo — por isso é aprendível.
+  z.object({
+    type: z.literal('COUNT_ITEM'),
+    params: z.object({ item: z.string().min(1) }),
+  }),
   z.object({ type: z.literal('JUMP'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('TRICK'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('EQUIP_ITEM'), params: z.object({ item: z.string().min(1) }) }),

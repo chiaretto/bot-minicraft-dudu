@@ -64,6 +64,7 @@ export const ACTION_DESCRIPTIONS: Record<Exclude<IntentType, 'CHAT' | 'UNKNOWN'>
   GOTO_COORDS: 'ir até um lugar — precisa de "x", "y" e "z"',
   DROP_ITEM_TO_OWNER: 'entregar um item para o jogador — precisa de "item"',
   LOOK_AT_OWNER: 'virar e olhar para o jogador',
+  COUNT_ITEM: 'dizer quanto ele tem de um material — "item" é madeira, pedra, terra, areia ou cascalho',
   JUMP: 'dar uns pulinhos no lugar, de brincadeira',
   TRICK: 'fazer graça: girar no lugar e terminar com um pulo',
   EQUIP_ITEM: 'pegar um item na mão — precisa de "item"',
@@ -97,6 +98,15 @@ function actionCatalog(): string {
   return AI_ACTION_CATALOG.map((type) => `- ${type}: ${ACTION_DESCRIPTIONS[type]}`).join('\n')
 }
 
+/** O que ele carrega, em uma linha. Só os cinco maiores: o resto é ruído. */
+function inventoryLine(snap: NonNullable<ConversationContext['snapshot']>): string {
+  if (snap.inventory.length === 0) return 'nada'
+  return snap.inventory
+    .slice(0, 5)
+    .map((item) => `${item.count} de ${item.name}`)
+    .join(', ')
+}
+
 function worldContext(ctx: ConversationContext): string {
   const snap = ctx.snapshot
   if (!snap) return 'Você ainda não está no mundo.'
@@ -109,6 +119,9 @@ function worldContext(ctx: ConversationContext): string {
   return [
     `Hora do jogo: ${snap.timeOfDay}.`,
     `Sua vida: ${Math.round(snap.health)}/20. Fome: ${Math.round(snap.food)}/20.`,
+    // A mochila estava faltando aqui, e a IA respondia no escuro: "quantos
+    // blocos de madeira você tem?" virou "isso eu não sei ver".
+    `Na sua mochila: ${inventoryLine(snap)}.`,
     `Sua posição: ${Math.round(snap.position.x)}, ${Math.round(snap.position.y)}, ${Math.round(snap.position.z)}.`,
     snap.ownerVisible ? `${ctx.owner} está por perto.` : `Você não está vendo o ${ctx.owner}.`,
     hostis.length > 0 ? `Monstros por perto: ${hostis.join(', ')}.` : 'Nenhum monstro por perto.',

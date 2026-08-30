@@ -22,6 +22,50 @@ export const MATERIAL_GROUPS: Record<string, readonly string[]> = {
 
 export type MaterialGroup = keyof typeof MATERIAL_GROUPS
 
+/**
+ * Como a criança fala de cada material → nome do grupo.
+ *
+ * Catálogo FECHADO, pelo mesmo motivo do catálogo de bichos: sem ele,
+ * "quantos amigos você tem?" viraria uma contagem de um bloco que não existe.
+ * Nome fora daqui não vira comando e desce na cascata como conversa.
+ * Ver: player_commands_delta.md → "Contar item da mochila".
+ */
+const SPOKEN_MATERIALS: Record<string, MaterialGroup> = {
+  madeira: 'madeira',
+  madeiras: 'madeira',
+  tronco: 'madeira',
+  troncos: 'madeira',
+  pau: 'madeira',
+  pedra: 'pedra',
+  pedras: 'pedra',
+  pedregulho: 'pedra',
+  terra: 'terra',
+  terras: 'terra',
+  areia: 'areia',
+  areias: 'areia',
+  cascalho: 'cascalho',
+}
+
+/**
+ * Nome falado → material do catálogo, ou `null` para não virar comando.
+ *
+ * Tolera o "bloco de" e o "blocos de" na frente, que é como criança pede.
+ */
+export function materialFromSpokenName(spoken: string): MaterialGroup | null {
+  const limpo = spoken
+    .trim()
+    .replace(/^blocos? de /u, '')
+    .replace(/^de /u, '')
+    .trim()
+
+  if (SPOKEN_MATERIALS[limpo]) return SPOKEN_MATERIALS[limpo]!
+  // Nome técnico do bloco também vale: `oak_log` é membro de um grupo.
+  for (const [grupo, membros] of Object.entries(MATERIAL_GROUPS)) {
+    if (membros.includes(limpo)) return grupo as MaterialGroup
+  }
+  return null
+}
+
 export function isMaterialGroup(name: string): boolean {
   return Object.prototype.hasOwnProperty.call(MATERIAL_GROUPS, name)
 }

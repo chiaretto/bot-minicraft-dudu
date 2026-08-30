@@ -257,6 +257,25 @@ function sleep(ms: number, signal: AbortSignal | null): Promise<void> {
   })
 }
 
+/**
+ * Diz quanto ele tem de um material.
+ *
+ * Não é ação no mundo: é uma pergunta que o snapshot já sabia responder e que
+ * ia parar na IA — que respondia "isso eu não sei ver", porque a mochila não
+ * estava no prompt. Aqui a resposta é exata e não custa rede.
+ * Ver: player_commands_delta.md → "Contar item da mochila".
+ */
+export async function countItem(deps: ActionDeps, item: string): Promise<ActionOutcome> {
+  const nomes = resolveBlockCandidates(item)
+  const total = countInInventory(deps.bot, nomes)
+  const nome = friendlyName(nomes[0] ?? item)
+
+  if (total === 0) {
+    return { ok: true, message: `Não tenho ${nome} nenhuma agora. Quer que eu busque?` }
+  }
+  return { ok: true, message: `Tenho ${total} de ${nome} aqui comigo!` }
+}
+
 /** Quantos pulos saem de um `pula`. Três é a graça inteira. */
 const JUMP_TIMES = 3
 
@@ -639,6 +658,8 @@ export async function runIntent(deps: ActionDeps, intent: Intent): Promise<Actio
       return lookAtOwner(deps)
     case 'EQUIP_ITEM':
       return equipItem(deps, intent.params.item)
+    case 'COUNT_ITEM':
+      return countItem(deps, intent.params.item)
     case 'JUMP':
       return jump(deps)
     case 'TRICK':

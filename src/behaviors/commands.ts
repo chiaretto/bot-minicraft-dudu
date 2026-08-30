@@ -1,6 +1,7 @@
 import type { Intent } from '../domain/intent.js'
 import { botRoleForChoice, type GameName, type GameRole, type RoleChoice } from '../domain/games.js'
 import { mobFromSpokenName } from '../domain/mobs.js'
+import { materialFromSpokenName } from '../domain/materials.js'
 import { prepare } from '../dialogue/normalize.js'
 
 interface CommandPattern {
@@ -706,6 +707,36 @@ function parseAttack(normalized: string): ParsedCommand | null {
   return null
 }
 
+/**
+ * Contar item da mochila. O que vem depois do "quanto" é capturado e precisa
+ * estar no catálogo de materiais — senão NÃO vira comando.
+ *
+ * A regra é a mesma do ataque nomeado, e pelo mesmo motivo: um padrão aberto
+ * transformaria "quantos amigos você tem?" numa contagem de um bloco que não
+ * existe. Nome desconhecido desce na cascata e vira conversa.
+ */
+const COUNT_PATTERNS = [
+  /^quantos? (.+) voce tem$/,
+  /^quantas? (.+) voce tem$/,
+  /^quanto de (.+) voce tem$/,
+  /^quanta (.+) voce tem$/,
+  /^voce tem quantos? (.+)$/,
+  /^voce tem quantas? (.+)$/,
+  /^quantos? (.+) tem na mochila$/,
+  /^quanto (.+) voce tem ai$/,
+]
+
+function parseCount(normalized: string): ParsedCommand | null {
+  for (const pattern of COUNT_PATTERNS) {
+    const found = pattern.exec(normalized)
+    if (!found?.[1]) continue
+    const item = materialFromSpokenName(found[1])
+    if (!item) continue // nome fora do catálogo: não é comando
+    return { intent: { type: 'COUNT_ITEM', params: { item } }, matched: normalized }
+  }
+  return null
+}
+
 function match(normalized: string): ParsedCommand | null {
   for (const command of COMMANDS) {
     for (const pattern of command.patterns) {
@@ -733,9 +764,12 @@ export function parseCommand(text: string, botName: string): ParsedCommand | nul
   const attack = parseAttack(normalized)
   if (attack) return attack
 
+  const count = parseCount(normalized)
+  if (count) return count
+
   const stripped = stripFillers(normalized)
   if (stripped === normalized || !stripped) return null
-  return match(stripped) ?? parseAttack(stripped)
+  return match(stripped) ?? parseAttack(stripped) ?? parseCount(stripped)
 }
 
 /** Exposto para teste: quantos padrões o parser cobre. */

@@ -199,6 +199,55 @@ describe('prompt', () => {
    * recusou "construa uma piscina" duas vezes — uma coisa que o bot passou a
    * saber fazer.
    */
+  /**
+   * A mochila faltava no bloco de mundo, e a IA respondia no escuro: em 20/08
+   * ela disse "isso eu não sei ver" sobre o inventário que o snapshot tinha.
+   */
+  it('o prompt manda a mochila junto do resto da situação', () => {
+    const comMundo = {
+      ...ctx,
+      snapshot: {
+        position: { x: 0, y: 64, z: 0 },
+        health: 20,
+        food: 20,
+        timeOfDay: 'dia' as const,
+        dimension: 'overworld',
+        inventory: [
+          { name: 'oak_log', count: 12 },
+          { name: 'cobblestone', count: 3 },
+        ],
+        nearbyEntities: [],
+        ownerVisible: true,
+        ownerPosition: { x: 1, y: 64, z: 1 },
+        ownerHealth: 20,
+        state: 'IDLE' as const,
+      },
+    }
+    const prompt = buildConversePrompt(comMundo)
+    expect(prompt).toMatch(/Na sua mochila:/)
+    expect(prompt).toContain('12 de oak_log')
+  })
+
+  it('mochila vazia é dita, não omitida', () => {
+    const semNada = {
+      ...ctx,
+      snapshot: {
+        position: { x: 0, y: 64, z: 0 },
+        health: 20,
+        food: 20,
+        timeOfDay: 'dia' as const,
+        dimension: 'overworld',
+        inventory: [],
+        nearbyEntities: [],
+        ownerVisible: true,
+        ownerPosition: null,
+        ownerHealth: null,
+        state: 'IDLE' as const,
+      },
+    }
+    expect(buildConversePrompt(semNada)).toContain('Na sua mochila: nada.')
+  })
+
   it('o prompt cita todas as plantas do catálogo, sem ninguém editar o prompt', () => {
     const prompt = buildConversePrompt(ctx)
     for (const name of STRUCTURE_NAMES) {

@@ -1,0 +1,102 @@
+# Proposal: Ele sabe dizer quanto tem na mochila
+
+**Change ID:** `add-inventory-count`
+**Created:** 2026-08-30
+**Status:** Draft
+
+---
+
+## Problem Statement
+
+No log de 20/08 a criança perguntou:
+
+> *"quantos blocos de madeira voce tem ?"*
+
+E a IA respondeu *"Isso eu não sei ver, mas posso pegar pra você!"* — uma
+resposta honesta e **errada**. O `WorldSnapshot` carrega `inventory` desde o
+primeiro dia, e o placeholder `{inventorySummary}` já existe no repertório.
+
+Dois buracos, um em cada nível da cascata:
+
+1. **A IA responde no escuro.** `worldContext()` manda vida, fome, posição,
+   hora e monstros — e não manda a mochila. Ela não tinha como saber.
+2. **Não existe comando.** A pergunta é sobre um item específico, e padrão de
+   repertório é texto literal: não dá para capturar "madeira" numa entrada.
+
+## Proposed Solution
+
+**`COUNT_ITEM`**, com o material como parâmetro. Ele conta o que tem e responde
+exato, sem rede: *"Tenho 12 de madeira aqui comigo!"*.
+
+E `worldContext()` passa a mandar a mochila, para a IA parar de responder no
+escuro quando a pergunta vier torta.
+
+### O catálogo fechado outra vez
+
+O que vem depois do "quanto" é capturado e precisa estar num catálogo de
+materiais falados (`madeira`, `pedra`, `terra`, `areia`, `cascalho`, mais os
+plurais e os nomes técnicos). Nome fora dele **não vira comando** e desce na
+cascata.
+
+É a mesma regra do ataque nomeado, e pelo mesmo motivo: sem ela,
+*"quantos amigos você tem?"* viraria a contagem de um bloco que não existe.
+
+### Mochila vazia responde e oferece
+
+*"Não tenho madeira nenhuma agora. Quer que eu busque?"* — a regra número um
+manda oferecer o que funciona quando a resposta é não.
+
+## Scope
+
+### In Scope
+
+- `COUNT_ITEM` no catálogo, schema e aprendíveis (o parâmetro é vocabulário).
+- `materialFromSpokenName()` em `domain/materials.ts`, catálogo fechado.
+- Padrões de captura em `commands.ts`, no molde do ataque nomeado.
+- A mochila no bloco de mundo do prompt.
+- Testes e README.
+
+### Out of Scope
+
+- **Contar item que não é material** (espada, comida, tocha). O catálogo cobre
+  o que o bot coleta e usa em obra; o resto viria com a lista de itens inteira
+  do jogo.
+- **Listar a mochila inteira por comando.** `inventario_social` já responde isso
+  pelo repertório, com `{inventorySummary}`.
+- Mostrar durabilidade, encantamento ou slot.
+
+## Impact Analysis
+
+| Componente | Muda? | Detalhes |
+|---|---|---|
+| `domain/materials.ts` | Sim | Catálogo de nomes falados |
+| `domain/intent.ts` | Sim | `COUNT_ITEM` |
+| `behaviors/actions/index.ts` | Sim | `countItem()` |
+| `behaviors/commands.ts` | Sim | Captura, como no ataque nomeado |
+| `ai/prompt.ts` | Sim | Mochila no bloco de mundo; descrição da ação |
+| Repertório | Não | `inventario_social` continua respondendo a pergunta geral |
+
+## Architecture Considerations
+
+- **Pergunta que o snapshot responde não deveria ir para a IA.** Cada uma que
+  sobe a cascata é latência, dinheiro e uma frase da criança saindo da máquina.
+- **Ação que só fala continua sendo ação.** `LOOK_AT_OWNER` já era assim: o
+  pipeline é o mesmo, e a resposta sai como resultado da ação.
+- **Catálogo fechado**, como bicho, planta e jogo. É a terceira vez que a mesma
+  regra evita a mesma classe de erro.
+
+## Success Criteria
+
+- [ ] `quantos blocos de madeira voce tem` responde com o número exato, sem IA
+- [ ] `quantos amigos voce tem` **não** vira comando
+- [ ] Mochila vazia responde e oferece buscar
+- [ ] A IA passa a receber a mochila no prompt
+- [ ] `npm test` e `npx eslint src test` passam
+
+## Risks & Mitigations
+
+| Risco | Probabilidade | Impacto | Mitigação |
+|---|---|---|---|
+| Padrão de captura roubar pergunta que não é de item | Média | Médio | Catálogo fechado: nome desconhecido não vira comando |
+| Mochila no prompt inchar o contexto | Baixa | Baixo | Só os cinco maiores, uma linha |
+| Criança pedir contagem de item fora do catálogo | Média | Baixo | Desce para a IA, que agora enxerga a mochila e responde |

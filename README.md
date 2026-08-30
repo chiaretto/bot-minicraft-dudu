@@ -298,6 +298,7 @@ llm:
 | `dudu, abre a porta`                 | abre a porta, o portão ou o alçapão |
 | `dudu, sai do buraco` / `sobe`       | faz escadinha de blocos e sobe     |
 | `dudu, pega madeira` / `pega pedra`  | vai buscar o bloco e traz          |
+| `quantos blocos de madeira você tem?`| conta a mochila e responde exato   |
 | `dudu, faz uma casa`                 | constrói uma casinha ao lado dele  |
 | `dudu, faz uma torre`                | constrói uma torre                 |
 | `dudu, faz uma piscina`              | levanta a bacia (a água é sua)     |

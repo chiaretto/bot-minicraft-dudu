@@ -250,6 +250,46 @@ describe('graça: pular e dancinha', () => {
   })
 })
 
+/**
+ * Contar item da mochila. A pergunta veio do log de 20/08, e a IA respondeu
+ * "isso eu não sei ver" para uma coisa que o snapshot já sabia.
+ * Ver: player_commands_delta.md → "Contar item da mochila".
+ */
+describe('contar item da mochila', () => {
+  it('a pergunta do log vira comando', () => {
+    for (const text of [
+      'quantos blocos de madeira voce tem',
+      'quanta madeira voce tem',
+      'quantas pedras voce tem',
+      'voce tem quantas pedras',
+      'quanto de terra voce tem',
+      'quantos blocos de areia tem na mochila',
+    ]) {
+      expect(parseCommand(text, 'Dudu')?.intent.type, text).toBe('COUNT_ITEM')
+    }
+  })
+
+  it('resolve o material que a criança falou', () => {
+    const parsed = parseCommand('quantos blocos de madeira voce tem', 'Dudu')
+    expect(parsed?.intent.type === 'COUNT_ITEM' && parsed.intent.params.item).toBe('madeira')
+  })
+
+  /**
+   * A guarda que impede "quantos amigos você tem?" de virar contagem de um
+   * bloco que não existe. Mesma regra do ataque nomeado.
+   */
+  it('nome fora do catálogo NÃO vira comando', () => {
+    for (const text of [
+      'quantos amigos voce tem',
+      'quantos anos voce tem',
+      'quantas vidas voce tem',
+      'quanto de saudade voce tem',
+    ]) {
+      expect(parseCommand(text, 'Dudu'), text).toBeNull()
+    }
+  })
+})
+
 describe('desistência no jogo', () => {
   it('reconhece que o jogador desistiu', () => {
     for (const text of ['desisto', 'dudu, desisto', 'cade voce', 'me entrego', 'nao acho voce']) {
