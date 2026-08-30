@@ -33,6 +33,19 @@ aprendida.
 O parser de regex continua ganhando de todos: o que um humano escreveu vale mais
 que o que o bot deduziu.
 
+Desde `fix-chat-noise-and-learned-quality`, o que muda não é a ordem e sim **o
+que entra na cascata**: retorno de comando do jogo é cortado na borda e nunca
+chega ao nível 1 (`minecraft_connection` → "Retorno de comando do jogo não é
+fala de jogador"). Antes, `Set own game mode to Creative Mode]` descia os quatro
+níveis, não casava com nada e terminava numa chamada de IA — que respondia com
+entusiasmo a uma frase que o Minecraft escreveu.
+
+#### Scenario: Eco de sistema não desce a cascata
+- **GIVEN** o dono usa um comando do jogo
+- **WHEN** o servidor devolve o retorno
+- **THEN** nenhum nível da cascata é consultado
+- **AND** o bot não fala nada
+
 Desde `ai-reply-with-action`, o que muda é o que o **nível 3** é capaz de
 devolver: além da fala, ele pode trazer uma ação a executar.
 
@@ -760,6 +773,47 @@ do dia, para qualquer ação, em qualquer lugar do mundo.
 - **WHEN** cada uma é lida
 - **THEN** nenhuma cita hora do dia, lugar, bloco ou ação específica
 - **AND** nenhuma promete capacidade — o que o bot vai fazer, ele já vai fazer em seguida
+
+---
+
+### Requirement: Entrada `comando_esquecido`
+
+A resposta do bot quando a criança corrige um comando aprendido errado
+(`nao era isso`, `errado`) e o aprendizado é desfeito
+(`learned_commands` → "A criança desfaz com a palavra dela").
+
+Como `comando_aprendido`, é `fallback`: disparada pelo código, nunca por padrão
+de texto. O bot admite o erro, não se justifica, e convida a ensinar de novo —
+uma criança de 7 anos que corrige o amigo espera "desculpa", não um relatório.
+
+#### Scenario: O bot esquece e diz que esqueceu
+- **GIVEN** o bot replicou um comando aprendido errado
+- **WHEN** a criança digita `nao era isso`
+- **AND** a entrada é apagada
+- **THEN** o bot responde uma variação de `comando_esquecido`
+- **AND** a fala tem uma ou duas frases curtas
+- **AND** convida a criança a pedir de novo ("me ensina de novo?")
+
+#### Scenario: Nenhuma palavra técnica chega ao chat
+- **GIVEN** as variações de `comando_esquecido`
+- **WHEN** cada uma é lida
+- **THEN** nenhuma contém "cache", "entrada", "removida", "histórico" ou
+  "aprendizado"
+- **AND** nenhuma diz que o bot "não aprende": ele aprende, e esqueceu uma coisa
+
+#### Scenario: A correção não é dita duas vezes seguidas igual
+- **GIVEN** a criança corrige o bot duas vezes na mesma sessão
+- **WHEN** o bot responde
+- **THEN** as duas falas são diferentes
+- **AND** vale o sorteio que já evita repetir a última variação
+
+#### Scenario: Fora do desfazer, a frase não casa esta entrada
+- **GIVEN** nenhum comando aprendido foi replicado recentemente
+- **WHEN** a criança digita `errado` no meio de uma brincadeira
+- **THEN** `comando_esquecido` **não** é usada
+- **AND** a mensagem desce a cascata como conversa comum
+- **AND** a razão é que a entrada responde a um desfazer que aconteceu, não a
+  uma palavra solta
 
 ---
 

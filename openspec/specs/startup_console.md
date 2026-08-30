@@ -64,6 +64,19 @@ recurso desligado é ruído.
 - **THEN** ele mostra uma linha com `12` comandos aprendidos
 - **AND** menciona as `3` descartadas por já estarem no código
 
+#### Scenario: O que foi esquecido vem com o motivo separado
+- **GIVEN** a carga descartou 2 entradas já cobertas pelo parser, 1 por ser
+  recado do jogo e 1 por não ser pedido
+- **WHEN** o cartão é impresso
+- **THEN** ele mostra `Esqueci 4`, com os três motivos discriminados
+- **AND** um número só, somando tudo, esconderia qual regra está agindo
+
+#### Scenario: A contagem do que saiu aparece mesmo sem sobrar nada
+- **GIVEN** todas as entradas do histórico foram descartadas na carga
+- **WHEN** o cartão é impresso
+- **THEN** ele diz que ainda não aprendeu nenhum comando
+- **AND** mostra assim mesmo quantas saíram e por quê
+
 #### Scenario: Histórico vazio na primeira execução
 - **GIVEN** `data/learned-commands.json` ainda não existe
 - **WHEN** o cartão é impresso

@@ -14,6 +14,11 @@
 Toda mensagem trocada com o bot é gravada, venha a resposta de qualquer nível da
 cascata.
 
+"Toda troca" quer dizer **toda troca com gente**: mensagem que o servidor gerou
+como retorno de comando do jogo não é conversa e não é registrada. Ela nem chega
+até aqui — o corte é na borda (`minecraft_connection` → "Retorno de comando do
+jogo não é fala de jogador").
+
 #### Scenario: Troca resolvida pelo repertório
 - **GIVEN** o dono digita `dudu, oi` e o repertório responde
 - **WHEN** a resposta é enviada ao chat
@@ -42,6 +47,13 @@ cascata.
 - **WHEN** a troca acontece
 - **THEN** ela é gravada com o `speaker` sendo `Fulano`
 - **AND** fica distinguível das falas do dono
+
+#### Scenario: A frase de correção é fala e fica registrada
+- **GIVEN** o bot acabou de replicar um comando aprendido
+- **WHEN** a criança digita `nao era isso`
+- **THEN** a fala dela e a resposta do bot entram no histórico
+- **AND** o filtro de ruído não pode engolir a correção — ela é a evidência de
+  que o bot aprendeu errado
 
 ---
 
@@ -264,3 +276,51 @@ O bloco `memory` da configuração parametriza o comportamento.
 - **WHEN** o bot reinicia no mesmo dia
 - **THEN** a memória curta começa vazia
 - **AND** a gravação no arquivo do dia continua normalmente
+
+---
+
+### Requirement: O histórico guarda fala de gente
+
+Só entra no histórico de conversa mensagem que veio de um jogador. Retorno de
+comando do jogo é descartado antes de chegar ao registro.
+
+#### Scenario: Eco de sistema não entra no JSONL
+- **GIVEN** o dono usa `/tp`, `/gamemode`, `/clear` ou `/time`
+- **WHEN** o servidor devolve o retorno do comando
+- **THEN** nenhuma linha é acrescentada em `data/conversations/AAAA-MM-DD.jsonl`
+- **AND** o arquivo do dia continua sendo só conversa
+
+#### Scenario: O ruído já gravado continua no arquivo
+- **GIVEN** o histórico de 15 a 29 de agosto de 2026 tem ~30 linhas de retorno de
+  comando
+- **WHEN** a mudança entra em vigor
+- **THEN** nenhuma linha antiga é apagada nem reescrita
+- **AND** a razão é que o histórico é append-only por decisão de projeto
+- **AND** quem filtra o passado é a leitura, não o arquivo
+
+---
+
+### Requirement: A rotina de manutenção lê só conversa
+
+O relatório de lacunas ignora eco de sistema ao ler o histórico já gravado, para
+não apontar como lacuna de repertório uma frase que o Minecraft escreveu.
+
+#### Scenario: Eco antigo some do relatório
+- **GIVEN** o histórico tem `Teleported Odraude to FresherRobin90]` sete vezes
+- **WHEN** `npm run repertoire:gaps` roda
+- **THEN** essas linhas não aparecem em `NÃO ENTENDI` nem em `RESOLVIDO SÓ PELA IA`
+- **AND** ninguém é induzido a escrever entrada de repertório para atender o jogo
+
+#### Scenario: A contagem do relatório não conta ruído
+- **GIVEN** o dia tem 40 falas de jogador e 8 ecos de sistema
+- **WHEN** o relatório calcula quanto foi resolvido localmente
+- **THEN** o denominador é 40
+- **AND** a porcentagem passa a descrever o repertório, não o filtro
+- **AND** medido no log de 15 a 29/08/2026: 264 falas viraram 233, e 49% de
+  resolução local viraram 56%
+
+#### Scenario: Lacuna de verdade continua aparecendo
+- **GIVEN** o histórico tem `vem auqi` e `me conta um segredo do minecraft`
+- **WHEN** o relatório roda
+- **THEN** as duas continuam listadas como lacuna
+- **AND** o filtro não pode esconder fala de criança
