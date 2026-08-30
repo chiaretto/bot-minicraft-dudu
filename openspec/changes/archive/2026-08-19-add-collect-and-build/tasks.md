@@ -85,14 +85,23 @@
 
 - [x] 6.1 Testes de ponta a ponta dos comandos novos
 - [x] 6.2 Atualizar o README
-- [ ] 6.3 **Construir em jogo de verdade**: a casa fica de pé em terreno real?
-- [ ] 6.4 **Coletar em jogo de verdade**: ele acha e cava a madeira?
+- [x] 6.3 **Construir em jogo de verdade**: a casa fica de pé em terreno real?
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
+- [x] 6.4 **Coletar em jogo de verdade**: ele acha e cava a madeira?
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
 - [x] 6.5 `npm test` + `npx eslint src test` finais
 
 **Quality Gate:**
 - [x] Todos os testes passam
 - [x] Lint limpo
-- [ ] Obra conferida em jogo, não só com mundo falso (PENDENTE — ver 6.3/6.4)
+- [x] Obra conferida em jogo, não só com mundo falso (PENDENTE — ver 6.3/6.4)
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
 - [x] Documentação sincronizada
 
 ---
@@ -101,5 +110,5 @@
 
 - [x] Fases 1 a 5 completas; da 6, só a verificação em jogo ficou aberta
 - [x] Repertório sincronizado nas duas cópias
-- [ ] Pronto para `/openspec-archive add-collect-and-build` **depois** do teste
+- [x] Pronto para `/openspec-archive add-collect-and-build` **depois** do teste
       em jogo

@@ -172,3 +172,26 @@ Respostas aceitas, já normalizadas (minúsculas, sem acento, sem pontuação):
 | Pendência sobrevive a `dudu, para` e ressuscita depois | Baixa | Médio | Todo comando reconhecido descarta a pendência, `para` inclusive |
 | Repertório editado só em `data/` e perdido | Média | Alto | Tarefa explícita de copiar para `src/dialogue/default-repertoire.yaml` |
 | `eu` responder papéis opostos nos dois jogos confunde na manutenção | Baixa | Médio | O mapa vive no domínio, em tabela única por jogo, coberto por teste dos dois lados |
+
+---
+
+## Archive Information
+
+**Archived:** 2026-08-29
+**Outcome:** implementado; ver a ressalva de verificação abaixo
+
+### Ressalva de verificação
+
+Os cenários de **prova em jogo** do `tasks.md` **não foram verificados na sessão
+que arquivou**. O arquivamento foi decisão do dono do projeto, em lote com os
+outros changes de 2026-08-19.
+
+A lógica está coberta por teste unitário; o que falta é a observação no mundo
+aberto. Quem for mexer nesta área deve tratar esses cenários como não
+confirmados.
+
+### Nota sobre o merge
+
+As seções `MODIFIED` foram mescladas **à mão**, requisito por requisito, com
+conferência de cenários perdidos arquivo por arquivo. Neste projeto `MODIFIED` de
+delta é **acréscimo**, não substituição — mesclar por script apaga cenário.

@@ -2,7 +2,8 @@
 
 **Componente:** `configuration`
 **Origem:** `add-minecraft-companion-bot` (2026-08-15)
-**Atualizado por:** `add-bot-games-hide-and-seek` (2026-08-15), `fix-hide-and-seek-cover` (2026-08-16),
+**Atualizado por:** `add-collect-and-build`, `add-escape-hole`, `add-open-door`, `ask-game-role` (2026-08-19),
+`add-bot-games-hide-and-seek` (2026-08-15), `fix-hide-and-seek-cover` (2026-08-16),
 `add-bot-game-pega-pega` (2026-08-16), `add-claude-code-provider` (2026-08-29)
 
 ---
@@ -369,3 +370,119 @@ learned:
 - **WHEN** o default é aplicado
 - **THEN** o arquivo fica em `data/`, que está inteiro no `.gitignore`
 - **AND** o aprendizado derivado das falas da criança não vai para um commit
+
+---
+
+### Requirement: Configuração da construção
+
+Três campos em `behavior` governam a obra.
+
+| Campo | Padrão | Para quê |
+|---|---|---|
+| `buildAllowlist` | troncos, pedra, pedregulho, terra, areia | o que pode virar parede |
+| `buildMaxBlocks` | `120` | teto de segurança do tamanho da obra |
+| `buildAutoGather` | `true` | buscar material sozinho quando faltar |
+
+> `buildAllowlist` é **separada** de `collectAllowlist` de propósito: o que o bot
+> pode cavar não é necessariamente o que faz uma casa decente, e um dia uma pode
+> mudar sem a outra.
+
+#### Scenario: Valores padrão
+- **GIVEN** `config.yaml` não traz nenhum dos três
+- **WHEN** o bot inicia
+- **THEN** valem os padrões acima
+- **AND** nenhuma migração de arquivo é necessária
+
+#### Scenario: Material proibido nunca vira parede
+- **GIVEN** `tnt` não está em `buildAllowlist`
+- **WHEN** a construção com `tnt` é pedida
+- **THEN** a obra é recusada
+
+#### Scenario: Teto de segurança
+- **GIVEN** `buildMaxBlocks: 10`
+- **WHEN** uma casa de 52 blocos é pedida
+- **THEN** a obra é recusada antes do primeiro bloco
+
+#### Scenario: Busca automática desligada
+- **GIVEN** `buildAutoGather: false` e falta material
+- **WHEN** a obra é pedida
+- **THEN** o bot recusa dizendo quanto falta, sem sair para coletar
+
+---
+
+### Requirement: Configuração da saída de buraco
+
+Quatro campos em `behavior` governam a subida.
+
+| Campo | Padrão | Para quê |
+|---|---|---|
+| `escapeMinDrop` | `3` | desnível a partir do qual vale empilhar |
+| `escapeMaxHeight` | `24` | teto de degraus por tentativa |
+| `escapeMaxDigs` | `12` | teto de blocos cavados para arranjar degrau |
+| `escapeStuckMs` | `6000` | tempo parado seguindo antes de suspeitar de buraco |
+
+#### Scenario: Valores padrão
+- **GIVEN** `config.yaml` não traz nenhum dos quatro
+- **WHEN** o bot inicia
+- **THEN** valem os padrões acima
+- **AND** nenhuma migração de arquivo é necessária
+
+#### Scenario: Vigia mais impaciente
+- **GIVEN** `escapeStuckMs: 2000`
+- **WHEN** o bot fica 2 s parado seguindo, com o dono acima
+- **THEN** a subida começa
+
+#### Scenario: Teto de altura menor
+- **GIVEN** `escapeMaxHeight: 5`
+- **WHEN** o dono está 30 blocos acima
+- **THEN** o bot sobe no máximo 5 degraus e fala que ainda está fundo
+
+#### Scenario: Valor inválido
+- **GIVEN** qualquer um dos quatro é zero ou negativo
+- **WHEN** a config é carregada
+- **THEN** o startup falha com mensagem clara
+
+---
+
+### Requirement: Raio de busca de porta
+`behavior.doorSearchRadius` define até onde o bot procura porta. Padrão: `6`.
+
+#### Scenario: Valor padrão
+- **GIVEN** `config.yaml` não traz o campo
+- **WHEN** o bot inicia
+- **THEN** o raio é 6 blocos
+- **AND** nenhuma migração de arquivo é necessária
+
+#### Scenario: Raio curto evita porta do vizinho
+- **GIVEN** o raio padrão
+- **WHEN** o bot procura porta
+- **THEN** ele só considera o que está perto de verdade
+- **AND** não sai abrindo porta de construção alheia
+
+#### Scenario: Valor inválido
+- **GIVEN** `doorSearchRadius` é zero ou negativo
+- **WHEN** a config é carregada
+- **THEN** o startup falha com mensagem clara
+
+---
+
+### Requirement: Prazo da pergunta de papel
+
+`games.roleQuestionTimeoutMs` define quanto tempo uma escolha de papel fica
+pendente antes de expirar. Padrão: `45000`.
+
+#### Scenario: Valor padrão
+- **GIVEN** `config.yaml` não traz `games.roleQuestionTimeoutMs`
+- **WHEN** o bot inicia
+- **THEN** o prazo é 45000 ms
+- **AND** nenhuma migração de arquivo é necessária
+
+#### Scenario: Valor customizado
+- **GIVEN** `games.roleQuestionTimeoutMs: 20000`
+- **WHEN** o bot pergunta o papel e ninguém responde por 20 s
+- **THEN** a escolha pendente expira
+
+#### Scenario: Valor inválido
+- **GIVEN** `games.roleQuestionTimeoutMs` é zero ou negativo
+- **WHEN** a config é carregada
+- **THEN** o startup falha com mensagem clara e acionável

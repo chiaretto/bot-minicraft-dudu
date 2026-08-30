@@ -145,3 +145,26 @@ nível 1 funciona com `llm.provider: 'none'`.
 | Torre até o céu com dono voando de criativo | Média | Baixo | `escapeMaxHeight` (24) |
 | Cavar a construção do jogador para arranjar degrau | Baixa | **Alto** | Só a interseção das duas allowlists; nunca o chão |
 | Subida durante brincadeira estragar o jogo | Baixa | Médio | O vigia não roda com rodada em andamento |
+
+---
+
+## Archive Information
+
+**Archived:** 2026-08-29
+**Outcome:** implementado; ver a ressalva de verificação abaixo
+
+### Ressalva de verificação
+
+Os cenários de **prova em jogo** do `tasks.md` **não foram verificados na sessão
+que arquivou**. O arquivamento foi decisão do dono do projeto, em lote com os
+outros changes de 2026-08-19.
+
+A lógica está coberta por teste unitário; o que falta é a observação no mundo
+aberto. Quem for mexer nesta área deve tratar esses cenários como não
+confirmados.
+
+### Nota sobre o merge
+
+As seções `MODIFIED` foram mescladas **à mão**, requisito por requisito, com
+conferência de cenários perdidos arquivo por arquivo. Neste projeto `MODIFIED` de
+delta é **acréscimo**, não substituição — mesclar por script apaga cenário.

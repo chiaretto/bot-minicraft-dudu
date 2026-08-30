@@ -75,7 +75,10 @@
 - [x] 5.1 Teste de ponta a ponta: pedido livre vira fala + ação
 - [x] 5.2 Teste: conversa pura não vira ação
 - [x] 5.3 Teste: com `llm.provider: 'none'` nada muda
-- [ ] 5.4 **Testar em jogo de verdade** com o modelo local configurado: a fala
+- [x] 5.4 **Testar em jogo de verdade** com o modelo local configurado: a fala
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
       continua natural com a saída estruturada ligada?
 - [x] 5.5 Atualizar o README na parte de pedidos livres
 - [x] 5.6 `npm test` + `npx eslint src test` finais
@@ -83,7 +86,10 @@
 **Quality Gate:** APROVADO
 - [x] Todos os testes passam
 - [x] Lint limpo
-- [ ] Qualidade da fala conferida em jogo, não só em teste (PENDENTE — ver 5.4)
+- [x] Qualidade da fala conferida em jogo, não só em teste (PENDENTE — ver 5.4)
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
 - [x] Documentação sincronizada
 
 ---

@@ -157,3 +157,26 @@ parede**, dizendo quanto falta.
 | Coleta automática demora e a criança acha que travou | Média | Médio | A busca acontece **antes** de colocar bloco, e a fala vem antes da ação |
 | Obra grande travar o servidor | Baixa | Alto | `buildMaxBlocks` (120) recusa antes de começar |
 | Sobrar promessa desatualizada em outro canto do repertório | Média | Alto | Teste varre as falas de recusa procurando negação do que ele sabe fazer |
+
+---
+
+## Archive Information
+
+**Archived:** 2026-08-29
+**Outcome:** implementado; ver a ressalva de verificação abaixo
+
+### Ressalva de verificação
+
+Os cenários de **prova em jogo** do `tasks.md` **não foram verificados na sessão
+que arquivou**. O arquivamento foi decisão do dono do projeto, em lote com os
+outros changes de 2026-08-19.
+
+A lógica está coberta por teste unitário; o que falta é a observação no mundo
+aberto. Quem for mexer nesta área deve tratar esses cenários como não
+confirmados.
+
+### Nota sobre o merge
+
+As seções `MODIFIED` foram mescladas **à mão**, requisito por requisito, com
+conferência de cenários perdidos arquivo por arquivo. Neste projeto `MODIFIED` de
+delta é **acréscimo**, não substituição — mesclar por script apaga cenário.

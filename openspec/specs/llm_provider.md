@@ -2,6 +2,7 @@
 
 **Componente:** `llm_provider`
 **Origem:** `add-minecraft-companion-bot` (2026-08-15)
+**Atualizado por:** `add-open-door`, `ai-reply-with-action` (2026-08-19)
 **Ampliado por:** `add-claude-code-provider` (2026-08-29) — provider Claude Code
 
 > Este arquivo cobre **de onde vem** a inferência. O *comportamento* de conversa
@@ -29,14 +30,36 @@ A interface tem três métodos: `converse()`, `warmUp(identity?)` e um `stop?()`
 opcional. `stop()` existe porque um provider pode segurar recurso vivo (o Claude
 Code segura um subprocesso); Ollama e Gemini não implementam.
 
+Desde `ai-reply-with-action`, `converse` devolve **fala e ação** — a ação é
+`null` quando a mensagem não é pedido. Não existe método separado de
+interpretação: uma mensagem do jogador custa **uma** chamada de inferência.
+
 ```ts
 interface LlmProvider {
-  readonly name: 'ollama' | 'gemini'
-  converse(ctx: ConversationContext): Promise<string>
-  interpret(text: string, ctx: ConversationContext): Promise<Intent>
-  warmUp(): Promise<void>
+  readonly name: 'ollama' | 'gemini' | 'claude' | 'none'
+  /** Uma chamada por mensagem: dela saem a fala E a ação. */
+  converse(ctx: ConversationContext, signal?: AbortSignal): Promise<ReplyWithAction>
+  warmUp(identity?: ConversationContext): Promise<void>
+  stop?(): void
 }
 ```
+
+> **Limite do pathfinder, registrado em `add-open-door`.**
+> `movements.canOpenDoors` **não abre portas**: o conjunto `openable` do
+> `mineflayer-pathfinder@2.4.5` só inclui bloco cujo nome contém `gate` — portão
+> de cerca. A própria lib mantém a flag desligada com a justificativa
+> `Causes issues. Probably due to none paper servers`, e o mundo deste projeto é
+> aberto em LAN pelo cliente vanilla, exatamente esse caso.
+>
+> **Decisão: `canOpenDoors` permanece `false`.** Porta é resolvida por
+> `bot.activateBlock`, fora do pathfinder.
+
+#### Scenario: Configuração de movimento no spawn
+- **GIVEN** o bot acabou de entrar no mundo
+- **WHEN** `Movements` é configurado
+- **THEN** `allowSprinting` é `true`
+- **AND** `canDig` é `false`
+- **AND** `canOpenDoors` é `false`
 
 #### Scenario: Camadas superiores não conhecem o provider
 - **GIVEN** o roteador da cascata precisa de uma resposta de IA
@@ -47,8 +70,14 @@ interface LlmProvider {
 #### Scenario: Troca de provider sem alterar código
 - **GIVEN** o bot está rodando com `llm.provider: "ollama"`
 - **WHEN** a config muda para `llm.provider: "gemini"` e o bot reinicia
-- **THEN** todo o comportamento de conversa e interpretação continua idêntico
+- **THEN** todo o comportamento de conversa e de ação continua idêntico
 - **AND** nenhum arquivo fora de config precisou mudar
+
+#### Scenario: Uma chamada por mensagem
+- **GIVEN** o dono manda uma mensagem que chega ao nível 3
+- **WHEN** a IA é consultada
+- **THEN** acontece **uma** chamada de inferência, não duas
+- **AND** dela saem tanto a fala quanto a ação
 
 ---
 
@@ -61,15 +90,20 @@ Implementação que fala com um servidor Ollama por HTTP.
   e `llm.ollama.model: "qwen3:4b"`
 - **WHEN** o nível 3 precisa responder uma mensagem
 - **THEN** o bot chama o endpoint de chat do Ollama com o modelo configurado
-- **AND** a resposta é enviada ao chat do jogo
+- **AND** a fala é enviada ao chat do jogo
 - **AND** nenhuma requisição sai da máquina
 
-#### Scenario: Interpretação com schema forçado
+#### Scenario: Fala e ação com schema forçado
 - **GIVEN** o provider Ollama está ativo
-- **WHEN** `interpret()` é chamado
-- **THEN** o JSON Schema de `Intent` é enviado no parâmetro de formato estruturado
+- **WHEN** `converse()` é chamado
+- **THEN** o JSON Schema de fala + ação é enviado no parâmetro de formato estruturado
 - **AND** a saída é validada contra o schema antes de virar ação
-- **AND** saída inválida vira `UNKNOWN`, igual ao provider de nuvem
+
+#### Scenario: Saída fora do formato
+- **GIVEN** o modelo devolveu algo que não bate com o schema
+- **WHEN** a resposta é processada
+- **THEN** o que veio é aproveitado como fala pura, sem ação
+- **AND** nenhuma exceção sobe para o roteador
 
 #### Scenario: Servidor Ollama fora do ar
 - **GIVEN** `llm.provider: "ollama"` e o `ollama serve` não está rodando
@@ -102,7 +136,13 @@ A implementação de nuvem continua disponível, agora atrás da mesma interface
 - **GIVEN** `llm.provider: "gemini"` e `GEMINI_API_KEY` está no ambiente
 - **WHEN** o nível 3 precisa responder
 - **THEN** o bot chama a API do Gemini
-- **AND** o `responseSchema` nativo é usado em `interpret()`
+- **AND** o `responseSchema` nativo carrega o schema de fala + ação
+
+#### Scenario: Fala e ação com `responseSchema`
+- **GIVEN** o provider Gemini está ativo
+- **WHEN** `converse()` é chamado
+- **THEN** o schema de fala + ação vai no `responseSchema` da requisição
+- **AND** a saída é validada antes de virar ação
 
 #### Scenario: Chave exigida só quando o provider é Gemini
 - **GIVEN** `llm.provider: "ollama"`
@@ -499,3 +539,16 @@ Diretrizes que a implementação deve documentar no README:
   apontar `baseUrl` para ela. Zero disputa de recurso, e permite um modelo maior.
 - O catálogo de modelos muda rápido; o README deve mandar conferir
   `ollama.com/library` em vez de fixar essa tabela como verdade eterna.
+
+---
+
+## Descontinuado
+
+### Requirement: `interpret` na interface de provider (removido: 2026-08-19)
+
+O método `interpret(text, ctx)` saiu de `LlmProvider`, de `ResilientProvider` e
+de `AiLayer` em `ai-reply-with-action`, junto dos cenários de "Interpretação com
+schema forçado" de cada provider — que passaram a valer para `converse`.
+
+**Motivo:** com a ação vindo junto da fala, ele não tinha mais chamador. Ver
+`ai_companion.md` → *Descontinuado* para o histórico completo.

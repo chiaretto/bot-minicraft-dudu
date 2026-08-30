@@ -67,15 +67,27 @@
 - [x] 6.1 `pedido_coleta` e `capacidades` sem promessa de pegar pedra na mão
 - [x] 6.2 `cp data/repertoire.yaml src/dialogue/default-repertoire.yaml`
 - [x] 6.3 Testes de regressão dos cinco defeitos
-- [ ] 6.4 **Testar em jogo**: cair num buraco de terra sem ferramenta e chamar
-- [ ] 6.5 **Testar em jogo**: buraco de pedra sem picareta dá a recusa certa
-- [ ] 6.6 **Testar em jogo**: `pega madeira` traz madeira de verdade
+- [x] 6.4 **Testar em jogo**: cair num buraco de terra sem ferramenta e chamar
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
+- [x] 6.5 **Testar em jogo**: buraco de pedra sem picareta dá a recusa certa
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
+- [x] 6.6 **Testar em jogo**: `pega madeira` traz madeira de verdade
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
 - [x] 6.7 `npm test` + `npx eslint src test` finais
 
 **Quality Gate:**
 - [x] Todos os testes passam
 - [x] Lint limpo
-- [ ] Correção conferida em jogo (PENDENTE — 6.4 a 6.6)
+- [x] Correção conferida em jogo (PENDENTE — 6.4 a 6.6)
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
 - [x] Repertório sincronizado nas duas cópias
 
 ---
@@ -83,5 +95,5 @@
 ## Completion Checklist
 
 - [x] Fases 1 a 5 completas; da 6, só a verificação em jogo ficou aberta
-- [ ] Pronto para `/openspec-archive fix-harvest-and-gather` **depois** do teste
+- [x] Pronto para `/openspec-archive fix-harvest-and-gather` **depois** do teste
       em jogo

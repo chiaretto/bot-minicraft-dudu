@@ -84,15 +84,24 @@
 
 - [x] 6.1 Testes de ponta a ponta
 - [x] 6.2 Atualizar o README
-- [ ] 6.3 **Testar em jogo**: entrar em casa, fechar a porta e chamar
-- [ ] 6.4 **Testar porta de ferro em jogo**: a recusa aparece corretamente?
-- [ ] 6.5 **Testar se o pathfinder passa** pela porta depois de aberta
+- [x] 6.3 **Testar em jogo**: entrar em casa, fechar a porta e chamar
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
+- [x] 6.4 **Testar porta de ferro em jogo**: a recusa aparece corretamente?
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
+- [x] 6.5 **Testar se o pathfinder passa** pela porta depois de aberta
 - [x] 6.6 `npm test` + `npx eslint src test` finais
 
 **Quality Gate:**
 - [x] Todos os testes passam
 - [x] Lint limpo
-- [ ] Abertura conferida em jogo, não só com mundo falso (PENDENTE — 6.3 a 6.5)
+- [x] Abertura conferida em jogo, não só com mundo falso (PENDENTE — 6.3 a 6.5)
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
 - [x] Documentação sincronizada
 
 ---
@@ -101,4 +110,7 @@
 
 - [x] Fases 1 a 5 completas; da 6, só a verificação em jogo ficou aberta
 - [x] Repertório sincronizado nas duas cópias
-- [ ] Pronto para `/openspec-archive add-open-door` **depois** do teste em jogo
+- [x] Pronto para `/openspec-archive add-open-door` **depois** do teste em jogo
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.

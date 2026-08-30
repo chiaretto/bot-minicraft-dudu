@@ -116,3 +116,26 @@ criança. Antes as duas situações davam a mesma frase.
 | Bot sem ferramenta nenhuma fica sem material em caverna de pedra | **Alta** | Médio | Recusa honesta pedindo picareta ou blocos — não há como cavar pedra sem picareta |
 | A espera do vigia deixar o bot preso por um minuto | Média | Baixo | Qualquer chamado novo zera a espera |
 | `bestHarvestTool` não existir em versão futura do pathfinder | Baixa | Médio | Uso isolado no adaptador |
+
+---
+
+## Archive Information
+
+**Archived:** 2026-08-29
+**Outcome:** implementado; ver a ressalva de verificação abaixo
+
+### Ressalva de verificação
+
+Os cenários de **prova em jogo** do `tasks.md` **não foram verificados na sessão
+que arquivou**. O arquivamento foi decisão do dono do projeto, em lote com os
+outros changes de 2026-08-19.
+
+A lógica está coberta por teste unitário; o que falta é a observação no mundo
+aberto. Quem for mexer nesta área deve tratar esses cenários como não
+confirmados.
+
+### Nota sobre o merge
+
+As seções `MODIFIED` foram mescladas **à mão**, requisito por requisito, com
+conferência de cenários perdidos arquivo por arquivo. Neste projeto `MODIFIED` de
+delta é **acréscimo**, não substituição — mesclar por script apaga cenário.

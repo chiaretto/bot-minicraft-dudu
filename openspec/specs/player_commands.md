@@ -2,7 +2,8 @@
 
 **Componente:** `player_commands`
 **Origem:** `add-minecraft-companion-bot` (2026-08-15)
-**Atualizado por:** `add-bot-games-hide-and-seek` (2026-08-15),
+**Atualizado por:** `add-collect-and-build`, `add-escape-hole`, `add-open-door`, `fix-harvest-and-gather` (2026-08-19),
+`add-bot-games-hide-and-seek` (2026-08-15),
 `add-bot-game-pega-pega` (2026-08-16), `fix-attack-on-command` (2026-08-29)
 
 ---
@@ -55,6 +56,20 @@ O bot acompanha o dono pelo mundo, mantendo uma distância confortável.
 - **WHEN** o dono digita `dudu, me segue`
 - **THEN** o bot responde que não está enxergando o dono
 - **AND** permanece em `IDLE`
+
+Desde `add-escape-hole`, um chamado que não consegue ser cumprido **não termina
+mais em silêncio**.
+
+> `GoalFollow` não avisa quando não existe caminho — o pathfinder simplesmente
+> não anda. Com `movements.canDig = false` (proposital, para o esconde-esconde),
+> o bot também não abre caminho sozinho. O resultado era o bot parado e mudo no
+> fundo da ravina depois de a criança mandar `vem`.
+
+#### Scenario: Chamado sem caminho possível
+- **GIVEN** o bot está preso num buraco fundo
+- **WHEN** o chamado chega e ele não consegue andar
+- **THEN** ele avisa no chat e tenta subir
+- **AND** **não** fica parado sem dizer nada
 
 ---
 
@@ -524,3 +539,483 @@ seu jeito.
 - **WHEN** `Miguel` digita `dudu, vamos brincar`
 - **THEN** o convite é recusado com explicação no chat
 - **AND** o bot permanece em `EMERGENCY`
+
+---
+
+### Requirement: Pegar bloco de verdade
+
+Pedido de bloco comum é comando de **nível 1**: resolve sem IA, sem espera e com
+`llm.provider: 'none'`. O bot vai até o bloco, cava e avisa o que trouxe.
+
+A busca é sempre pelo **grupo** do material, nunca por um bloco só: "madeira"
+vale por qualquer tronco.
+
+| A criança fala | Grupo procurado |
+|---|---|
+| `pega madeira`, `pega tronco` | qualquer tronco |
+| `pega pedra` | pedra e pedregulho |
+| `pega terra` | terra |
+| `pega areia` | areia |
+
+#### Scenario: Pedido de madeira numa floresta
+- **GIVEN** `games`/IA irrelevantes e há árvores por perto
+- **WHEN** `FresherRobin90` digita `dudu, pega madeira`
+- **THEN** o parser resolve no nível 1, sem chamar a IA
+- **AND** o bot caminha até o tronco, cava e avisa quanto pegou
+
+#### Scenario: Floresta sem o tronco exato pedido
+- **GIVEN** o lugar só tem bétula
+- **WHEN** o pedido chega como `oak_log`
+- **THEN** a busca cobre o grupo inteiro e a bétula serve
+- **AND** o bot **não** responde "não achei" num lugar cheio de árvore
+
+#### Scenario: Bloco fora da allowlist de coleta
+- **GIVEN** `diamond_ore` não está em `collectAllowlist`
+- **WHEN** a coleta é pedida
+- **THEN** o bot recusa sem cavar nada
+- **AND** a recusa usa o nome que a criança entende, nunca o técnico
+
+#### Scenario: Não há o bloco por perto
+- **GIVEN** não existe nenhum bloco do grupo em 32 blocos
+- **WHEN** a coleta roda
+- **THEN** o bot avisa que não achou
+- **AND** volta para `IDLE` sem ficar preso
+
+---
+
+### Requirement: Construir coisa simples
+
+O bot levanta estruturas de um **catálogo fechado**. Pedido fora da lista nunca
+vira obra.
+
+| Estrutura | Forma |
+|---|---|
+| `casa` | 5x5, paredes de 2, porta na frente, 3 janelas, telhado plano |
+| `torre` | 3x3, paredes de 4, porta, topo fechado |
+
+#### Scenario: Pedir uma casa
+- **GIVEN** o bot tem material suficiente, ou sabe buscar
+- **WHEN** `FresherRobin90` digita `dudu, faz uma casa`
+- **THEN** o parser resolve no nível 1, sem chamar a IA
+- **AND** o bot levanta a casa ao lado de onde está
+- **AND** avisa no chat quando termina
+
+#### Scenario: A casa é habitável
+- **GIVEN** uma casa recém-construída
+- **WHEN** a criança chega nela
+- **THEN** existe um vão de porta da altura da parede
+- **AND** o interior é oco
+- **AND** o telhado é fechado, sem buraco
+
+#### Scenario: Estrutura fora do catálogo
+- **GIVEN** o pedido é `castelo`
+- **WHEN** a construção é avaliada
+- **THEN** nenhuma obra começa e nenhum bloco é colocado
+- **AND** o bot responde que essa ele não sabe fazer
+
+#### Scenario: Obra grande demais
+- **GIVEN** a planta pedida passa de `behavior.buildMaxBlocks`
+- **WHEN** a construção é avaliada
+- **THEN** ela é recusada **antes** de colocar o primeiro bloco
+
+---
+
+### Requirement: A obra nunca destrói o que já existe
+
+Construir só acrescenta. Posição que já tem bloco é pulada, e conta como
+pronta.
+
+#### Scenario: Bloco do jogador no caminho da parede
+- **GIVEN** existe um bloco do jogador onde a parede passaria
+- **WHEN** a obra chega naquela posição
+- **THEN** o bloco é preservado
+- **AND** a obra segue e termina normalmente
+
+#### Scenario: Material fora da allowlist de obra
+- **GIVEN** o pedido é construir com `tnt`
+- **WHEN** o material é escolhido
+- **THEN** a obra é recusada
+- **AND** `buildAllowlist` é a única fonte do que pode virar parede
+
+---
+
+### Requirement: Ordem de colocação com apoio
+
+Todo bloco é colocado encostado em algo que já existe: no chão, no bloco de
+baixo ou num vizinho já posto. A planta sai ordenada de baixo para cima e, em
+cada camada, de fora para dentro.
+
+> Sem isso o telhado não fecha: bloco no ar não pode ser colocado, e a obra
+> terminaria pela metade com a criança olhando.
+
+#### Scenario: Telhado fecha do anel de fora para o meio
+- **GIVEN** as paredes estão de pé
+- **WHEN** o telhado é colocado
+- **THEN** o anel externo se apoia na parede
+- **AND** cada anel seguinte se apoia no anterior, até o centro
+
+#### Scenario: Bloco sem apoio na vez dele
+- **GIVEN** um bloco cujo apoio ainda não existe
+- **WHEN** a passada chega nele
+- **THEN** ele é adiado para a passada seguinte
+- **AND** a obra não trava esperando por ele
+
+#### Scenario: Passada que não avança encerra a obra
+- **GIVEN** uma passada inteira sem colocar nada
+- **WHEN** ela termina
+- **THEN** a obra é encerrada
+- **AND** o bot fala que faltaram pedaços, em vez de fingir que terminou
+
+---
+
+### Requirement: Material da obra
+
+Uma obra usa **um** material. Sem pedido explícito, vence o que o bot tem em
+maior quantidade. Faltando material, ele busca antes de começar.
+
+#### Scenario: Constrói com o que tem
+- **GIVEN** o bot tem 90 de pedregulho e 10 de tronco
+- **WHEN** a casa é pedida sem dizer o material
+- **THEN** a obra inteira sai de pedregulho
+
+#### Scenario: Material pedido pelo jogador
+- **GIVEN** a criança pede uma torre de pedra
+- **WHEN** o material é escolhido
+- **THEN** a obra usa pedra, se estiver na allowlist de obra
+
+#### Scenario: Falta material e ele busca
+- **GIVEN** falta material e `behavior.buildAutoGather` é `true`
+- **WHEN** a obra vai começar
+- **THEN** o bot coleta o que falta primeiro
+- **AND** só então levanta a estrutura
+
+#### Scenario: Falta material e não dá para buscar
+- **GIVEN** a busca não trouxe o suficiente
+- **WHEN** a obra vai começar
+- **THEN** ela é recusada **antes** de levantar meia parede
+- **AND** o bot diz quantos blocos faltam e pede ajuda
+
+#### Scenario: Mochila vazia
+- **GIVEN** o bot não tem bloco nenhum e não sabe buscar
+- **WHEN** a obra é pedida
+- **THEN** ele recusa sem sair do lugar
+
+Desde `fix-harvest-and-gather`, **com a mochila vazia e a busca ligada ele
+escolhe o que vai buscar em vez de recusar antes de tentar.**
+
+#### Scenario: Mochila vazia com busca ligada
+- **GIVEN** o bot não tem bloco nenhum e `behavior.buildAutoGather` é `true`
+- **WHEN** a obra é pedida
+- **THEN** ele sai para buscar material
+- **AND** **não** responde "não tenho bloco nenhum" sem tentar
+
+#### Scenario: Mochila vazia sem busca
+- **GIVEN** `behavior.buildAutoGather` é `false`
+- **WHEN** a obra é pedida com a mochila vazia
+- **THEN** a recusa continua sendo a resposta certa
+
+#### Scenario: Material da obra precisa ser alcançável
+- **GIVEN** o bot não tem picareta
+- **WHEN** o material da obra é escolhido
+- **THEN** pedra não entra na lista de candidatos
+- **AND** ele prefere o que consegue colher de verdade
+
+---
+
+### Requirement: A obra é interrompível
+
+Construir é ação como qualquer outra: para na hora que mandarem parar.
+
+#### Scenario: `dudu, para` no meio da obra
+- **GIVEN** a casa está pela metade
+- **WHEN** `FresherRobin90` digita `dudu, para`
+- **THEN** a obra para em menos de 1 s
+- **AND** o que já foi construído permanece
+- **AND** o bot volta para `IDLE`
+
+#### Scenario: Ameaça durante a obra
+- **GIVEN** a obra está em andamento
+- **WHEN** um hostil entra no raio de proteção do dono
+- **THEN** a defesa interrompe a obra
+- **AND** a obra **não** recomeça sozinha quando o combate acaba
+
+---
+
+### Requirement: Sair de buraco
+
+Chamado quando está preso no fundo de um buraco, o bot empilha blocos embaixo
+de si até alcançar o nível do dono e então volta a seguir. Um chamado nunca
+termina em silêncio.
+
+#### Scenario: Chamado no fundo de uma ravina
+- **GIVEN** o bot está em `FOLLOW` e o dono está 14 blocos acima
+- **AND** o bot não sai do lugar há `behavior.escapeStuckMs`
+- **WHEN** o vigia avalia a situação
+- **THEN** o bot avisa no chat que caiu num buraco, **antes** de começar
+- **AND** empilha blocos embaixo de si até o nível do dono
+- **AND** volta a seguir sem precisar de comando novo
+
+#### Scenario: Pedido explícito
+- **GIVEN** o bot está num buraco
+- **WHEN** `FresherRobin90` digita `dudu, sai do buraco` ou `dudu, sobe`
+- **THEN** o parser resolve no nível 1, sem chamar a IA
+- **AND** a subida começa
+
+#### Scenario: Não está em buraco nenhum
+- **GIVEN** o dono está no mesmo nível do bot, ou abaixo
+- **WHEN** a subida é pedida
+- **THEN** o bot recusa dizendo que não está num buraco
+- **AND** nenhum bloco é colocado
+
+#### Scenario: Desnível pequeno
+- **GIVEN** o dono está menos de `behavior.escapeMinDrop` acima
+- **WHEN** o vigia avalia
+- **THEN** nada acontece — o pulo do pathfinder resolve
+
+#### Scenario: Dono fora de vista
+- **GIVEN** o bot está fundo e o dono não está visível
+- **WHEN** a subida é avaliada
+- **THEN** ele **não** sobe
+- **AND** a razão é que uma torre no meio do nada não leva a lugar nenhum
+
+#### Scenario: Teto de altura
+- **GIVEN** o dono está 300 blocos acima, voando de criativo
+- **WHEN** a subida roda
+- **THEN** ela para em `behavior.escapeMaxHeight` degraus
+- **AND** o bot fala que subiu mas ainda está fundo
+
+---
+
+### Requirement: Material do degrau
+
+Faltando bloco, o bot cava as paredes em volta. Nunca o chão, e nunca o que não
+pode cavar.
+
+#### Scenario: Mochila vazia dentro do buraco
+- **GIVEN** o bot não tem nenhum bloco e as paredes são de terra
+- **WHEN** a subida vai começar
+- **THEN** ele cava as paredes até ter degrau suficiente
+- **AND** só então começa a subir
+
+#### Scenario: Nunca cavar embaixo dos pés
+- **GIVEN** o bot está escolhendo o que cavar
+- **WHEN** os candidatos são listados
+- **THEN** nenhum deles está abaixo dos pés
+- **AND** a razão é que cavar o chão aprofunda o buraco
+
+#### Scenario: Só o que ele pode cavar E usar
+- **GIVEN** um bloco só está em `collectAllowlist`, ou só em `buildAllowlist`
+- **WHEN** o material é escolhido
+- **THEN** esse bloco **não** é cavado
+- **AND** vale apenas a interseção das duas listas
+
+#### Scenario: Nada para cavar e nada na mochila
+- **GIVEN** o bot está num buraco de rocha que ele não pode cavar
+- **WHEN** a subida é tentada
+- **THEN** ele pede ajuda no chat
+- **AND** não fica preso tentando
+
+#### Scenario: Teto de escavação
+- **GIVEN** cavar não está rendendo material
+- **WHEN** `behavior.escapeMaxDigs` blocos foram cavados
+- **THEN** ele para de cavar
+- **AND** a subida não vira uma escavação sem fim
+
+---
+
+### Requirement: A subida respeita as prioridades
+
+Subir é ação como qualquer outra: cede a lugar para o que é mais urgente.
+
+#### Scenario: `dudu, para` no meio da subida
+- **GIVEN** o bot está empilhando blocos
+- **WHEN** `FresherRobin90` digita `dudu, para`
+- **THEN** a subida para
+- **AND** os degraus já colocados permanecem
+
+#### Scenario: Monstro durante a subida
+- **GIVEN** a subida está em andamento
+- **WHEN** um hostil entra no raio de proteção do dono
+- **THEN** a defesa interrompe a subida
+
+#### Scenario: Brincadeira em andamento
+- **GIVEN** uma rodada de esconde-esconde ou pega-pega está valendo
+- **WHEN** o vigia roda
+- **THEN** ele não faz nada
+- **AND** a razão é que um bot empilhando blocos estragaria a brincadeira
+
+#### Scenario: Parado por outro motivo
+- **GIVEN** o bot está parado, mas o dono está no mesmo nível
+- **WHEN** o vigia avalia
+- **THEN** nenhuma subida começa
+
+---
+
+### Requirement: Abrir porta
+
+O bot abre porta, portão de cerca e alçapão de madeira, clicando neles como o
+jogador faria. Porta de ferro **não**: essa só abre com botão, alavanca ou placa
+de pressão, e ele diz isso em vez de tentar.
+
+#### Scenario: Pedido explícito
+- **GIVEN** existe uma porta de madeira fechada por perto
+- **WHEN** `FresherRobin90` digita `dudu, abre a porta`
+- **THEN** o parser resolve no nível 1, sem chamar a IA
+- **AND** o bot caminha até a porta e a abre
+- **AND** avisa no chat que abriu
+
+#### Scenario: Portão e alçapão
+- **GIVEN** o bloco mais próximo é um portão de cerca ou um alçapão
+- **WHEN** a abertura acontece
+- **THEN** o bot chama o bloco pelo nome que a criança usa — `portão`, `alçapão`
+- **AND** nunca pelo nome técnico
+
+#### Scenario: Porta de ferro
+- **GIVEN** a porta mais próxima é de ferro
+- **WHEN** a abertura é pedida
+- **THEN** o bot **não** clica nela
+- **AND** explica que ela só abre com botão ou alavanca
+
+> Ficar clicando numa porta que não vai abrir pareceria bot quebrado. A recusa
+> honesta é a regra do público (`openspec/project.md`).
+
+#### Scenario: Nenhuma porta por perto
+- **GIVEN** não há porta em `behavior.doorSearchRadius`
+- **WHEN** a abertura é pedida
+- **THEN** o bot diz que não está vendo porta nenhuma
+
+#### Scenario: Porta já aberta
+- **GIVEN** a única porta por perto já está aberta
+- **WHEN** a abertura é pedida
+- **THEN** o bot avisa que ela já está aberta
+- **AND** **não** clica nela — clicar de novo a fecharia
+
+#### Scenario: As duas metades da porta
+- **GIVEN** uma porta ocupa dois blocos e os dois aparecem na busca
+- **WHEN** o alvo é escolhido
+- **THEN** só a metade de baixo é considerada
+- **AND** o bot não trata as duas metades como portas diferentes
+
+#### Scenario: O clique não surtiu efeito
+- **GIVEN** o bot clicou na porta
+- **WHEN** ela continua fechada
+- **THEN** ele fala que tentou e não abriu
+- **AND** **não** anuncia que abriu
+
+---
+
+### Requirement: Porta fechada não trava o chamado
+
+Porta fechada é parede para o pathfinder. Um chamado nunca pode terminar com o
+bot parado do lado de fora, calado.
+
+#### Scenario: Chamado com a porta fechada no caminho
+- **GIVEN** o dono entrou em casa e fechou a porta
+- **AND** o bot está em `FOLLOW` e não sai do lugar há `behavior.escapeStuckMs`
+- **WHEN** o vigia avalia
+- **THEN** o bot avisa que tem porta no caminho
+- **AND** abre a porta
+- **AND** volta a seguir sem precisar de comando novo
+
+#### Scenario: Porta vem antes de buraco
+- **GIVEN** o bot está travado
+- **AND** existe porta fechada por perto
+- **WHEN** o vigia escolhe o que fazer
+- **THEN** ele tenta a porta primeiro
+- **AND** a razão é que porta é mais comum, mais barata de resolver, e acontece
+  no mesmo nível — onde a regra do buraco nem se aplica
+
+#### Scenario: Porta de ferro não conta como causa
+- **GIVEN** o bot está travado e a única porta por perto é de ferro
+- **WHEN** o vigia avalia
+- **THEN** a porta **não** é tratada como causa
+- **AND** o vigia segue para a avaliação de buraco
+
+#### Scenario: Brincadeira em andamento
+- **GIVEN** uma rodada de esconde-esconde ou pega-pega está valendo
+- **WHEN** o vigia roda
+- **THEN** ele não abre porta nenhuma
+
+> A garantia de "quem se lacrou não é achado" vem de o pathfinder não conseguir
+> entrar. A sessão de jogo não abre portas, e o vigia não roda durante rodada:
+> abrir porta continua sendo decisão do jogador.
+
+Desde `fix-harvest-and-gather` há um limite novo: **depois de uma tentativa que
+não deu certo, ele espera antes de tentar de novo.**
+
+#### Scenario: Tentativa falha não vira repetição
+- **GIVEN** o bot tentou destravar e não conseguiu
+- **WHEN** o vigia roda de novo no ciclo seguinte
+- **THEN** ele não tenta nem fala de novo
+- **AND** a criança não recebe a mesma frustração várias vezes seguidas
+
+#### Scenario: Chamado novo zera a espera
+- **GIVEN** o vigia está esperando depois de uma falha
+- **WHEN** o dono manda seguir de novo
+- **THEN** a espera é zerada
+- **AND** a razão é que ele pode ter jogado blocos para o bot, ou aberto a porta
+
+---
+
+### Requirement: A abertura respeita as prioridades
+
+#### Scenario: `dudu, para` durante a abertura
+- **GIVEN** o bot está indo até a porta
+- **WHEN** `FresherRobin90` digita `dudu, para`
+- **THEN** ele para e não clica na porta
+
+#### Scenario: Monstro durante a abertura
+- **GIVEN** a abertura está em andamento
+- **WHEN** um hostil entra no raio de proteção do dono
+- **THEN** a defesa interrompe a abertura
+
+---
+
+### Requirement: Só cava o que consegue levar
+
+Cavar não é o mesmo que conseguir o bloco. Pedra quebrada sem picareta some sem
+dropar nada: o bot gasta o tempo, abre o buraco e volta de mãos vazias.
+
+#### Scenario: Pedra sem picareta
+- **GIVEN** o bot não tem nenhuma picareta
+- **WHEN** a coleta de pedra é pedida
+- **THEN** ele **não** cava nenhuma pedra
+- **AND** responde que precisa de uma picareta
+
+#### Scenario: Pedra com picareta
+- **GIVEN** o bot tem uma picareta na mochila
+- **WHEN** a coleta de pedra roda
+- **THEN** ele equipa a picareta antes de cavar
+
+#### Scenario: Bloco que cai na mão
+- **GIVEN** o alvo é terra, areia ou tronco
+- **WHEN** a coleta roda
+- **THEN** ele cava normalmente, sem exigir ferramenta
+
+#### Scenario: Buraco de pedra sem picareta
+- **GIVEN** o bot está num buraco de paredes de pedra e sem picareta
+- **WHEN** ele procura material para o degrau
+- **THEN** ele **não** cava as paredes
+- **AND** pede uma picareta — não blocos
+
+> `me joga uns blocos` e `preciso de uma picareta` pedem coisas opostas da
+> criança. Dar a mesma frase para as duas situações a deixa sem saber o que fazer.
+
+---
+
+### Requirement: O número que ele fala é o que entrou na mochila
+
+O resultado da coleta é medido pelo inventário, antes e depois — nunca por
+quantos blocos foram quebrados.
+
+#### Scenario: Coleta que não rendeu
+- **GIVEN** os blocos quebrados não renderam item
+- **WHEN** a coleta termina
+- **THEN** o bot diz que **não conseguiu** pegar
+- **AND** nunca anuncia um número que não está na mochila
+
+#### Scenario: Recolher o que caiu
+- **GIVEN** o bot acabou de quebrar um bloco a 2 de distância
+- **WHEN** o item cai no chão
+- **THEN** ele anda em cima do lugar para recolher
+- **AND** falhar em recolher não derruba a coleta inteira

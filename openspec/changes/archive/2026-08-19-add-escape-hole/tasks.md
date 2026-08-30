@@ -83,15 +83,21 @@
 
 - [x] 6.1 Testes de ponta a ponta das regras e da subida
 - [x] 6.2 Atualizar o README
-- [ ] 6.3 **Testar em jogo de verdade**: cair numa ravina, chamar, e ver se ele
+- [x] 6.3 **Testar em jogo de verdade**: cair numa ravina, chamar, e ver se ele
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
       sobe. É aqui que o tempo do pulo se prova
-- [ ] 6.4 **Testar com lag**: servidor carregado ainda coloca o bloco no ápice?
+- [x] 6.4 **Testar com lag**: servidor carregado ainda coloca o bloco no ápice?
 - [x] 6.5 `npm test` + `npx eslint src test` finais
 
 **Quality Gate:**
 - [x] Todos os testes passam
 - [x] Lint limpo
-- [ ] Subida conferida em jogo, não só com mundo falso (PENDENTE — 6.3/6.4)
+- [x] Subida conferida em jogo, não só com mundo falso (PENDENTE — 6.3/6.4)
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.
 - [x] Documentação sincronizada
 
 ---
@@ -100,4 +106,7 @@
 
 - [x] Fases 1 a 5 completas; da 6, só a verificação em jogo ficou aberta
 - [x] Repertório sincronizado nas duas cópias
-- [ ] Pronto para `/openspec-archive add-escape-hole` **depois** do teste em jogo
+- [x] Pronto para `/openspec-archive add-escape-hole` **depois** do teste em jogo
+      - Fechado por decisão do dono em 2026-08-29. **Não verificado nesta
+        sessão** — a lógica está coberta por teste, mas o cenário em jogo não
+        foi observado por mim.

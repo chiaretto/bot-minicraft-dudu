@@ -2,7 +2,8 @@
 
 **Componente:** `local_dialogue`
 **Origem:** `add-minecraft-companion-bot` (2026-08-15)
-**Atualizado por:** `add-bot-games-hide-and-seek` (2026-08-15),
+**Atualizado por:** `add-collect-and-build`, `ai-reply-with-action`, `ask-game-role`, `fix-harvest-and-gather` (2026-08-19),
+`add-bot-games-hide-and-seek` (2026-08-15),
 `add-bot-game-pega-pega` (2026-08-16)
 
 > Este é o **nível 2** da cascata de resolução: roda depois do parser de comandos
@@ -31,6 +32,19 @@ aprendida.
 
 O parser de regex continua ganhando de todos: o que um humano escreveu vale mais
 que o que o bot deduziu.
+
+Desde `ai-reply-with-action`, o que muda é o que o **nível 3** é capaz de
+devolver: além da fala, ele pode trazer uma ação a executar.
+
+| Nível | Devolve |
+|---|---|
+| 1. comando (regex) | ação |
+| 1.5. comando aprendido | ação |
+| 2. repertório local | fala |
+| 3. IA | fala **e**, quando for pedido, ação |
+
+Os níveis 1 e 2 não mudam em nada: o 1 continua funcionando com a IA desligada, e
+o 2 continua respondendo sem sair da máquina.
 
 #### Scenario: Comando tem precedência sobre o aprendido e sobre o repertório
 - **GIVEN** o dono digita `dudu, me segue`
@@ -746,3 +760,112 @@ do dia, para qualquer ação, em qualquer lugar do mundo.
 - **WHEN** cada uma é lida
 - **THEN** nenhuma cita hora do dia, lugar, bloco ou ação específica
 - **AND** nenhuma promete capacidade — o que o bot vai fazer, ele já vai fazer em seguida
+
+---
+
+### Requirement: Nenhuma fala nega capacidade que o bot tem
+
+> Desde `fix-harvest-and-gather` vale a outra ponta também: **nem afirma
+> capacidade que ele não tem sempre.** "Sei pegar pedra" só vale com picareta, e
+> o bot normalmente não tem ferramenta nenhuma.
+
+O repertório responde **antes** da IA. Uma entrada que diz "isso eu não sei
+fazer" para algo que o bot faz é pior que um bug: é o bot mentindo para a
+criança, e nenhum código de ação alcança ela.
+
+Foi exatamente o que aconteceu com a coleta: `collectBlock` existia desde o
+começo, e `pedido_coleta` respondia "Buscar coisa eu ainda não aprendi".
+
+#### Scenario: Capacidade nova varre o repertório
+- **GIVEN** o bot aprendeu a construir e a pegar bloco
+- **WHEN** o repertório é revisado
+- **THEN** nenhuma entrada nega essas capacidades
+- **AND** as entradas de recusa cobrem só o que ele de fato não faz
+
+#### Scenario: Pedir casa não cai em recusa
+- **GIVEN** o catálogo atual
+- **WHEN** `faz uma casa` ou `constroi uma casa` é resolvido pelo repertório
+- **THEN** a resposta **não** diz que ele não sabe fazer
+
+#### Scenario: Pedir madeira não cai em recusa
+- **GIVEN** o catálogo atual
+- **WHEN** `pega madeira` ou `pega pedra` é resolvido pelo repertório
+- **THEN** a resposta **não** diz que ele não sabe fazer
+
+#### Scenario: O que ele não faz continua recusado
+- **GIVEN** o bot não sabe craftar nem fazer poção
+- **WHEN** `crafta`, `faz uma pocao` ou `constroi um castelo` chega
+- **THEN** a resposta vem de `recusa_escopo`
+- **AND** ela oferece o que funciona: casinha, torre, pegar bloco
+
+#### Scenario: Minério continua sendo recusa honesta
+- **GIVEN** minério não está na allowlist de coleta
+- **WHEN** `pega diamante` chega
+- **THEN** a resposta vem de `pedido_coleta`
+- **AND** ela ensina um pedido que funciona
+
+#### Scenario: A lista de capacidades acompanha
+- **GIVEN** perguntam o que o bot sabe fazer
+- **WHEN** `capacidades` responde
+- **THEN** pegar bloco e construir aparecem entre as respostas
+
+#### Scenario: Capacidade condicional não vira promessa
+- **GIVEN** pegar pedra depende de ter picareta
+- **WHEN** o repertório lista o que ele sabe fazer
+- **THEN** ele oferece o que funciona sempre: madeira, terra e areia
+- **AND** pedra aparece com a condição dita, ou não aparece
+
+#### Scenario: A recusa de minério ensina o que funciona
+- **GIVEN** `pega diamante` chega
+- **WHEN** `pedido_coleta` responde
+- **THEN** ela oferece material que ele consegue pegar na mão
+- **AND** menciona a picareta quando falar de pedra
+
+---
+
+### Requirement: O prompt da IA acompanha a capacidade
+
+O que o bot diz que sabe fazer é igual no repertório e no prompt. As duas fontes
+não podem contar histórias diferentes.
+
+#### Scenario: Identidade não nega mais construir
+- **GIVEN** o bot aprendeu a construir
+- **WHEN** o prompt de conversa é montado
+- **THEN** construir aparece entre o que ele sabe
+- **AND** **não** aparece entre o que ele não sabe
+
+#### Scenario: Exemplo do prompt sem promessa desatualizada
+- **GIVEN** os exemplos de "pedido impossível" no prompt
+- **WHEN** o prompt é montado
+- **THEN** nenhum deles usa construir casa como exemplo do que ele não faz
+
+---
+
+### Requirement: Falas da pergunta de papel
+
+As perguntas de papel entram no catálogo como qualquer fala de jogo:
+instantâneas, sem IA, com 4+ variações.
+
+| Entrada | Quando |
+|---|---|
+| `jogo_quem_esconde` | convite de esconde-esconde sem papel |
+| `jogo_quem_corre` | convite de pega-pega sem papel |
+
+#### Scenario: Toda variação oferece as duas opções
+- **GIVEN** o catálogo tem `jogo_quem_esconde` e `jogo_quem_corre`
+- **WHEN** qualquer variação de qualquer uma das duas é sorteada
+- **THEN** ela nomeia **as duas** escolhas possíveis
+- **AND** uma pergunta que cita só um lado não é aceitável — esconder metade das
+  opções é o defeito que este change existe para corrigir
+
+#### Scenario: Pergunta sem IA
+- **GIVEN** `llm.provider` é `'none'`
+- **WHEN** o bot pergunta o papel
+- **THEN** a fala sai do repertório local, na hora
+- **AND** nenhuma chamada de provider acontece
+
+#### Scenario: Repergunta usa a mesma entrada
+- **GIVEN** o bot já perguntou uma vez e vai reperguntar
+- **WHEN** ele fala de novo
+- **THEN** a fala vem da mesma entrada, em outra variação
+- **AND** vale a regra de não repetir a variação anterior
