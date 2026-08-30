@@ -968,6 +968,11 @@ jogador (`[Miguel: Set own game mode to Creative Mode]`), e o bot chegou a
 responder a isso com entusiasmo, gastando chamada de IA e até decorando a frase
 como comando. Agora ele reconhece o recado do jogo e ignora.
 
+**Quero ver o que aconteceu numa sessão antiga**
+O log da aplicação fica em `data/logs/AAAA-MM-DD.log`, um arquivo por dia — o
+mesmo que sai no terminal e no "Coisas de adulto". A conversa fica separada, em
+`data/conversations/`. Desligue com `logDir: null` se preferir só o terminal.
+
 **O bot responde besteira em vez de conversar**
 O repertório está casando padrão demais. Suba `dialogue.minConfidence` para 0.8.
 

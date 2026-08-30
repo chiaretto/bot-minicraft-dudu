@@ -25,8 +25,11 @@ async function main(): Promise<void> {
 
   const { config, secrets } = loaded
 
-  const logger = createLogger(config.logLevel)
-  logger.info({ owner: config.ownerPlayer, bot: config.persona.name }, 'iniciando')
+  const logger = createLogger({ level: config.logLevel, fileDir: config.logDir })
+  logger.info(
+    { owner: config.ownerPlayer, bot: config.persona.name, log: config.logDir ?? 'só no terminal' },
+    'iniciando',
+  )
 
   let bot: CompanionBot
   try {

@@ -424,6 +424,14 @@ export const configSchema = z.object({
   learned: learnedSchema.default({}),
   behavior: behaviorSchema.default({}),
   logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
+  /**
+   * Pasta do log da aplicação em arquivo, um por dia.
+   *
+   * `null` desliga: o log vai só para o `stdout`, como antes de 2026-08-30.
+   * O padrão fica ao lado do histórico de conversa, dentro de `data/` — que
+   * está inteiro no `.gitignore`, porque log de bot tem fala de criança.
+   */
+  logDir: z.string().nullable().default('data/logs'),
 })
 
 export type Config = z.infer<typeof configSchema>

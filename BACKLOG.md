@@ -228,7 +228,7 @@ falas do bot em voz alta é a mudança de maior impacto do projeto inteiro.
 
 **Custo.** Médio.
 
-### 15. Log da aplicação em arquivo
+### 15. ~~Log da aplicação em arquivo~~ ✅ (2026-08-30, `add-file-logging`)
 
 Hoje o pino vai só para o `stdout` (`CLAUDE.md` → Diagnóstico). Quando algo falha
 sem terminal aberto, não sobra rastro nenhum.

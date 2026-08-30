@@ -309,3 +309,13 @@ behavior:
   survivalTickMs: 3000
 
 logLevel: 'info'
+
+# Onde gravar o log da aplicação, um arquivo por dia (AAAA-MM-DD.log).
+#
+# O log continua saindo no terminal — e no "Coisas de adulto" do aplicativo de
+# desktop, que é o mesmo stdout. O arquivo é o que SOBRA depois que a janela
+# fecha: sem ele, quem diz "não funcionou" no dia seguinte não tem o que mostrar.
+#
+# Fica dentro de `data/`, que está inteiro no .gitignore — log de bot tem fala
+# de criança. Use `null` para desligar e voltar a ter só o terminal.
+logDir: 'data/logs'
