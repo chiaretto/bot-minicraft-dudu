@@ -150,10 +150,47 @@ Custaram tempo a descobrir; não re-investigue do zero.
 - `data/conversations/AAAA-MM-DD.jsonl` registra o que o bot **decidiu**
   responder, não o que chegou ao jogador. Entrega é outra coisa — ver a
   armadilha do chat seguro acima.
-- O log da aplicação (pino) vai só para o stdout do terminal, não para arquivo.
-  Quando o bot sobe pelo aplicativo de desktop, esse mesmo stdout aparece em
-  "Coisas de adulto" — é onde procurar quando alguém diz que "não funcionou" e
-  não tem terminal aberto.
+- **Desde 2026-08-30 o log também vai para arquivo**: `data/logs/AAAA-MM-DD.log`,
+  um por dia, com a mesma convenção de nome do histórico de conversa. O stdout
+  continua — o aplicativo de desktop mostra ele em "Coisas de adulto", e é onde
+  procurar durante a sessão. O arquivo é o que sobra depois que a janela fecha.
+  `logDir: null` volta ao comportamento antigo.
+
+## Instintos: o que ele faz sem ninguém pedir
+
+Desde 2026-08-30 existem dois comportamentos que acontecem sozinhos, no molde da
+defesa — **determinísticos, periódicos e sem IA**:
+
+- **`autoEat`**: com a fome em `eatBelowFood` (14 de 20), ele come.
+- **`autoTorch`**: com a luz abaixo de `torchBelowLight` (7 de 15), ele acende
+  uma tocha.
+
+Três coisas que quebram se alguém mexer sem saber:
+
+- **Só em estado calmo** (`IDLE`, `FOLLOW`, `STAY`). Comer trava o bot por quase
+  dois segundos: no meio de uma briga ou de uma brincadeira é o pior momento
+  possível, e a guarda é o que impede o instinto de atrapalhar justamente quando
+  a criança precisa dele.
+- **Uma coisa por tick.** Comer e acender na mesma passada deixaria a criança
+  falando sozinha por quatro segundos.
+- **O cardápio é catálogo fechado, sem maçã dourada.** Item raro que a criança
+  pediu para guardar não vira lanche do bot.
+
+As duas ações **nunca lançam**: instinto que derruba a ação em curso é pior que
+instinto nenhum.
+
+## O aplicativo lê em voz alta
+
+Desde 2026-08-30 o protocolo com o supervisor tem **dois** prefixos:
+`@dudu-status` (ciclo de vida) e `@dudu-fala` (o que o bot disse no chat).
+
+Separados de propósito, e com uma diferença que importa: o canal de status
+**engole repetição** (dois `procurando` seguidos não são transição); o de fala
+**não pode** — o bot repete "quente!" numa rodada de quente e frio, e a criança
+precisa ouvir cada uma.
+
+A política do que vale a pena ouvir mora em `launcher/src/voice.ts`, puro e
+testável. A janela só faz o que exige navegador: `speechSynthesis`.
 
 ## Atacar é comando, nunca intenção da IA
 

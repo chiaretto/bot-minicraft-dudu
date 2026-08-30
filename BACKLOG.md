@@ -1,5 +1,15 @@
 # Backlog do Dudu
 
+> ## ✅ Os 15 itens foram implementados (2026-08-30)
+>
+> **Nenhum foi provado em jogo.** Cada change tem, no `tasks.md`, a lista do que
+> falta observar no mundo aberto — e nenhum deles foi arquivado por causa disso.
+> O que existe é teste unitário e medição sobre os arquivos reais de log e de
+> cache.
+>
+> A lista continua aqui inteira, com a evidência que originou cada item: é o
+> histórico de por que cada coisa existe.
+
 Lista ordenada do que falta implementar. A ordem é para ser seguida de cima para
 baixo: bug que corrompe dado vem antes de feature, e feature barata que a
 criança já pediu vem antes de aposta grande.
