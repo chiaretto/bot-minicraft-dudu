@@ -8,6 +8,12 @@ em jogo** (ver o bloco no fim)
 > fase 1 no lugar, metade do lixo aprendido deixa de nascer, e a fase 5 só
 > precisa varrer o que já está lá.
 
+> **2026-08-30 — provado em jogo pelo dono, e aprovado.**
+>
+> As caixas de "em jogo" abaixo ficaram como estavam: a aprovação foi da sessão
+> inteira, não item a item. Marcá-las uma a uma diria que cada cenário foi
+> observado, e isso ninguém afirmou.
+
 ---
 
 ## Fase 1: A borda — retorno de comando não é fala

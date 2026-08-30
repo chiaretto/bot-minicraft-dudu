@@ -3,6 +3,12 @@
 **Change ID:** `add-launcher-voice`
 **Implementado:** 2026-08-30 — falta prova com a janela aberta
 
+> **2026-08-30 — provado em jogo pelo dono, e aprovado.**
+>
+> As caixas de "em jogo" abaixo ficaram como estavam: a aprovação foi da sessão
+> inteira, não item a item. Marcá-las uma a uma diria que cada cenário foi
+> observado, e isso ninguém afirmou.
+
 ---
 
 ## Fase 1: O bot anuncia o que fala

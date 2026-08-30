@@ -248,3 +248,17 @@ prova de que os módulos novos carregam em Node real sobre o `dist/`.
   `log-file.test.ts` dormia 50 ms fixos esperando o pino, e
   `module-loading.test.ts` usava o prazo padrão de 5 s do vitest para testes que
   sobem processo. Viraram espera ativa com prazo e prazo próprio de 30 s.
+
+---
+
+## Verificado em jogo
+
+**2026-08-30 — o dono testou e aprovou.**
+
+A ressalva acima descreve o estado em que este change foi arquivado, algumas
+horas antes. Fica registrada como histórico: é ela que explica por que os itens
+de "em jogo" do `tasks.md` continuam sem marca.
+
+As caixas **não** foram marcadas uma a uma de propósito. O que houve foi
+aprovação da sessão inteira; dizer qual cenário específico foi exercitado seria
+inventar detalhe que ninguém observou.

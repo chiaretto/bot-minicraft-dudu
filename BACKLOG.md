@@ -2,10 +2,11 @@
 
 > ## ✅ Os 15 itens foram implementados (2026-08-30)
 >
-> **Nenhum foi provado em jogo.** Cada change tem, no `tasks.md`, a lista do que
-> falta observar no mundo aberto — e nenhum deles foi arquivado por causa disso.
-> O que existe é teste unitário e medição sobre os arquivos reais de log e de
-> cache.
+> **Provado em jogo e aprovado pelo dono em 2026-08-30.** Os onze changes de 29
+> e 30/08 estão arquivados e as specs consolidadas.
+>
+> As caixas de "em jogo" dentro de cada `tasks.md` arquivado continuam sem
+> marca: a aprovação foi da sessão inteira, não item a item.
 >
 > A lista continua aqui inteira, com a evidência que originou cada item: é o
 > histórico de por que cada coisa existe.
