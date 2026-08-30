@@ -165,7 +165,7 @@ sob os próprios pés sem escadinha, e `ESCAPE_HOLE` como saída garantida.
 
 **Custo.** Médio.
 
-### 10. `SLEEP` — dormir na cama
+### 10. ~~`SLEEP` — dormir na cama~~ ✅ (2026-08-30, `add-sleep`)
 
 **Evidência.** Entrada `pedido_dormir`, nascida de três jeitos diferentes de
 pedir a mesma coisa no mesmo dia.

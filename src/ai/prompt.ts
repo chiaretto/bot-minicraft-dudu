@@ -68,6 +68,7 @@ export const ACTION_DESCRIPTIONS: Record<Exclude<IntentType, 'CHAT' | 'UNKNOWN'>
   PLACE_BLOCK:
     'pôr UM bloco no chão à frente dele — "material" é opcional (madeira, pedra…)',
   DIG: 'cavar à frente dele — "shape" é "buraco" (poço 2x2) ou "tunel" (4 de comprimento)',
+  SLEEP: 'deitar na cama mais perto e dormir — só funciona de noite, e pula a noite inteira',
   JUMP: 'dar uns pulinhos no lugar, de brincadeira',
   TRICK: 'fazer graça: girar no lugar e terminar com um pulo',
   EQUIP_ITEM: 'pegar um item na mão — precisa de "item"',

@@ -30,6 +30,7 @@ export const INTENT_TYPES = [
   'COUNT_ITEM',
   'PLACE_BLOCK',
   'DIG',
+  'SLEEP',
   'CHAT',
   'UNKNOWN',
 ] as const
@@ -85,6 +86,7 @@ export const LEARNABLE_INTENTS = [
   'COUNT_ITEM',
   'PLACE_BLOCK',
   'DIG',
+  'SLEEP',
 ] as const
 
 export type LearnableIntentType = (typeof LEARNABLE_INTENTS)[number]
@@ -155,6 +157,8 @@ export const intentSchema = z.discriminatedUnion('type', [
     type: z.literal('DIG'),
     params: z.object({ shape: z.enum(DIG_SHAPES) }),
   }),
+  // Dormir na cama mais próxima. Sem parâmetro: qual cama é o mundo que diz.
+  z.object({ type: z.literal('SLEEP'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('JUMP'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('TRICK'), params: z.object({}).default({}) }),
   z.object({ type: z.literal('EQUIP_ITEM'), params: z.object({ item: z.string().min(1) }) }),

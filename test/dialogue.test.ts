@@ -276,15 +276,25 @@ describe('variação de respostas', () => {
     expect(first).not.toBe(second)
   })
 
-  it('três saudações seguidas dão três respostas diferentes', () => {
+  /**
+   * O contrato do sorteio é "nunca repetir a ÚLTIMA", não "nunca repetir".
+   *
+   * Este teste pedia três respostas distintas em três sorteios, e falhava
+   * sozinho mais ou menos uma vez a cada cinco rodadas: a terceira pode ser
+   * igual à primeira sem quebrar contrato nenhum. Agora ele cobra o que a
+   * spec promete — duas iguais em SEQUÊNCIA é que não pode.
+   * Ver: local_dialogue_delta.md → "Variação de respostas".
+   */
+  it('três saudações seguidas nunca repetem a anterior', () => {
     const rep = makeRepertoire()
-    const seen = new Set<string>()
+    const ditas: string[] = []
     for (let i = 0; i < 3; i++) {
       const r = rep.respond('oi', snapshot())
       expect(r).not.toBeNull()
-      seen.add(r!.text)
+      ditas.push(r!.text)
     }
-    expect(seen.size).toBe(3)
+    expect(ditas[1], 'repetiu a anterior').not.toBe(ditas[0])
+    expect(ditas[2], 'repetiu a anterior').not.toBe(ditas[1])
   })
 
   it('com uma só resposta, devolve sempre a mesma sem quebrar', () => {

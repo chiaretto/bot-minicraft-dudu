@@ -7,6 +7,13 @@ import { bestWeapon } from '../../domain/mobs.js'
 import { canHarvestWith, friendlyName, resolveBlockCandidates } from '../../domain/materials.js'
 import { chooseFood } from '../../domain/survival.js'
 import { facingFromYaw, type DigShape } from '../../domain/digging.js'
+import {
+  isBedName,
+  sleepRefusal,
+  BED_SEARCH_RADIUS,
+  SLEEP_REFUSAL_LINES,
+} from '../../domain/sleeping.js'
+import { toTimeOfDay } from '../../minecraft/snapshot.js'
 import { digShape, DigAborted, DigRefused, type DigWorld } from './dig.js'
 import {
   buildStructure,
@@ -333,6 +340,68 @@ export async function placeTorch(deps: ActionDeps): Promise<boolean> {
     return true
   } catch {
     return false
+  }
+}
+
+/**
+ * Vai até a cama mais perto e dorme.
+ *
+ * Pular a noite é o que essa ação entrega de verdade: a parte do jogo que mais
+ * assusta uma criança de 7 anos passa em dois segundos. Por isso ela recusa
+ * cedo e com fala — atravessar o mundo até uma cama para levar um "não" do
+ * servidor seria pior do que não tentar.
+ * Ver: player_commands_delta.md → "Dormir na cama".
+ */
+export async function sleepInBed(deps: ActionDeps): Promise<ActionOutcome> {
+  const { bot } = deps
+
+  const ids = Object.values(bot.registry.blocksByName)
+    .filter((b) => isBedName(b.name))
+    .map((b) => b.id)
+  const cama = ids.length > 0 ? bot.findBlock({ matching: ids, maxDistance: BED_SEARCH_RADIUS }) : null
+
+  const recusa = sleepRefusal({
+    timeOfDay: toTimeOfDay(bot.time?.timeOfDay ?? 0),
+    bedDistance: cama ? bot.entity.position.distanceTo(cama.position) : null,
+  })
+  if (recusa) throw new ActionRefused(SLEEP_REFUSAL_LINES[recusa].replace('{owner}', deps.ownerName))
+
+  // `cama` não é nulo aqui: `sleepRefusal` já teria devolvido 'sem_cama'.
+  const alvo = cama!
+  await withGuards(
+    bot.pathfinder.goto(new goals.GoalNear(alvo.position.x, alvo.position.y, alvo.position.z, 2)),
+    deps.signal,
+    deps.behavior.actionTimeoutMs,
+  )
+  checkAborted(deps.signal)
+
+  try {
+    await withGuards(bot.sleep(alvo), deps.signal, deps.behavior.actionTimeoutMs)
+  } catch (err) {
+    // O servidor recusa com motivo próprio ("there are monsters nearby"), e
+    // esse motivo é em inglês: traduzir aqui é a diferença entre a criança
+    // entender e não entender.
+    const motivo = err instanceof Error ? err.message.toLowerCase() : ''
+    if (motivo.includes('monster')) {
+      throw new ActionRefused('Tem monstro por perto! Não dá pra dormir assim.')
+    }
+    if (motivo.includes('occupied')) throw new ActionRefused('Essa cama já tá ocupada!')
+    if (motivo.includes('day') || motivo.includes('night')) {
+      throw new ActionRefused(SLEEP_REFUSAL_LINES.de_dia)
+    }
+    throw new ActionRefused('Não consegui deitar nessa cama, desculpa!')
+  }
+
+  return { ok: true, message: 'Boa noite! Vou dormir pra passar a noite rapidinho.' }
+}
+
+/** Acorda, se estiver dormindo. Nunca lança: acordar é sempre opcional. */
+export async function wakeUp(bot: Bot): Promise<void> {
+  if (!bot.isSleeping) return
+  try {
+    await bot.wake()
+  } catch {
+    // Já acordou sozinho, ou o servidor não deixou. Nos dois casos, tudo bem.
   }
 }
 
@@ -817,6 +886,8 @@ export async function runIntent(deps: ActionDeps, intent: Intent): Promise<Actio
       return equipItem(deps, intent.params.item)
     case 'COUNT_ITEM':
       return countItem(deps, intent.params.item)
+    case 'SLEEP':
+      return sleepInBed(deps)
     case 'PLACE_BLOCK':
       return placeBlockAhead(deps, intent.params.material)
     case 'DIG':

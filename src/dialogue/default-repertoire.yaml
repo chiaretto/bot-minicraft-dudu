@@ -29,8 +29,11 @@ entries:
   - id: despedida
     specificity: 2
     # 2026-08-19 (log): 'eu vou procurar uma caverna, depois eu volto' caía na IA.
+    # 2026-08-30: 'boa noite' caía em elogio_bot pela palavra "boa" — o bot
+    # agradecia um elogio que ninguém fez. É despedida, e o lugar dela é aqui.
     patterns: ['tchau', 'ate mais', 'ate logo', 'ate amanha', 'vou sair', 'vou dormir', 'to indo', 'falou', 'fui',
-       'ja volto', 'depois eu volto', 'volto ja', 'vou explorar', 'vou procurar uma caverna']
+       'ja volto', 'depois eu volto', 'volto ja', 'vou explorar', 'vou procurar uma caverna',
+       'boa noite', 'boanoite']
     responses:
       - 'Tchau {owner}! Volta logo, viu?'
       - 'Ahh já vai? Tá bom... até amanhã!'
@@ -777,20 +780,21 @@ entries:
       - 'Hmm, isso eu não vejo. Fala o que é que eu chuto!'
       - 'Não dá pra ver daqui! Mas eu vejo você :D'
 
-  # ──────────── 33. DORMIR / CAMA (ainda não sei fazer) ───────────────
-  # 2026-08-19: 'deite na cama', 'vamos dormir' e 'queria ver se voce conseguia
-  # dormir' — três jeitos do mesmo assunto, todos na IA.
-  - id: pedido_dormir
+  # ──────────────── 33. DORMIR: A PERGUNTA (a ordem é comando) ─────────
+  # 2026-08-19: três jeitos do mesmo assunto, todos na IA.
+  # 2026-08-30: o bot aprendeu a dormir. As ORDENS ('vamos dormir', 'deita na
+  # cama') viraram comando SLEEP; aqui ficam só as PERGUNTAS, e a resposta
+  # mudou de "não sei" para "sei, e pulo a noite".
+  - id: pergunta_dormir
     specificity: 5
-    patterns: ['deite na cama', 'deita na cama', 'vamos dormir', 'va dormir', 'vai dormir',
-       'voce dorme', 'voce sabe dormir', 'voce consegue dormir', 'deita ai', 'deite ai',
-       'voce conseguia dormir']
+    patterns: ['voce dorme', 'voce sabe dormir', 'voce consegue dormir', 'voce conseguia dormir',
+       'voce dorme na cama', 'voce tem sono', 'voce fica com sono']
     responses:
-      - 'Eu não sei dormir, {owner}. Mas fico de olho enquanto você dorme!'
-      - 'Cama eu não uso não! Vou ficar aqui de guarda pra você.'
-      - 'Não durmo nunca! Assim eu vigio os monstros pra você.'
-      - 'Dormir eu não sei. Deita você que eu fico bem pertinho!'
-      - 'Eu não tenho sono! Bom sono pra você :D'
+      - 'Durmo sim! Se tiver cama por perto e for de noite, fala "vamos dormir".'
+      - 'Sei dormir! E dormindo a noite passa voando, sem monstro nenhum.'
+      - 'Durmo de noite, na cama! De dia não dá, o jogo não deixa.'
+      - 'Sei sim! Acha uma cama que eu deito e a gente pula a noite.'
+      - 'Tenho sono só de noite! Fala "dorme" que eu vou pra cama.'
 
   # ─────────────── 34. VOCÊ ME PROTEGE? (pergunta) ────────────────────
   # 2026-08-19: 'voce me proteje?' é PERGUNTA e fica aqui. 'me proteja' é

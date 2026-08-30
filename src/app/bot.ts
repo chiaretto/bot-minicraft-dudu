@@ -42,6 +42,7 @@ import pathfinderPkg from 'mineflayer-pathfinder'
 import {
   equipBestWeapon,
   eatSomething,
+  wakeUp,
   placeTorch,
   runIntent,
   escape,
@@ -966,6 +967,10 @@ export class CompanionBot {
     // `command()` aborta o sinal, e é isso que faz a sessão do jogo terminar.
     this.state.command('IDLE')
     this.mc.stopMoving()
+    // Dormindo, `para` também quer dizer "levanta daí": o abort não tira
+    // ninguém da cama.
+    const bot = this.mc.raw
+    if (bot) void wakeUp(bot)
     if (wasPlaying) this.sayGame('jogo_cancelado')
     else this.say('Parei!', 'command')
   }

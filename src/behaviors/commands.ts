@@ -297,6 +297,30 @@ const COMMANDS: CommandPattern[] = [
       /^cercadinho$/,
     ],
   },
+  // ── Dormir ──────────────────────────────────────────────────────────────
+  // 2026-08-30: os padrões vieram da entrada `pedido_dormir`, que existia só
+  // para dizer "eu não durmo". Dormir pula a noite — a parte do jogo que mais
+  // assusta criança de 7 anos.
+  {
+    intent: { type: 'SLEEP', params: {} },
+    patterns: [
+      /^vamos dormir$/,
+      /^vai dormir$/,
+      /^va dormir$/,
+      /^dorme$/,
+      /^durma$/,
+      /^dorme ai$/,
+      /^deita na cama$/,
+      /^deite na cama$/,
+      /^deita ai$/,
+      /^deite ai$/,
+      /^vai pra cama$/,
+      /^hora de dormir$/,
+      // "boa noite" fica FORA de propósito: é despedida na boca de uma criança,
+      // não ordem. Mandar o bot para a cama porque ela se despediu seria
+      // obedecer a coisa errada.
+    ],
+  },
   // ── Pôr bloco e cavar ───────────────────────────────────────────────────
   // 2026-08-30: os padrões vieram das entradas `pedido_cavar` e
   // `pedido_soltar_item`, que existiam só para dizer "não sei fazer".

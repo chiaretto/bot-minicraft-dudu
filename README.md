@@ -308,6 +308,7 @@ llm:
 | `dudu, cava um buraco` / `cava aqui` | poço 2x2 **à frente** dele         |
 | `dudu, cava um túnel`                | passagem de 2 de altura            |
 | `dudu, põe um bloco aqui`            | põe um bloco no chão à frente      |
+| `dudu, vamos dormir`                 | deita na cama e **pula a noite**   |
 | `dudu, esconde esconde`              | pergunta quem se esconde           |
 | `dudu, pega pega`                    | pergunta quem corre                |
 | `dudu, se esconde`                   | esconde-esconde: ele se esconde    |
